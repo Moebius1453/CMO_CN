@@ -93,3 +93,12 @@
 - `evidence/live/dialogs/05_order_of_battle.png`：【作战序列 (OoB)】按编队统计单位、按任务统计单位。
 - `evidence/live/dialogs/06_event_editor.png`：【事件编辑器】事件描述、可重复、已启用、概率、已显示列头。
 - `evidence/live/dialogs/07_game_options.png`：【推演选项】通用设置、度量衡单位系统、窗口打开行为、辅助窗口停靠重置。
+
+### 5. 全量 45 个教程实机运行、文本/按键精准匹配与战情消息验证（6 张核心存证）
+- `evidence/live/tutorials/01_sub_tutorial_1_1_side_briefing.png`：【潜艇教程 1.1】进入战场的阵营简报全中文渲染（操作潜艇深度/航向/航速、声呐操作、汇聚区运作、鱼雷攻击水面目标）。
+- `evidence/live/tutorials/01_sub_tutorial_1_1_special_message.png`：【潜艇教程 1.1】运行态首个专用战情消息弹窗（F3 航线规划、Esc 取消模式、F2 油门/深度、浅水层 Shallow、微速/静音 Creep、空格键推演，100% 中文与按键精准对应）。
+- `evidence/live/tutorials/02_ew_tutorial_side_briefing.png`：【电子战教程】以色列阵营作战简报全量汉化。
+- `evidence/live/tutorials/02_ew_tutorial_special_message.png`：【电子战教程】专用战情消息弹窗（拉马特戴维基地 6 架 F-35I、6 架 F-15I、10 架 F-16I、湾流 G550 预警机、波音 707 加油机与 EA-6B 徘徊者电子战机中文命名）。
+- `evidence/live/tutorials/03_uncle_mark_1_side_briefing.png`：【马克大叔教程 1】解密阵营简报（`<Briefing_Encrypted>`）高难度深度汉化（五段式军用电文格式、白色正式命令与蓝色战术解说评注双色 HTML 渲染、特急电报优先级 FLASH PRIORITY、大西洋盟军最高司令部 CINCLANT）。
+- `evidence/live/tutorials/04_flight_tutorial_1_special_message.png`：【飞行教程 1】专用战情消息弹窗（按 SPACE 开始推演、按 F6 打开空中作业窗口、点击「单位状态」面板「飞机」打开，按键与界面操作 100% 匹配）。
+
