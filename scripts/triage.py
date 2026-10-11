@@ -26,11 +26,24 @@ DICT = ROOT / "dict"
 
 # ---------------------------------------------------------------- hard blocks
 
-SQL_KEYWORDS = re.compile(
-    r"\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|VIEW|TRIGGER|"
-    r"FROM|WHERE|JOIN|INNER|OUTER|LEFT\s+JOIN|RIGHT\s+JOIN|GROUP\s+BY|ORDER\s+BY|"
-    r"HAVING|LIMIT|OFFSET|UNION|DISTINCT|PRAGMA|VACUUM|ATTACH|BEGIN|COMMIT|"
-    r"ROLLBACK)\b", re.I)
+# SQL is detected by *statement structure*, not by lone keywords: "View",
+# "Group", "Table", "Index" and "Left" are ordinary English UI words that also
+# happen to be SQL keywords.  Only genuine statements are blocked.
+SQL_STRONG = re.compile(
+    r"(\bSELECT\s+.{2,}?\s+FROM\b"
+    r"|\bINSERT\s+INTO\b"
+    r"|\bUPDATE\s+\S+\s+SET\b"
+    r"|\bDELETE\s+FROM\b"
+    r"|\bCREATE\s+(TABLE|INDEX|VIEW|TRIGGER|UNIQUE)\b"
+    r"|\bDROP\s+(TABLE|INDEX|VIEW|TRIGGER)\b"
+    r"|\bALTER\s+TABLE\b"
+    r"|\bORDER\s+BY\b"
+    r"|\bGROUP\s+BY\b"
+    r"|\bPRAGMA\s+\w"
+    r"|\b(sqlite_master|sqlite_sequence|information_schema)\b"
+    r"|\bVACUUM\b)", re.I)
+SQL_WEAK = re.compile(r"\b(FROM|WHERE|JOIN|HAVING|LIMIT|UNION|DISTINCT)\b", re.I)
+SQL_COLUMNISH = re.compile(r"\b\w+(ID|Id|Type|Name|Flag)\b")
 
 LUA_IDENT = re.compile(
     r"\b(elseif|collectgarbage|getmetatable|setmetatable|rawget|rawset|"
@@ -74,6 +87,20 @@ XML_FRAGMENT = re.compile(r"^\s*</?[A-Za-z_]|</[A-Za-z_]+>\s*$|<[A-Za-z_]+>.*</[
 HTML_FRAGMENT = re.compile(r"<\s*(td|tr|table|br|b|i|u|font|span|div|p)\b", re.I)
 CODE_EXPR = re.compile(r"(==|!=|&&|\|\||=>|::|;\s*$|\bnull\b|\bvoid\b|\bstring\b\s*\()")
 MEMBER_CALL = re.compile(r"\.\w+\s*\(|\w+\s*\(\s*\)\s*$")
+# Executable script text.  Injecting a translation over one of these corrupts the
+# engine exactly the way translating a Lua sandbox keyword did before.
+SCRIPT_CODE = re.compile(
+    r"(^\s*local\s+\w+"                       # local roll = 10
+    r"|^\s*--"                                  # Lua comment
+    r"|\bfunction\s*\("                        # function (
+    r"|\bprint\s*\("                           # print(...
+    r"|\w+\s*=\s*[0-9\"'\[{]"                  # assignment to a literal
+    r"|^\s*(end|then|else|elseif|return)\s*$"
+    r"|\w+\s*:\s*\w+\s*\("                    # obj:method(
+    r"|\$\w+\s*="                              # $-variable assignment
+    r")")
+# Version / build identifiers, e.g. "DB3000 v510", "Cold War DB v512".
+VERSION_ID = re.compile(r"^\s*\S+\s+v\d{3,}\s*$")
 # .NET namespace / assembly identity, e.g. "Gibraltar.Agent.LogWriteMode, Gibraltar.Agent"
 NAMESPACE_LIKE = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+(\s*,\s*[A-Za-z_]\w*)+$")
 # DateTime custom-format strings, e.g. "d/M/yyyy h.mm.ss tt"
@@ -141,6 +168,10 @@ def classify(s: str) -> str:
     # --- hard internal blocks -------------------------------------------
     if ERROR_PROBE.match(t):
         return "internal"
+    if SCRIPT_CODE.search(t):
+        return "internal"
+    if VERSION_ID.match(t):
+        return "internal"
     if PATH_LIKE.search(t):
         return "internal"
     if XML_FRAGMENT.search(t) or "</" in t:
@@ -161,7 +192,9 @@ def classify(s: str) -> str:
         return "internal"
     if LUA_IDENT.search(t) and t.count(" ") <= 1:
         return "internal"
-    if SQL_KEYWORDS.search(t):
+    if SQL_STRONG.search(t):
+        return "internal"
+    if SQL_WEAK.search(t) and SQL_COLUMNISH.search(t):
         return "internal"
     if t in INTERNAL_TOKENS:
         return "internal"
@@ -198,7 +231,31 @@ def classify(s: str) -> str:
         if CAMEL.match(t) or t.islower() or t.isupper():
             return "internal"
         return "label"
+    # A bare English word possibly with trailing punctuation ("Selected:",
+    # "Weapons").  Safe as a UI-tree label; never injected at offset level.
+    if re.match(r"^[A-Za-z][A-Za-z'\-]*\s*[:.?]?$", t):
+        return "label"
     return "internal"
+
+
+def is_script_or_schema(s: str) -> bool:
+    """True when translating this string at source level could corrupt the engine.
+
+    Covers SQL / Lua / schema identifiers / control names / paths / dates -- the
+    classes that previously produced a DAL `KeyNotFoundException` and a broken
+    Lua sandbox.
+    """
+    if not s:
+        return False
+    t = s.strip()
+    return bool(SCRIPT_CODE.search(t) or PATH_LIKE.search(t)
+                or SQL_STRONG.search(t) or LUA_IDENT.search(t)
+                or CONTROL_PREFIX.match(t) or UNDERSCORE_IDENT.match(t)
+                or DOTTED.match(t) or NAMESPACE_LIKE.match(t)
+                or MEMBER_CALL.search(t) or CODE_EXPR.search(t)
+                or ERROR_PROBE.match(t) or LOWER_CAMEL.match(t)
+                or DESIGNER_FIELD.search(t) or t.startswith(CODE_PREFIXES)
+                or (SQL_WEAK.search(t) and SQL_COLUMNISH.search(t)))
 
 
 def load_pool() -> dict[str, str]:

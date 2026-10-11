@@ -1,0 +1,5 @@
+{
+  "_note": "仅在 UI 层翻译、绝不注入引擎字符串池的词条（含文件扩展名等敏感 token）。",
+  ".scen to XML": ".scen 转 XML",
+  "XML to .scen": "XML 转 .scen"
+}
