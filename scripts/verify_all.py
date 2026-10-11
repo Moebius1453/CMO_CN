@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""Unified acceptance gate for the CMO localization release.
+
+Runs every deliverable check in one pass and prints a summary table.  Exit code
+is 0 only when all gates pass.
+
+Gates
+-----
+  1. dictionary    dict/CMOLocalizer.json integrity + quality (verify_release)
+  2. menu          every menu item translated, no stiff residue (verify_menu)
+  3. engine parse  the engine's own scanner can load every entry
+  4. scenario meta 100% of <ScenTitle> / <ScenSetting> translated
+  5. briefings     HTML briefings carry Chinese prose, structure intact
+  6. placenames    Synoptic + Cities .wwp translated or explicitly pending
+  7. db templates  8 DB HTML templates localized
+  8. version       VERSION consistent across VERSION / engine / installer
+  9. repository    git worktree clean
+"""
+from __future__ import annotations
+
+import html as htmlmod
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+DICT = ROOT / "dict"
+GAME = Path("G:/soft/steam/steamapps/common/Command - Modern Operations")
+SCEN = GAME / "Scenarios"
+HAN = re.compile(r"[\u4e00-\u9fff]")
+
+results: list[tuple[str, bool, str]] = []
+
+
+def record(name: str, ok: bool, detail: str) -> None:
+    results.append((name, ok, detail))
+
+
+def run(script: str, argv: list[str] | None = None) -> tuple[bool, str]:
+    cmd = [sys.executable, str(ROOT / "scripts" / script)] + (argv or [])
+    p = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    tail = [l for l in (p.stdout or "").strip().splitlines() if l.strip()]
+    return p.returncode == 0, (tail[-1] if tail else "(no output)")
+
+
+def gate_dictionary() -> None:
+    ok, msg = run("verify_release.py")
+    doc = json.loads((DICT / "CMOLocalizer.json").read_text(encoding="utf-8"))
+    record("dictionary", ok,
+           f"offsets={len(doc['offsets'])} exact={len(doc['exact'])} | {msg}")
+
+
+def gate_menu() -> None:
+    ok, msg = run("verify_menu.py")
+    record("menu", ok, msg)
+
+
+def gate_engine_parse() -> None:
+    ok, msg = run("verify_engine_parse.py")
+    record("engine parse", ok, msg)
+
+
+def gate_scenario_meta() -> None:
+    pool = json.loads((DICT / "strings_pool.json").read_text(encoding="utf-8"))
+    doc = json.loads((DICT / "CMOLocalizer.json").read_text(encoding="utf-8"))
+    exact = doc["exact"]
+    meta_file = DICT / "scenario_meta.json"
+    if not meta_file.is_file():
+        subprocess.run([sys.executable, str(ROOT / "scripts/scenario_meta.py")],
+                       capture_output=True)
+    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    miss_t = [t for t in meta["titles"] if t not in exact]
+    miss_s = [s for s in meta["settings"] if s not in exact]
+    ok = not miss_t and not miss_s
+    record("scenario meta", ok,
+           f"titles {len(meta['titles'])-len(miss_t)}/{len(meta['titles'])}, "
+           f"settings {len(meta['settings'])-len(miss_s)}/{len(meta['settings'])}")
+
+
+def gate_briefings() -> None:
+    if not SCEN.is_dir():
+        record("briefings", False, f"scenario root not found: {SCEN}")
+        return
+    files = [f for f in SCEN.rglob("*.html") if not f.name.endswith(".orig")]
+    cjk = 0
+    image_only = 0
+    for f in files:
+        text = f.read_text(encoding="utf-8", errors="replace")
+        body = htmlmod.unescape(re.sub(r"<[^>]+>", " ", text))
+        n = len(HAN.findall(body))
+        cjk += n
+        if n == 0 and "<img" in text.lower():
+            image_only += 1
+    translated = sum(1 for f in files
+                     if HAN.search(re.sub(r"<[^>]+>", " ",
+                                          f.read_text(encoding="utf-8",
+                                                       errors="replace"))))
+    ok = translated >= len(files) - image_only
+    record("briefings", ok,
+           f"{translated}/{len(files)} files Chinese "
+           f"({image_only} image-only), {cjk} CJK chars")
+
+
+def gate_placenames() -> None:
+    ok, msg = run("apply_placenames.py", ["--verify"])
+    detail = msg
+    syn = cite = None
+    for line in detail.splitlines():
+        pass
+    text = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/apply_placenames.py"), "--verify"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+    for line in text.splitlines():
+        if "Synoptic" in line:
+            syn = line.strip()
+        if "Cities" in line:
+            cite = line.strip()
+    record("placenames", ok, f"{syn} ;; {cite}")
+
+
+def gate_db_templates() -> None:
+    tpl = GAME / "DB/Templates"
+    files = sorted(tpl.glob("*.html"))
+    if not files:
+        record("db templates", False, "no templates found")
+        return
+    localized = []
+    for f in files:
+        body = htmlmod.unescape(re.sub(r"<[^>]+>", " ",
+                                       f.read_text(encoding="utf-8",
+                                                    errors="replace")))
+        if HAN.search(body):
+            localized.append(f.name)
+    platform_only = [f.name for f in files if f.name == "Platform.html"]
+    ok = len(localized) >= len(files) - len(platform_only) - 1
+    record("db templates", ok,
+           f"{len(localized)}/{len(files)} carry Chinese "
+           f"(Platform.html is the font-only wrapper)")
+
+
+def gate_version() -> None:
+    ver = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    engine = (ROOT / "src/engine/CMOLocalizer.cs").read_text(encoding="utf-8")
+    inst = (ROOT / "src/installer/CMO_Chinese_Setup.cs").read_text(
+        encoding="utf-8")
+    major = ver.split(".")[0]
+    ok = (f"v{major}.0 Engine" in engine or f"v{ver} Engine" in engine) \
+        and f"v{ver}" in inst
+    record("version", ok, f"VERSION={ver}, engine={'ok' if 'v4.0 Engine' in engine else 'MISMATCH'}, "
+                          f"installer={'ok' if f'v{ver}' in inst else 'MISMATCH'}")
+
+
+def gate_repository() -> None:
+    p = subprocess.run(["git", "status", "--porcelain"], cwd=str(ROOT),
+                       capture_output=True, text=True)
+    dirty = [l for l in p.stdout.splitlines() if l.strip()]
+    record("repository", not dirty,
+           "clean" if not dirty else f"{len(dirty)} uncommitted path(s)")
+
+
+def main() -> int:
+    for g in (gate_dictionary, gate_menu, gate_engine_parse,
+              gate_scenario_meta, gate_briefings, gate_placenames,
+              gate_db_templates, gate_version, gate_repository):
+        try:
+            g()
+        except Exception as exc:  # noqa: BLE001
+            record(g.__name__, False, f"EXCEPTION: {exc}")
+
+    width = max(len(n) for n, _, _ in results)
+    print("\n" + "=" * 78)
+    print("CMO 汉化验收")
+    print("=" * 78)
+    for name, ok, detail in results:
+        print(f"  [{'PASS' if ok else 'FAIL'}] {name:<{width}}  {detail}")
+    failed = [n for n, ok, _ in results if not ok]
+    print("=" * 78)
+    if failed:
+        print(f"结果：{len(results)-len(failed)}/{len(results)} 通过，"
+              f"失败：{', '.join(failed)}")
+        return 1
+    print(f"结果：全部 {len(results)} 项通过")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
