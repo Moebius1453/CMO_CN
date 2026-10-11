@@ -69,7 +69,7 @@ def iter_source_maps():
     if not SRC.is_dir():
         return
     for p in sorted(SRC.glob("*.json")):
-        if p.name in ("blacklist.json", "labels.json"):
+        if p.name in ("blacklist.json", "labels.json", "identifiers.json"):
             continue
         data = load(p)
         if isinstance(data, dict):
@@ -145,6 +145,19 @@ def build() -> dict:
     if blfile.is_file():
         blacklist = set(load(blfile))
 
+    # Engine identifiers -- INI section/key names and on-disk directory names.
+    # They may be shown to a player, so they stay in `exact`, but they must never
+    # be injected at offset level: the pool string is also the lookup key, and
+    # translating it breaks configuration reads (proven: `Game Preferences`
+    # causes a NullReferenceException during Application_Startup) or path
+    # resolution (proven: `Config` produced a Chinese-named 配置/ directory).
+    identifiers: set[str] = set()
+    idfile = SRC / "identifiers.json"
+    if idfile.is_file():
+        data = load(idfile)
+        if isinstance(data, dict):
+            identifiers = set(data.get("identifiers", []))
+
     pool = load(DICT / "strings_pool.json")
     text_to_offset = {v: int(k) for k, v in pool.items()}
     bucket_of = {int(k): classify(v) for k, v in pool.items()}
@@ -169,7 +182,8 @@ def build() -> dict:
             exact[en] = zh
             curated.add(en)
             off = text_to_offset.get(en)
-            if off is not None and bucket_of.get(off) == "display":
+            if off is not None and bucket_of.get(off) == "display" \
+                    and en not in identifiers:
                 offsets[off] = zh
 
     # --- labels-only batch (never injected at offset level) --------------
@@ -223,12 +237,14 @@ def build() -> dict:
         exact.pop(bad, None)
         partial.pop(bad, None)
     # --- safety invariant: offsets may only hold display prose -----------
-    # Injecting a translation over a schema identifier, script statement or
-    # control name corrupts the engine (this is exactly what broke the DAL and
-    # the Lua sandbox before).  Only strings triage is confident about reach
-    # `offsets`; every other string is still served through `exact`.
+    # Injecting a translation over a schema identifier, script statement, control
+    # name or path/config key corrupts the engine (this is exactly what broke the
+    # DAL, the Lua sandbox, the INI reader and the Scenarios directory lookup
+    # before).  Only strings triage is confident about reach `offsets`; every
+    # other string is still served through `exact`.
     offsets = {k: v for k, v in offsets.items()
-               if bucket_of.get(k) == "display"}
+               if bucket_of.get(k) == "display"
+               and pool.get(str(k)) not in identifiers}
     known = set(text_to_offset.values())
     offsets = {k: v for k, v in offsets.items() if k in known}
 
