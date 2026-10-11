@@ -3,8 +3,8 @@
 由 `scripts/verify_menu.py` 从游戏字符串池与菜单栏实测转储生成。
 
 - 菜单项总数：**328**
-- 已汉化：**326**
-- 按键名保留英文：**2**
+- 已汉化：**325**
+- 按键名保留英文：**3**
 - 生硬/残留英文：**0**
 
 | 英文原文 | 中文译名 |
@@ -61,7 +61,7 @@
 | Change bearing type of selected Ref Point(s) to ROTATING | 将所选参考点方位类型改为随动 |
 | Change next Waypoint | 修改下一航路点 |
 | Civilian | 民用 |
-| Clear | 清除 |
+| Clear | 晴 |
 | Clone Unit | 克隆单位 |
 | Comms range | 通信范围 |
 | Conditions | 条件 |
@@ -163,7 +163,7 @@
 | Lay chaff (single burst) | 投放箔条（单发） |
 | Left Arrow / Num 6 | 方向键左 / 小键盘 6 |
 | License Tweaker | 许可证调整 |
-| Load | 加载 |
+| Load | 挂载 |
 | Load From File | 从文件加载 |
 | Load other DB file... | 加载其他数据库文件... |
 | Load recent: | 最近打开： |
@@ -272,7 +272,7 @@
 | Set Unit Properties | 设置单位属性 |
 | Set Unit Side | 设置单位阵营 |
 | Shallow - Over Layer | 浅水（温跃层之上） |
-| Shift + Ins | Shift + 在...内 |
+| Shift + Ins | （按键名·保留英文） |
 | Show ghosted group members for... | 编组成员虚影显示... |
 | Show Non-friendly Range-Symbols | 显示非友方范围符号 |
 | Show range symbols for... | 显示范围符号... |
@@ -330,7 +330,7 @@
 | WEAPONS FREE | 自由开火 |
 | WEAPONS HOLD | 禁止开火 |
 | WEAPONS TIGHT | 限制开火 |
-| Weather | 气象水文 |
+| Weather | 天气 |
 | X / Mouse Scroll | X / 鼠标滚轮 |
 | XML to .scen | XML 转 .scen |
 | Z / Mouse Scroll | Z / 鼠标滚轮 |

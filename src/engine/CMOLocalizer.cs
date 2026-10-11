@@ -215,6 +215,13 @@ namespace CMOLocalizer
                     Thread.Sleep(interval);
                     loopCount++;
 
+                    // Process external automated test commands (if any)
+                    try
+                    {
+                        ProcessTestCommands();
+                    }
+                    catch { }
+
                     FormCollection openForms = Application.OpenForms;
                     if (openForms != null && openForms.Count > 0)
                     {
@@ -407,6 +414,40 @@ namespace CMOLocalizer
             if (dep == null) return;
             try
             {
+                if (dep is System.Windows.Controls.HeaderedContentControl)
+                {
+                    System.Windows.Controls.HeaderedContentControl hc = (System.Windows.Controls.HeaderedContentControl)dep;
+                    if (hc.Header is string)
+                    {
+                        string s = (string)hc.Header;
+                        if (!string.IsNullOrEmpty(s))
+                        {
+                            string trans = TranslateString(s);
+                            if (trans != s) hc.Header = trans;
+                        }
+                    }
+                    else if (hc.Header is System.Windows.DependencyObject)
+                    {
+                        TranslateWpfElement((System.Windows.DependencyObject)hc.Header);
+                    }
+                }
+                if (dep is System.Windows.Controls.HeaderedItemsControl)
+                {
+                    System.Windows.Controls.HeaderedItemsControl hic = (System.Windows.Controls.HeaderedItemsControl)dep;
+                    if (hic.Header is string)
+                    {
+                        string s = (string)hic.Header;
+                        if (!string.IsNullOrEmpty(s))
+                        {
+                            string trans = TranslateString(s);
+                            if (trans != s) hic.Header = trans;
+                        }
+                    }
+                    else if (hic.Header is System.Windows.DependencyObject)
+                    {
+                        TranslateWpfElement((System.Windows.DependencyObject)hic.Header);
+                    }
+                }
                 if (dep is System.Windows.Controls.TextBlock)
                 {
                     System.Windows.Controls.TextBlock tb = (System.Windows.Controls.TextBlock)dep;
@@ -439,18 +480,9 @@ namespace CMOLocalizer
                             }
                         }
                     }
-                }
-                else if (dep is System.Windows.Controls.HeaderedContentControl)
-                {
-                    System.Windows.Controls.HeaderedContentControl hc = (System.Windows.Controls.HeaderedContentControl)dep;
-                    if (hc.Header is string)
+                    else if (cc.Content is System.Windows.DependencyObject)
                     {
-                        string s = (string)hc.Header;
-                        if (!string.IsNullOrEmpty(s))
-                        {
-                            string trans = TranslateString(s);
-                            if (trans != s) hc.Header = trans;
-                        }
+                        TranslateWpfElement((System.Windows.DependencyObject)cc.Content);
                     }
                 }
 
@@ -586,6 +618,22 @@ namespace CMOLocalizer
             else if (ctrl.GetType().Name.IndexOf("WebView2", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 TranslateWebView2(ctrl);
+            }
+            else if (ctrl.GetType().Name.IndexOf("ElementHost", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                try
+                {
+                    PropertyInfo piChild = ctrl.GetType().GetProperty("Child");
+                    if (piChild != null)
+                    {
+                        object childObj = piChild.GetValue(ctrl, null);
+                        if (childObj is System.Windows.DependencyObject)
+                        {
+                            TranslateWpfElement((System.Windows.DependencyObject)childObj);
+                        }
+                    }
+                }
+                catch { }
             }
             else if (ctrl.GetType().Name.Contains("ChromiumWebBrowser"))
             {
@@ -752,6 +800,40 @@ namespace CMOLocalizer
 
             string norm = Regex.Replace(text.Trim(), @"\s+", " ");
             if (normExactMap.ContainsKey(norm)) return normExactMap[norm];
+
+            // Database Viewer dynamic numeric patterns (e.g. "15 seconds Observe...", "30 seconds (Cadet)")
+            if (norm.EndsWith("seconds Observe, Orient, Decide, and Act (reaction time)"))
+            {
+                return norm.Replace("seconds Observe, Orient, Decide, and Act (reaction time)", "秒 (观察-判断-决策-行动 OODA 反应时间)");
+            }
+            if (norm.EndsWith("seconds (Novice Proficiency Level)"))
+            {
+                return norm.Replace("seconds (Novice Proficiency Level)", "秒 (新手熟练度)");
+            }
+            if (norm.EndsWith("seconds (Cadet)"))
+            {
+                return norm.Replace("seconds (Cadet)", "秒 (学员熟练度)");
+            }
+            if (norm.EndsWith("seconds (Regular)"))
+            {
+                return norm.Replace("seconds (Regular)", "秒 (普通熟练度)");
+            }
+            if (norm.EndsWith("seconds (Veteran)"))
+            {
+                return norm.Replace("seconds (Veteran)", "秒 (老手熟练度)");
+            }
+            if (norm.EndsWith("seconds (Ace)"))
+            {
+                return norm.Replace("seconds (Ace)", "秒 (王牌熟练度)");
+            }
+            if (Regex.IsMatch(norm, @"^\d+(\.\d+)?\s+seconds$"))
+            {
+                return norm.Replace("seconds", "秒");
+            }
+            if (norm.StartsWith("Performance Details for "))
+            {
+                return "战术性能详情：" + norm.Substring("Performance Details for ".Length);
+            }
 
             // Multi-line or multi-sentence breakdown
             if (text.Contains(". ") || text.Contains("?\n") || text.Contains("!\n") || text.Contains("\n"))
@@ -1063,14 +1145,61 @@ namespace CMOLocalizer
                     {
                         TranslateToolStripItem(sub);
                     }
+                    if (ddi.Owner != null)
+                    {
+                        ddi.Owner.BeginInvoke((MethodInvoker)delegate
+                        {
+                            try
+                            {
+                                foreach (ToolStripItem sub in ddi.DropDownItems)
+                                {
+                                    TranslateToolStripItem(sub);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
                 }
             }
             catch { }
         }
 
+        private static readonly HashSet<int> hookedItems = new HashSet<int>();
+        [ThreadStatic]
+        private static bool _inTextChanged;
+
         private static void TranslateToolStripItem(ToolStripItem item)
         {
             if (item == null) return;
+
+            int itemHash = item.GetHashCode();
+            if (!hookedItems.Contains(itemHash))
+            {
+                hookedItems.Add(itemHash);
+                item.TextChanged += (s, e) =>
+                {
+                    if (_inTextChanged) return;
+                    try
+                    {
+                        _inTextChanged = true;
+                        ToolStripItem it = s as ToolStripItem;
+                        if (it != null && !string.IsNullOrEmpty(it.Text) && !ContainsChinese(it.Text))
+                        {
+                            string tr = TranslateString(it.Text);
+                            if (tr != it.Text && ContainsChinese(tr))
+                            {
+                                it.Text = tr;
+                            }
+                        }
+                    }
+                    catch { }
+                    finally
+                    {
+                        _inTextChanged = false;
+                    }
+                };
+            }
+
             string t = item.Text;
             if (!string.IsNullOrEmpty(t))
             {
@@ -1114,6 +1243,13 @@ namespace CMOLocalizer
 
         private static void TranslateControlText(Control ctrl)
         {
+            // ComboBox, TextBoxBase, ListControl and UpDownBase hold internal query/code keys
+            // or user inputs. Overwriting their .Text destroys SelectedIndex and breaks game logic!
+            if (ctrl is ComboBox || ctrl is TextBoxBase || ctrl is ListControl || ctrl is UpDownBase)
+            {
+                return;
+            }
+
             string t = ctrl.Text;
             if (!string.IsNullOrEmpty(t))
             {
@@ -1155,6 +1291,35 @@ namespace CMOLocalizer
             {
                 return raw;
             }
+
+            // 特殊复合前缀拆解：即使前缀已经被 offsets 汉化，后续英文想定标题/地域名/年份仍需递归汉化
+            if (raw.StartsWith("[未授权] ") || raw.StartsWith("[UNLICENSED] "))
+            {
+                string rest = raw.Substring(raw.IndexOf(']') + 1).Trim();
+                string tRest = TranslateString(rest);
+                return "[未授权] " + tRest;
+            }
+            if (raw.StartsWith("作战地域:") || raw.StartsWith("作战地域：") || raw.StartsWith("位置 / 设置:"))
+            {
+                int colonIdx = raw.IndexOf(':');
+                if (colonIdx < 0) colonIdx = raw.IndexOf('：');
+                string prefix = (colonIdx >= 0) ? raw.Substring(0, colonIdx + 1).Trim() : "作战地域：";
+                string body = (colonIdx >= 0) ? raw.Substring(colonIdx + 1).Trim() : raw;
+                int idxY = body.IndexOf("--");
+                if (idxY > 0)
+                {
+                    string setting = body.Substring(0, idxY).Trim();
+                    string rest = body.Substring(idxY + 2).Trim();
+                    rest = Regex.Replace(rest, @"\bYear\s*:\s*", "年份: ", RegexOptions.IgnoreCase);
+                    string tSet = TranslateString(setting);
+                    return prefix + " " + tSet + "  --  " + rest;
+                }
+            }
+            if (raw.StartsWith("Uses: "))
+            {
+                return "使用数据库: " + raw.Substring(6).Trim();
+            }
+
             // 如果文本中已经含有中文，说明已经被翻译过或者是中文字符串，坚决避免重复翻译与递归替换！
             if (ContainsChinese(raw)) return raw;
 
@@ -1177,6 +1342,11 @@ namespace CMOLocalizer
                 {
                     dynamicCache[raw] = result;
                 }
+            }
+
+            if (result == raw && !ContainsChinese(raw))
+            {
+                AuditUntranslatedLive(raw);
             }
 
             return result;
@@ -1543,6 +1713,658 @@ namespace CMOLocalizer
                     wordsMap[key] = val;
                 }
             }
+        }
+
+        private static readonly HashSet<string> liveAuditSeen = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly object auditLock = new object();
+        private static string auditLogPath = "";
+
+        private static void AuditUntranslatedLive(string raw)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(raw) || raw.Length < 2 || raw.Length > 300) return;
+                if (ContainsChinese(raw)) return;
+                if (raw.Contains("\\") || raw.Contains("://") || raw.Contains(".dll") || raw.Contains(".exe") || raw.Contains(".db3") || raw.Contains(".scen") || raw.Contains(".png")) return;
+
+                bool hasAlpha = false;
+                for (int i = 0; i < raw.Length; i++)
+                {
+                    if ((raw[i] >= 'A' && raw[i] <= 'Z') || (raw[i] >= 'a' && raw[i] <= 'z'))
+                    {
+                        hasAlpha = true;
+                        break;
+                    }
+                }
+                if (!hasAlpha) return;
+
+                lock (auditLock)
+                {
+                    if (liveAuditSeen.Add(raw))
+                    {
+                        if (string.IsNullOrEmpty(auditLogPath))
+                        {
+                            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                            auditLogPath = Path.Combine(baseDir, "CMOLocalizer_LiveAudit.log");
+                        }
+                        File.AppendAllText(auditLogPath, raw.Replace("\r", "\\r").Replace("\n", "\\n") + "\r\n", Encoding.UTF8);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static string JsonEsc(string s)
+        {
+            if (s == null) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+        }
+
+        private static MenuStrip FindMainMenuStrip(out Form ownerForm)
+        {
+            ownerForm = null;
+            FormCollection forms = Application.OpenForms;
+            if (forms == null) return null;
+            foreach (Form frm in forms)
+            {
+                if (frm == null || frm.IsDisposed) continue;
+                if (frm.MainMenuStrip != null)
+                {
+                    ownerForm = frm;
+                    return frm.MainMenuStrip;
+                }
+                foreach (Control c in frm.Controls)
+                {
+                    if (c is MenuStrip)
+                    {
+                        ownerForm = frm;
+                        return (MenuStrip)c;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static void DumpMenuItemJson(ToolStripItem item, int idx, StringBuilder sb)
+        {
+            sb.Append("{\"index\":").Append(idx)
+              .Append(",\"name\":\"").Append(JsonEsc(item.Name))
+              .Append("\",\"text\":\"").Append(JsonEsc(item.Text))
+              .Append("\",\"type\":\"").Append(JsonEsc(item.GetType().Name))
+              .Append("\",\"enabled\":").Append(item.Enabled ? "true" : "false")
+              .Append(",\"visible\":").Append(item.Visible ? "true" : "false");
+
+            ToolStripDropDownItem ddi = item as ToolStripDropDownItem;
+            if (ddi != null && ddi.DropDownItems != null && ddi.DropDownItems.Count > 0)
+            {
+                sb.Append(",\"children\":[");
+                for (int i = 0; i < ddi.DropDownItems.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    DumpMenuItemJson(ddi.DropDownItems[i], i, sb);
+                }
+                sb.Append("]");
+            }
+            sb.Append("}");
+        }
+
+        private static ToolStripItem FindMenuItemByText(ToolStripItemCollection items, string target)
+        {
+            if (items == null) return null;
+            foreach (ToolStripItem item in items)
+            {
+                if (item == null) continue;
+                string cleanText = (item.Text ?? "").Replace("&", "").Trim();
+                if (string.Equals(cleanText, target, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(item.Name, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+                ToolStripDropDownItem ddi = item as ToolStripDropDownItem;
+                if (ddi != null && ddi.HasDropDownItems)
+                {
+                    ToolStripItem sub = FindMenuItemByText(ddi.DropDownItems, target);
+                    if (sub != null) return sub;
+                }
+            }
+            foreach (ToolStripItem item in items)
+            {
+                if (item == null) continue;
+                string cleanText = (item.Text ?? "").Replace("&", "").Trim();
+                if (cleanText.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return item;
+                }
+                ToolStripDropDownItem ddi = item as ToolStripDropDownItem;
+                if (ddi != null && ddi.HasDropDownItems)
+                {
+                    ToolStripItem sub = FindMenuItemByText(ddi.DropDownItems, target);
+                    if (sub != null) return sub;
+                }
+            }
+            return null;
+        }
+
+        private static void CollectControlTexts(Control ctrl, List<string> list)
+        {
+            if (ctrl == null || ctrl.IsDisposed) return;
+            if (!string.IsNullOrEmpty(ctrl.Text))
+            {
+                list.Add(ctrl.GetType().Name + ":" + ctrl.Name + "=" + ctrl.Text);
+            }
+            if (ctrl is TabControl)
+            {
+                foreach (TabPage tp in ((TabControl)ctrl).TabPages)
+                {
+                    list.Add("TabPage:" + tp.Name + "=" + tp.Text);
+                    CollectControlTexts(tp, list);
+                }
+            }
+            else if (ctrl is DataGridView)
+            {
+                foreach (DataGridViewColumn col in ((DataGridView)ctrl).Columns)
+                {
+                    list.Add("DGVCol:" + col.Name + "=" + col.HeaderText);
+                }
+            }
+            else if (ctrl is ListView)
+            {
+                foreach (ColumnHeader ch in ((ListView)ctrl).Columns)
+                {
+                    list.Add("LVCol:" + ch.Text);
+                }
+            }
+            else if (ctrl is ToolStrip)
+            {
+                foreach (ToolStripItem tsi in ((ToolStrip)ctrl).Items)
+                {
+                    list.Add("TSItem:" + tsi.Name + "=" + tsi.Text);
+                }
+            }
+            foreach (Control child in ctrl.Controls)
+            {
+                CollectControlTexts(child, list);
+            }
+        }
+
+        private static void ProcessTestCommands()
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string cmdFile = Path.Combine(baseDir, "CMOLocalizer_Cmd.txt");
+            if (!File.Exists(cmdFile)) return;
+
+            string rawCmd = "";
+            try
+            {
+                rawCmd = File.ReadAllText(cmdFile, Encoding.UTF8).Trim();
+                File.Delete(cmdFile);
+            }
+            catch (Exception ex)
+            {
+                Log("ProcessTestCommands read error: " + ex.Message);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(rawCmd)) return;
+            string resFile = Path.Combine(baseDir, "CMOLocalizer_CmdResult.json");
+
+            try
+            {
+                string response = ExecuteTestCommand(rawCmd);
+                File.WriteAllText(resFile, response, Encoding.UTF8);
+                Log("ProcessTestCommands executed: " + rawCmd);
+            }
+            catch (Exception ex)
+            {
+                string err = "{\"status\":\"error\",\"message\":\"" + JsonEsc(ex.Message) + "\"}";
+                try { File.WriteAllText(resFile, err, Encoding.UTF8); } catch { }
+                Log("ProcessTestCommands exception: " + ex.ToString());
+            }
+        }
+
+        private static string ExecuteTestCommand(string rawCmd)
+        {
+            string cmd = rawCmd;
+            string arg = "";
+            int sp = rawCmd.IndexOf(' ');
+            if (sp > 0)
+            {
+                cmd = rawCmd.Substring(0, sp).Trim().ToUpperInvariant();
+                arg = rawCmd.Substring(sp + 1).Trim();
+            }
+            else
+            {
+                cmd = rawCmd.Trim().ToUpperInvariant();
+            }
+
+            if (cmd == "RELOAD_DICT")
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string dictPath = Path.Combine(baseDir, "CMOLocalizer.json");
+                if (File.Exists(dictPath))
+                {
+                    exactMap.Clear();
+                    normExactMap.Clear();
+                    lock (cacheLock) { dynamicCache.Clear(); }
+                    LoadDictionaries(dictPath);
+                    return "{\"status\":\"ok\",\"exact\":" + exactMap.Count + ",\"offsets\":" + offsetMap.Count + "}";
+                }
+                return "{\"status\":\"error\",\"message\":\"CMOLocalizer.json not found\"}";
+            }
+
+            Form mainFrm;
+            MenuStrip ms = FindMainMenuStrip(out mainFrm);
+
+            if (cmd == "DUMP_MENUS")
+            {
+                if (ms == null) return "{\"status\":\"error\",\"message\":\"MenuStrip not found\"}";
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{\"status\":\"ok\",\"menus\":[");
+                for (int i = 0; i < ms.Items.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    DumpMenuItemJson(ms.Items[i], i, sb);
+                }
+                sb.Append("]}");
+                return sb.ToString();
+            }
+
+            if (cmd == "SHOW_MENU")
+            {
+                if (ms == null || mainFrm == null) return "{\"status\":\"error\",\"message\":\"MenuStrip not found\"}";
+                int idx = int.Parse(arg);
+                string menuText = "";
+                mainFrm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        foreach (ToolStripItem it in ms.Items)
+                        {
+                            ToolStripDropDownItem d = it as ToolStripDropDownItem;
+                            if (d != null) d.HideDropDown();
+                        }
+                        if (idx >= 0 && idx < ms.Items.Count)
+                        {
+                            ToolStripDropDownItem target = ms.Items[idx] as ToolStripDropDownItem;
+                            if (target != null)
+                            {
+                                TranslateToolStripItem(target);
+                                target.ShowDropDown();
+                            }
+                        }
+                    }
+                    catch { }
+                });
+                if (idx >= 0 && idx < ms.Items.Count) menuText = ms.Items[idx].Text;
+                return "{\"status\":\"ok\",\"action\":\"SHOW_MENU\",\"index\":" + idx + ",\"text\":\"" + JsonEsc(menuText) + "\"}";
+            }
+
+            if (cmd == "SHOW_SUBMENU")
+            {
+                if (ms == null || mainFrm == null) return "{\"status\":\"error\",\"message\":\"MenuStrip not found\"}";
+                string[] parts = arg.Split(':');
+                int pIdx = int.Parse(parts[0]);
+                int cIdx = int.Parse(parts[1]);
+                string subText = "";
+                if (pIdx >= 0 && pIdx < ms.Items.Count)
+                {
+                    ToolStripDropDownItem pItem = ms.Items[pIdx] as ToolStripDropDownItem;
+                    if (pItem != null && cIdx >= 0 && cIdx < pItem.DropDownItems.Count)
+                    {
+                        subText = pItem.DropDownItems[cIdx].Text;
+                    }
+                }
+                mainFrm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        foreach (ToolStripItem it in ms.Items)
+                        {
+                            ToolStripDropDownItem d = it as ToolStripDropDownItem;
+                            if (d != null) d.HideDropDown();
+                        }
+                        if (pIdx >= 0 && pIdx < ms.Items.Count)
+                        {
+                            ToolStripDropDownItem pItem = ms.Items[pIdx] as ToolStripDropDownItem;
+                            if (pItem != null)
+                            {
+                                TranslateToolStripItem(pItem);
+                                pItem.ShowDropDown();
+                                if (cIdx >= 0 && cIdx < pItem.DropDownItems.Count)
+                                {
+                                    ToolStripDropDownItem cItem = pItem.DropDownItems[cIdx] as ToolStripDropDownItem;
+                                    if (cItem != null)
+                                    {
+                                        TranslateToolStripItem(cItem);
+                                        cItem.Select();
+                                        cItem.ShowDropDown();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                });
+                return "{\"status\":\"ok\",\"action\":\"SHOW_SUBMENU\",\"parent\":" + pIdx + ",\"child\":" + cIdx + ",\"text\":\"" + JsonEsc(subText) + "\"}";
+            }
+
+            if (cmd == "HIDE_MENUS")
+            {
+                if (ms != null && mainFrm != null)
+                {
+                    mainFrm.BeginInvoke((MethodInvoker)delegate
+                    {
+                        try
+                        {
+                            foreach (ToolStripItem it in ms.Items)
+                            {
+                                ToolStripDropDownItem d = it as ToolStripDropDownItem;
+                                if (d != null) d.HideDropDown();
+                            }
+                        }
+                        catch { }
+                    });
+                }
+                return "{\"status\":\"ok\",\"action\":\"HIDE_MENUS\"}";
+            }
+
+            if (cmd == "CLICK_MENU")
+            {
+                if (ms == null || mainFrm == null) return "{\"status\":\"error\",\"message\":\"MenuStrip not found\"}";
+                ToolStripItem found = FindMenuItemByText(ms.Items, arg);
+                if (found == null) return "{\"status\":\"error\",\"message\":\"Menu item not found: " + JsonEsc(arg) + "\"}";
+                string foundText = found.Text;
+                string foundName = found.Name;
+                mainFrm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try { found.PerformClick(); } catch { }
+                });
+                return "{\"status\":\"ok\",\"action\":\"CLICK_MENU\",\"name\":\"" + JsonEsc(foundName) + "\",\"text\":\"" + JsonEsc(foundText) + "\"}";
+            }
+
+            if (cmd == "DUMP_OPEN_FORMS")
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{\"status\":\"ok\",\"forms\":[");
+                FormCollection forms = Application.OpenForms;
+                bool first = true;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f == null || f.IsDisposed) continue;
+                        if (!first) sb.Append(",");
+                        first = false;
+                        List<string> ctrls = new List<string>();
+                        try { CollectControlTexts(f, ctrls); } catch { }
+                        sb.Append("{\"name\":\"").Append(JsonEsc(f.Name))
+                          .Append("\",\"type\":\"").Append(JsonEsc(f.GetType().FullName))
+                          .Append("\",\"text\":\"").Append(JsonEsc(f.Text))
+                          .Append("\",\"visible\":").Append(f.Visible ? "true" : "false")
+                          .Append(",\"hwnd\":").Append(f.Handle.ToInt64())
+                          .Append(",\"bounds\":\"").Append(f.Bounds.ToString())
+                          .Append("\",\"controls\":[");
+                        for (int i = 0; i < ctrls.Count && i < 200; i++)
+                        {
+                            if (i > 0) sb.Append(",");
+                            sb.Append("\"").Append(JsonEsc(ctrls[i])).Append("\"");
+                        }
+                        sb.Append("]}");
+                    }
+                }
+                sb.Append("]}");
+                return sb.ToString();
+            }
+
+            if (cmd == "CLOSE_FORM")
+            {
+                FormCollection forms = Application.OpenForms;
+                int closedCount = 0;
+                if (forms != null)
+                {
+                    for (int i = forms.Count - 1; i >= 0; i--)
+                    {
+                        Form f = forms[i];
+                        if (f == null || f.IsDisposed || f == mainFrm) continue;
+                        if (arg == "ALL" || f.Name.IndexOf(arg, StringComparison.OrdinalIgnoreCase) >= 0 || f.Text.IndexOf(arg, StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            try
+                            {
+                                f.BeginInvoke((MethodInvoker)delegate { try { f.Close(); } catch { } });
+                                closedCount++;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                return "{\"status\":\"ok\",\"closed\":" + closedCount + "}";
+            }
+
+            if (cmd == "DB_INSPECT" || cmd == "DB_SELECT_ROW")
+            {
+                Form dbForm = null;
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            dbForm = f; break;
+                        }
+                    }
+                }
+                if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
+
+                FieldInfo fHtml = dbForm.GetType().GetField("RenderedHTMLString", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                FieldInfo fId = dbForm.GetType().GetField("SelectedObjectID", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                FieldInfo fName = dbForm.GetType().GetField("SelectedObjectName", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                FieldInfo fList = dbForm.GetType().GetField("dXkHcikCGK6", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                MethodInfo mDisplay = dbForm.GetType().GetMethod("DisplaySelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                if (cmd == "DB_SELECT_ROW")
+                {
+                    int row = 0;
+                    int.TryParse(arg, out row);
+                    dbForm.BeginInvoke((MethodInvoker)delegate
+                    {
+                        try
+                        {
+                            if (fList != null)
+                            {
+                                object lv = fList.GetValue(dbForm);
+                                if (lv != null)
+                                {
+                                    PropertyInfo piSel = lv.GetType().GetProperty("SelectedIndices");
+                                    if (piSel != null)
+                                    {
+                                        var selList = piSel.GetValue(lv, null) as System.Collections.IList;
+                                        if (selList != null)
+                                        {
+                                            selList.Clear();
+                                            selList.Add(row);
+                                        }
+                                    }
+                                }
+                            }
+                            if (mDisplay != null) mDisplay.Invoke(dbForm, null);
+                        }
+                        catch (Exception ex) { Log("DB_SELECT_ROW error: " + ex.Message); }
+                    });
+                    return "{\"status\":\"ok\",\"action\":\"DB_SELECT_ROW\",\"row\":" + row + "}";
+                }
+
+                string html = fHtml != null ? fHtml.GetValue(dbForm) as string : "";
+                int objId = fId != null ? (int)fId.GetValue(dbForm) : -1;
+                string objName = fName != null ? fName.GetValue(dbForm) as string : "";
+                return "{\"status\":\"ok\",\"id\":" + objId + ",\"name\":\"" + JsonEsc(objName) + "\",\"html_len\":" + (html != null ? html.Length : 0) + ",\"html_sample\":\"" + JsonEsc(html != null ? html.Substring(0, Math.Min(350, html.Length)) : "") + "\"}";
+            }
+
+            if (cmd == "SCEN_EXPAND_ALL" || cmd == "SCEN_SELECT" || cmd == "SCEN_LOAD")
+            {
+                Form loadScenForm = null;
+                Control dtvCtrl = null;
+                Button btnLoad = null;
+
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f == null || f.IsDisposed) continue;
+                        if (f.GetType().Name.IndexOf("LoadScenario", StringComparison.OrdinalIgnoreCase) >= 0 || f.Name.IndexOf("LoadScenario", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            loadScenForm = f;
+                            dtvCtrl = FindControlByTypeOrName(f, "DarkTreeView");
+                            btnLoad = FindControlByTypeOrName(f, "Button2") as Button;
+                            break;
+                        }
+                    }
+                }
+
+                if (loadScenForm == null) return "{\"status\":\"error\",\"message\":\"LoadScenario window not open\"}";
+
+                if (cmd == "SCEN_LOAD")
+                {
+                    if (btnLoad != null)
+                    {
+                        loadScenForm.BeginInvoke((MethodInvoker)delegate
+                        {
+                            try { btnLoad.PerformClick(); } catch { }
+                        });
+                        return "{\"status\":\"ok\",\"action\":\"SCEN_LOAD\"}";
+                    }
+                    return "{\"status\":\"error\",\"message\":\"Load button not found\"}";
+                }
+
+                if (dtvCtrl == null) return "{\"status\":\"error\",\"message\":\"DarkTreeView not found in LoadScenario\"}";
+
+                string matchFound = null;
+                loadScenForm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        TranslateDarkTreeView(dtvCtrl);
+                        PropertyInfo piNodes = dtvCtrl.GetType().GetProperty("Nodes");
+                        if (piNodes != null)
+                        {
+                            var nodes = piNodes.GetValue(dtvCtrl, null) as System.Collections.IEnumerable;
+                            if (nodes != null)
+                            {
+                                if (cmd == "SCEN_EXPAND_ALL")
+                                {
+                                    ExpandAllDarkNodes(nodes);
+                                    TranslateDarkTreeView(dtvCtrl);
+                                    dtvCtrl.Invalidate();
+                                }
+                                else if (cmd == "SCEN_SELECT")
+                                {
+                                    matchFound = SelectDarkNodeRecursive(dtvCtrl, nodes, arg);
+                                    TranslateDarkTreeView(dtvCtrl);
+                                    dtvCtrl.Invalidate();
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("SCEN command error: " + ex.Message);
+                    }
+                });
+
+                return "{\"status\":\"ok\",\"action\":\"" + cmd + "\",\"query\":\"" + JsonEsc(arg) + "\"}";
+            }
+
+            return "{\"status\":\"error\",\"message\":\"Unknown command: " + JsonEsc(cmd) + "\"}";
+        }
+
+        private static Control FindControlByTypeOrName(Control root, string target)
+        {
+            if (root == null || root.IsDisposed) return null;
+            if (string.Equals(root.GetType().Name, target, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(root.Name, target, StringComparison.OrdinalIgnoreCase))
+            {
+                return root;
+            }
+            foreach (Control child in root.Controls)
+            {
+                Control found = FindControlByTypeOrName(child, target);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static void ExpandAllDarkNodes(System.Collections.IEnumerable nodes)
+        {
+            if (nodes == null) return;
+            foreach (object n in nodes)
+            {
+                if (n == null) continue;
+                PropertyInfo piExp = n.GetType().GetProperty("Expanded");
+                if (piExp != null) piExp.SetValue(n, true, null);
+                PropertyInfo piCh = n.GetType().GetProperty("Nodes");
+                if (piCh != null) ExpandAllDarkNodes(piCh.GetValue(n, null) as System.Collections.IEnumerable);
+            }
+        }
+
+        private static string SelectDarkNodeRecursive(Control dtv, System.Collections.IEnumerable nodes, string target)
+        {
+            if (nodes == null || string.IsNullOrEmpty(target)) return null;
+            foreach (object n in nodes)
+            {
+                if (n == null) continue;
+                PropertyInfo piTxt = n.GetType().GetProperty("Text");
+                string txt = piTxt != null ? piTxt.GetValue(n, null) as string : "";
+                PropertyInfo piTag = n.GetType().GetProperty("Tag");
+                string tag = piTag != null && piTag.GetValue(n, null) != null ? piTag.GetValue(n, null).ToString() : "";
+
+                bool isMatch = (txt != null && txt.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0)
+                            || (tag != null && tag.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0);
+
+                if (isMatch)
+                {
+                    // Expand all parents
+                    object parent = n;
+                    while (parent != null)
+                    {
+                        PropertyInfo piP = parent.GetType().GetProperty("ParentNode");
+                        parent = piP != null ? piP.GetValue(parent, null) : null;
+                        if (parent != null)
+                        {
+                            PropertyInfo piExp = parent.GetType().GetProperty("Expanded");
+                            if (piExp != null) piExp.SetValue(parent, true, null);
+                        }
+                    }
+
+                    // Select this node
+                    PropertyInfo piSel = dtv.GetType().GetProperty("SelectedNodes");
+                    if (piSel != null)
+                    {
+                        object selList = piSel.GetValue(dtv, null);
+                        if (selList != null)
+                        {
+                            MethodInfo miClear = selList.GetType().GetMethod("Clear");
+                            MethodInfo miAdd = selList.GetType().GetMethod("Add");
+                            if (miClear != null) miClear.Invoke(selList, null);
+                            if (miAdd != null) miAdd.Invoke(selList, new object[] { n });
+                        }
+                    }
+                    return txt;
+                }
+
+                PropertyInfo piCh = n.GetType().GetProperty("Nodes");
+                if (piCh != null)
+                {
+                    string subMatch = SelectDarkNodeRecursive(dtv, piCh.GetValue(n, null) as System.Collections.IEnumerable, target);
+                    if (subMatch != null)
+                    {
+                        PropertyInfo piExp = n.GetType().GetProperty("Expanded");
+                        if (piExp != null) piExp.SetValue(n, true, null);
+                        return subMatch;
+                    }
+                }
+            }
+            return null;
         }
     }
 }

@@ -32,6 +32,10 @@ def gather() -> dict[str, str]:
     country = json.loads((ROOT / "dict/placenames_countries.json").read_text(
         encoding="utf-8"))
     table.update({k: v for k, v in country.items() if not k.startswith("_")})
+    cities_json = ROOT / "dict/placenames_cities.json"
+    if cities_json.is_file():
+        cities_data = json.loads(cities_json.read_text(encoding="utf-8"))
+        table.update({k: v for k, v in cities_data.items() if not k.startswith("_")})
     city_dir = ROOT / "dict/city_src"
     if city_dir.is_dir():
         for p in sorted(city_dir.glob("*.json")):

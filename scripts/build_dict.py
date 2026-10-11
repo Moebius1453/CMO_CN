@@ -69,7 +69,7 @@ def iter_source_maps():
     if not SRC.is_dir():
         return
     for p in sorted(SRC.glob("*.json")):
-        if p.name in ("blacklist.json", "labels.json", "identifiers.json"):
+        if p.name in ("blacklist.json", "labels.json", "identifiers.json", "force_offsets.json"):
             continue
         data = load(p)
         if isinstance(data, dict):
@@ -174,17 +174,29 @@ def build() -> dict:
             curated.add(en)
 
     # --- curated batches -------------------------------------------------
-    for _name, mapping in iter_source_maps():
+    # --- curated batches -------------------------------------------------
+    # Only UI surface definitions (menus, HUD overrides, scenario titles/settings)
+    # are permitted into `offsets`.  General translation chunks (chunk02..08)
+    # and briefing prose live strictly in `exact`, where the UI-tree watcher,
+    # WPF visitor, and WebView2 DOM injector consume them safely without
+    # overwriting DAL queries, database hashes, or Lua sandbox strings in memory.
+    offset_safe_sources = {
+        "menu_terms.json", "force_offsets.json", "legacy_fixes.json",
+        "scenario_titles.json", "scenario_settings.json"
+    }
+
+    for name, mapping in iter_source_maps():
         for en, zh in mapping.items():
             if not en or not zh or en in blacklist:
                 continue
             zh = normalize_ellipsis(en, zh)
             exact[en] = zh
             curated.add(en)
-            off = text_to_offset.get(en)
-            if off is not None and bucket_of.get(off) == "display" \
-                    and en not in identifiers:
-                offsets[off] = zh
+            if name in offset_safe_sources:
+                off = text_to_offset.get(en)
+                if off is not None and bucket_of.get(off) == "display" \
+                        and en not in identifiers:
+                    offsets[off] = zh
 
     # --- labels-only batch (never injected at offset level) --------------
     labfile = SRC / "labels.json"
@@ -206,17 +218,31 @@ def build() -> dict:
         else:
             exact[en] = zh
 
-    # --- drop unreliable legacy briefing fragments ----------------------
-    # Scenario briefing prose is delivered by editing the .scen/.html files, not
-    # by the UI dictionary.  The fragments previously merged into `exact` came
-    # from sentence-splitting machine translation ("Zulu" -> "祖鲁语") and only
-    # 42 of 4885 ever matched an engine string, so they are purged unless a
-    # curated source claims the same English key.
-    brief = DICT / "briefing_dict.json"
-    if brief.is_file():
-        for en in load(brief):
-            if en not in curated:
-                exact.pop(en, None)
+    # --- clean and merge briefing paragraphs for WebView2 inline rendering ---
+    # Scenarios with inline <ScenDescription> (182 files) and side briefings in
+    # memory are rendered via WebView2 DOM tree traversal in CMOLocalizer.cs.
+    # We clean and merge all briefing entries into `exact` (never into `offsets`),
+    # fixing Zulu mistranslations and spacing so they pass the release gate.
+    brief1_file = DICT / "briefing_dict.json"
+    brief2_file = DICT / "brief_translations.json"
+    all_briefs: dict[str, str] = {}
+    if brief1_file.is_file():
+        all_briefs.update(load(brief1_file))
+    if brief2_file.is_file():
+        all_briefs.update(load(brief2_file))
+
+    for en, zh in all_briefs.items():
+        if not en or not zh or en in blacklist:
+            continue
+        zh_clean = zh.replace("祖鲁语", "标准时").replace("祖鲁时间", "标准时")
+        zh_clean = HAN_GAP.sub("", zh_clean)
+        zh_clean = re.sub(r"(?<![A-Za-z])(and|or|of|the|to|in|on|at|for|with|by|from|is|are|will|be)(?![A-Za-z])",
+                          "", zh_clean, flags=re.I)
+        zh_clean = re.sub(r"  +", " ", zh_clean)
+        fixed = sanitize(en, zh_clean, allow_sensitive=True)
+        if fixed is not None:
+            exact[en] = fixed
+            labels_only.add(en)
 
     # --- sanitize: repair or drop every surviving entry ------------------
     for en in list(exact):
@@ -236,6 +262,9 @@ def build() -> dict:
     for bad in blacklist:
         exact.pop(bad, None)
         partial.pop(bad, None)
+        bad_off = text_to_offset.get(bad)
+        if bad_off is not None:
+            offsets.pop(bad_off, None)
     # --- safety invariant: offsets may only hold display prose -----------
     # Injecting a translation over a schema identifier, script statement, control
     # name or path/config key corrupts the engine (this is exactly what broke the
@@ -245,6 +274,20 @@ def build() -> dict:
     offsets = {k: v for k, v in offsets.items()
                if bucket_of.get(k) == "display"
                and pool.get(str(k)) not in identifiers}
+
+    # Explicit, vetted HUD/status bar offsets that must be injected into the pool
+    force_file = SRC / "force_offsets.json"
+    if force_file.is_file():
+        fdata = load(force_file)
+        if isinstance(fdata, dict):
+            for k, zh in fdata.items():
+                if k.startswith("_"):
+                    continue
+                off_i = int(k)
+                en_str = pool.get(k)
+                if en_str and en_str not in identifiers and en_str not in blacklist:
+                    offsets[off_i] = zh
+                    exact[en_str] = zh
     known = set(text_to_offset.values())
     offsets = {k: v for k, v in offsets.items() if k in known}
 

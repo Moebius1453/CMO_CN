@@ -41,7 +41,10 @@ SQL_STRONG = re.compile(
     r"|\bGROUP\s+BY\b"
     r"|\bPRAGMA\s+\w"
     r"|\b(sqlite_master|sqlite_sequence|information_schema)\b"
-    r"|\bVACUUM\b)", re.I)
+    r"|\bVACUUM\b"
+    r"|\b(AND|OR)\s+[A-Za-z0-9_.]+\s*(LIKE\b|=|<>|<=|>=|<|>|IN\s*\()"
+    r"|\b(Data Source|Provider|Initial Catalog)\s*="
+    r"|\bSET\s+\[)", re.I)
 SQL_WEAK = re.compile(r"\b(FROM|WHERE|JOIN|HAVING|LIMIT|UNION|DISTINCT)\b", re.I)
 SQL_COLUMNISH = re.compile(r"\b\w+(ID|Id|Type|Name|Flag)\b")
 
@@ -192,10 +195,12 @@ def classify(s: str) -> str:
         return "internal"
     if LUA_IDENT.search(t) and t.count(" ") <= 1:
         return "internal"
-    if SQL_STRONG.search(t):
-        return "internal"
-    if SQL_WEAK.search(t) and SQL_COLUMNISH.search(t):
-        return "internal"
+    # A string ending with a colon or question mark is a UI prompt, never a SQL query.
+    if not (t.endswith(":") or t.endswith("：") or t.endswith("?")):
+        if SQL_STRONG.search(t):
+            return "internal"
+        if SQL_WEAK.search(t) and SQL_COLUMNISH.search(t):
+            return "internal"
     if t in INTERNAL_TOKENS:
         return "internal"
     if HTML_FRAGMENT.search(t):
@@ -248,8 +253,13 @@ def is_script_or_schema(s: str) -> bool:
     if not s:
         return False
     t = s.strip()
+    # A string ending with a colon is a UI prompt, never a SQL query.
+    is_sql = False
+    if not (t.endswith(":") or t.endswith("：") or t.endswith("?")):
+        if SQL_STRONG.search(t) or (SQL_WEAK.search(t) and SQL_COLUMNISH.search(t)):
+            is_sql = True
     return bool(SCRIPT_CODE.search(t) or PATH_LIKE.search(t)
-                or SQL_STRONG.search(t) or LUA_IDENT.search(t)
+                or is_sql or LUA_IDENT.search(t)
                 or CONTROL_PREFIX.match(t) or UNDERSCORE_IDENT.match(t)
                 or DOTTED.match(t) or NAMESPACE_LIKE.match(t)
                 or MEMBER_CALL.search(t) or CODE_EXPR.search(t)
