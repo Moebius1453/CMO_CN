@@ -240,11 +240,14 @@ def build() -> dict:
         "_meta": {
             "engine": "CMOLocalizer",
             "version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
+            # Keys are deliberately prefixed so this block can never be mistaken
+            # for a top-level section by the engine's hand-rolled JSON scanner
+            # (see scripts/verify_engine_parse.py).
             "counts": {
-                "offsets": len(ordered_offsets),
-                "exact": len(ordered_exact),
-                "partial": len(ordered_partial),
-                "words": 0,
+                "n_offsets": len(ordered_offsets),
+                "n_exact": len(ordered_exact),
+                "n_partial": len(ordered_partial),
+                "n_words": 0,
             },
         },
         "offsets": ordered_offsets,
@@ -264,7 +267,8 @@ def main() -> int:
     write(doc, MAIN)
     c = doc["_meta"]["counts"]
     print(f"built {MAIN}")
-    print(f"  offsets={c['offsets']}  exact={c['exact']}  partial={c['partial']}")
+    print(f"  offsets={c['n_offsets']}  exact={c['n_exact']}  "
+          f"partial={c['n_partial']}")
     return 0
 
 

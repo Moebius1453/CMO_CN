@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -1323,10 +1324,13 @@ namespace CMOLocalizer
 
         private static void ParseJsonSections(string text)
         {
-            int idxOffsets = text.IndexOf("\"offsets\"");
-            int idxExact = text.IndexOf("\"exact\"");
-            int idxPartial = text.IndexOf("\"partial\"");
-            int idxWords = text.IndexOf("\"words\"");
+            // Section keys must be located at the TOP level of the root object.
+            // A plain IndexOf would match `_meta.counts.offsets` instead and shift
+            // every section boundary, silently loading zero entries.
+            int idxOffsets = FindTopLevelKey(text, "offsets");
+            int idxExact = FindTopLevelKey(text, "exact");
+            int idxPartial = FindTopLevelKey(text, "partial");
+            int idxWords = FindTopLevelKey(text, "words");
 
             List<SectionPos> sections = new List<SectionPos>();
             if (idxOffsets >= 0) sections.Add(new SectionPos { Name = "offsets", Pos = idxOffsets });
@@ -1353,6 +1357,43 @@ namespace CMOLocalizer
             public int Pos;
         }
 
+        /// <summary>
+        /// Return the index of a quoted key that sits directly inside the root
+        /// object (depth 1), or -1. Nested containers such as `_meta.counts` are
+        /// at depth 2 and therefore never match.
+        /// </summary>
+        private static int FindTopLevelKey(string text, string key)
+        {
+            int depth = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c == '"')
+                {
+                    int j = i + 1;
+                    bool matches = j + key.Length < text.Length
+                        && text[j + key.Length] == '"'
+                        && string.CompareOrdinal(text, j, key, 0, key.Length) == 0;
+                    if (matches && depth == 1)
+                    {
+                        return i;
+                    }
+                    // Skip the whole string literal, honouring escapes.
+                    i = j;
+                    while (i < text.Length)
+                    {
+                        if (text[i] == '\\') { i += 2; continue; }
+                        if (text[i] == '"') break;
+                        i++;
+                    }
+                    continue;
+                }
+                if (c == '{' || c == '[') depth++;
+                else if (c == '}' || c == ']') depth--;
+            }
+            return -1;
+        }
+
         private static void ParsePairs(string block, bool isOffset, bool isExact, bool isPartial, bool isWords)
         {
             int p = 0;
@@ -1374,11 +1415,27 @@ namespace CMOLocalizer
                     if (block[p] == '\\' && p + 1 < block.Length)
                     {
                         char c = block[p + 1];
-                        if (c == '\"') sbKey.Append('\"');
+                        if (c == '"') sbKey.Append('"');
                         else if (c == '\\') sbKey.Append('\\');
+                        else if (c == '/') sbKey.Append('/');
+                        else if (c == 'b') sbKey.Append('\b');
+                        else if (c == 'f') sbKey.Append('\f');
                         else if (c == 'n') sbKey.Append('\n');
                         else if (c == 'r') sbKey.Append('\r');
                         else if (c == 't') sbKey.Append('\t');
+                        else if (c == 'u' && p + 5 < block.Length)
+                        {
+                            int code;
+                            if (int.TryParse(block.Substring(p + 2, 4),
+                                    NumberStyles.HexNumber,
+                                    CultureInfo.InvariantCulture, out code))
+                            {
+                                sbKey.Append((char)code);
+                                p += 6;
+                                continue;
+                            }
+                            sbKey.Append('\\'); sbKey.Append(c);
+                        }
                         else { sbKey.Append('\\'); sbKey.Append(c); }
                         p += 2;
                     }
@@ -1412,11 +1469,27 @@ namespace CMOLocalizer
                     if (block[p] == '\\' && p + 1 < block.Length)
                     {
                         char c = block[p + 1];
-                        if (c == '\"') sbVal.Append('\"');
+                        if (c == '"') sbVal.Append('"');
                         else if (c == '\\') sbVal.Append('\\');
+                        else if (c == '/') sbVal.Append('/');
+                        else if (c == 'b') sbVal.Append('\b');
+                        else if (c == 'f') sbVal.Append('\f');
                         else if (c == 'n') sbVal.Append('\n');
                         else if (c == 'r') sbVal.Append('\r');
                         else if (c == 't') sbVal.Append('\t');
+                        else if (c == 'u' && p + 5 < block.Length)
+                        {
+                            int code;
+                            if (int.TryParse(block.Substring(p + 2, 4),
+                                    NumberStyles.HexNumber,
+                                    CultureInfo.InvariantCulture, out code))
+                            {
+                                sbVal.Append((char)code);
+                                p += 6;
+                                continue;
+                            }
+                            sbVal.Append('\\'); sbVal.Append(c);
+                        }
                         else { sbVal.Append('\\'); sbVal.Append(c); }
                         p += 2;
                     }
