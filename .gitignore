@@ -26,3 +26,7 @@ CMOLocalizer.log
 .vs/
 .idea/
 *.user
+
+# 生成物（可重现）
+dict/worklist.json
+dict/CMOLocalizer.json.bak

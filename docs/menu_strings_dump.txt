@@ -1,0 +1,903 @@
+[79714] MenuStrip1  ==>  <NONE>
+[79738] FileToolStripMenuItem  ==>  <NONE>
+[79784] File  ==>  文件
+[79796] MaiToolStripMenuItem  ==>  <NONE>
+[79840] Start Menu  ==>  开始菜单
+[79864] TSMI_NewScenario  ==>  <NONE>
+[79900] Create New Blank Scenario  ==>  创建新的空白想定
+[79954] ToolStripSeparator46  ==>  <NONE>
+[79998] TSMI_SaveScen  ==>  <NONE>
+[80028] Save  ==>  保存
+[80040] TSMI_SaveIncrementally  ==>  <NONE>
+[80088] Save Incrementally  ==>  增量保存
+[80128] TSMI_SaveAs  ==>  <NONE>
+[80154] Save As...  ==>  另存为...
+[80178] ToolStripSeparator47  ==>  <NONE>
+[80222] TSMI_LoadScenario  ==>  <NONE>
+[80260] Load  ==>  加载
+[80272] TSMI_LoadRecent  ==>  <NONE>
+[80306] Load recent:  ==>  最近加载：
+[80334] ToolStripSeparator48  ==>  <NONE>
+[80378] RealtimeToolStripMenuItem  ==>  <NONE>
+[80432] Multiplayer  ==>  多人游戏
+[80458] RealtimeJoinToolStripMenuItem  ==>  <NONE>
+[80520] Join  ==>  <NONE>
+[80532] RealtimeDisconnectToolStripMenuItem  ==>  <NONE>
+[80606] Disconnect  ==>  断开连接
+[80630] TSMI_Benchmark  ==>  <NONE>
+[80662] ExitToolStripMenuItem  ==>  <NONE>
+[80708] Exit  ==>  退出
+[80720] ViewToolStripMenuItem1  ==>  <NONE>
+[80768] View  ==>  视图
+[80780] CMenu_View  ==>  <NONE>
+[80804] TSMI_FullScreen  ==>  <NONE>
+[80838] Alt + Enter  ==>  <NONE>
+[80864] Toggle Full-screen / Windowed  ==>  切换全屏/窗口化
+[80926] ZoomInToolStripMenuItem1  ==>  <NONE>
+[80978] Z / Mouse Scroll  ==>  <NONE>
+[81014] Zoom In  ==>  放大地图
+[81032] ZoomOutToolStripMenuItem1  ==>  <NONE>
+[81086] X / Mouse Scroll  ==>  <NONE>
+[81122] Zoom Out  ==>  缩小地图
+[81142] PanMapToolStripMenuItem  ==>  <NONE>
+[81192] Pan Map  ==>  平移地图
+[81210] PanMapUpToolStripMenuItem  ==>  <NONE>
+[81264] Up Arrow / Num 8  ==>  上箭头 / 小键盘8
+[81300] Pan Map Up  ==>  向上平移地图
+[81324] PanMapRightToolStripMenuItem  ==>  <NONE>
+[81384] Left Arrow / Num 6  ==>  左箭头 / 小键盘6
+[81424] Pan Map Right  ==>  向右平移地图
+[81454] PanMapLeftToolStripMenuItem  ==>  <NONE>
+[81512] Right Arrow / Num 4  ==>  右箭头 / 小键盘4
+[81554] Pan Map Left  ==>  向左平移地图
+[81582] PanMapDownToolStripMenuItem  ==>  <NONE>
+[81640] Down Arrow / Num 2  ==>  下箭头 / 小键盘2
+[81680] Pan Map Down  ==>  向下平移地图
+[81708] ToolStripSeparator29  ==>  <NONE>
+[81752] TSMI_SelectNextUnit  ==>  <NONE>
+[81794] | (Vert. Separator)  ==>  |（垂直分隔符）
+[81836] Select Next Unit  ==>  <NONE>
+[81872] TSMI_SelectPreviousUnit  ==>  <NONE>
+[81922] Backspace  ==>  <NONE>
+[81944] Select Previous Unit  ==>  <NONE>
+[81988] ToolStripSeparator27  ==>  <NONE>
+[82032] RangeBearingToolToolStripMenuItem  ==>  <NONE>
+[82102] Ctrl+D  ==>  <NONE>
+[82118] Range / Bearing Tool  ==>  测距/测向标尺
+[82162] ToolStripSeparator25  ==>  <NONE>
+[82206] MessageLogInSeparateWindowToolStripMenuItem  ==>  <NONE>
+[82296] Message Log in Separate Window  ==>  在独立窗口中显示消息日志
+[82360] ToolStripSeparator21  ==>  <NONE>
+[82404] TSMI_BaseEarthLayer  ==>  <NONE>
+[82446] Base Earth  ==>  基础地球
+[82470] MapLatLonGridToolStripMenuItem  ==>  <NONE>
+[82534] Map Lat/Lon Grid  ==>  地图经纬网格
+[82570] TSMI_Sentinel2  ==>  <NONE>
+[82602] Sentinel-2 satellite map  ==>  Sentinel-2 卫星地图
+[82654] BMNGLayerToolStripMenuItem  ==>  <NONE>
+[82710] BMNG Layer  ==>  BMNG 图层
+[82734] ReliefLayerToolStripMenuItem  ==>  <NONE>
+[82794] Relief + Bathymetry Layer  ==>  地形+水深图层
+[82848] BordersCoastlinesToolStripMenuItem  ==>  <NONE>
+[82920] Borders + Coastlines  ==>  边界+海岸线
+[82964] TSMI_StamenTerrain  ==>  <NONE>
+[83004] Stamen - Terrain  ==>  Stamen - 地形
+[83040] TSMI_StamenRoads  ==>  <NONE>
+[83076] Stamen - Roads + Cities  ==>  Stamen - 道路+城市
+[83126] TSMI_OpenTopoMap  ==>  <NONE>
+[83162] OpenTopoMap  ==>  <NONE>
+[83188] TSMI_OSMVector  ==>  <NONE>
+[83220] OSM Vector Map  ==>  OSM 矢量地图
+[83252] TSMI_LandCover  ==>  <NONE>
+[83284] Land Cover  ==>  土地覆盖
+[83308] VirtualEarthTSMI  ==>  <NONE>
+[83344] Virtual Earth  ==>  微软虚拟地球卫星图
+[83374] TSMI_CustomLayers  ==>  <NONE>
+[83412] Custom Layers  ==>  自定义图层
+[83442] PlacenamesToolStripMenuItem  ==>  <NONE>
+[83500] Placenames  ==>  地名
+[83524] DayNightLightingToolStripMenuItem  ==>  <NONE>
+[83594] Day + Night Lighting  ==>  昼夜光照
+[83638] TSMI_3DView  ==>  <NONE>
+[83664] 3D View  ==>  3D 视图
+[83682] ReportsToolStripMenuItem  ==>  <NONE>
+[83734] Game  ==>  游戏
+[83746] CMenu_Game  ==>  <NONE>
+[83770] StartResumeGameToolStripMenuItem.Image  ==>  <NONE>
+[83850] StartResumeGameToolStripMenuItem  ==>  <NONE>
+[83918] Spacebar / Ctrl+Enter  ==>  空格键 / Ctrl+Enter
+[83964] Start / Resume  ==>  开始/继续推演
+[83996] TSMI_Lock_UnlockFidelity  ==>  <NONE>
+[84048] Lock / Unlock simulation fidelity  ==>  锁定/解锁仿真精度
+[84118] IncreaseCompressionToolStripMenuItem  ==>  <NONE>
+[84194] +  ==>  <NONE>
+[84200] Increase Time Compression  ==>  增加时间压缩
+[84254] DecreaseCompressionToolStripMenuItem  ==>  <NONE>
+[84330] Decrease Time Compression  ==>  减少时间压缩
+[84384] SetToolStripMenuItem  ==>  <NONE>
+[84428] Enter  ==>  <NONE>
+[84442] Normal (1:1) Time Compression  ==>  正常倍率 (1:1实时)
+[84504] OrderOfBattleToolStripMenuItem  ==>  <NONE>
+[84568] O  ==>  <NONE>
+[84574] Order Of Battle (OoB)  ==>  作战序列（OoB）
+[84620] DatabaseViewerToolStripMenuItem  ==>  <NONE>
+[84686] Database Viewer  ==>  数据库查看器
+[84720] BrowseScenarioPlatformsToolStripMenuItem  ==>  <NONE>
+[84804] Browse Scenario Platforms  ==>  浏览想定平台
+[84858] ScenarioDescriptionToolStripMenuItem  ==>  <NONE>
+[84934] Scenario Description  ==>  想定描述
+[84978] ScenarioBriefingToolStripMenuItem  ==>  <NONE>
+[85048] Side Briefing  ==>  阵营简报
+[85078] SideDoctrineRoEToolStripMenuItem  ==>  <NONE>
+[85146] Ctrl+Shift+F9  ==>  <NONE>
+[85176] Side Doctrine, EMCON, WRA  ==>  阵营条令、EMCON、WRA
+[85230] SidePostureToolStripMenuItem  ==>  <NONE>
+[85290] Side Posture  ==>  阵营态势
+[85318] TSMI_SideSpecialActions  ==>  <NONE>
+[85368] Special Actions  ==>  特殊行动
+[85402] SatellitePassPredictionsToolStripMenuItem  ==>  <NONE>
+[85488] Satellite Pass Predictions  ==>  卫星过境预测
+[85544] TSMI_Recorder  ==>  <NONE>
+[85574] Recorder  ==>  记录器
+[85594] MessageLogToolStripMenuItem  ==>  <NONE>
+[85652] Message Log  ==>  消息日志
+[85678] ClearToolStripMenuItem  ==>  <NONE>
+[85726] Ctrl+M  ==>  <NONE>
+[85742] Clear  ==>  清除
+[85756] PrintToFileToolStripMenuItem  ==>  <NONE>
+[85816] Print to file  ==>  打印到文件
+[85846] LossesExpendituresToolStripMenuItem  ==>  <NONE>
+[85920] Losses + Expenditures  ==>  损失与消耗
+[85966] ViewCurrentScoreToolStripMenuItem  ==>  <NONE>
+[86036] Scoring  ==>  计分
+[86054] ToolStripSeparator23  ==>  <NONE>
+[86098] OptionsToolStripMenuItem1.Image  ==>  <NONE>
+[86164] OptionsToolStripMenuItem1  ==>  <NONE>
+[86218] Game Options  ==>  推演选项
+[86246] TSMI_LicenseTweaker  ==>  <NONE>
+[86288] License Tweaker  ==>  许可证调整工具
+[86322] TSMI_MapSettings  ==>  <NONE>
+[86358] Map Settings + Tools  ==>  地图设置与工具
+[86402] CMenu_MapSettings  ==>  <NONE>
+[86440] MapSettingsToolStripMenuItem1  ==>  <NONE>
+[86502] Map Settings Window  ==>  态势图/地图设置窗口
+[86544] SwitchToGroupViewToolStripMenuItem  ==>  <NONE>
+[86616] V / PgUp / Num 9  ==>  V / PgUp / 小键盘9
+[86652] Switch to GROUP View  ==>  Switch 至编队查看
+[86696] ShowGhostedGroupMembersForToolStripMenuItem  ==>  <NONE>
+[86786] Show ghosted group members for...  ==>  为下列对象显示编组成员虚影...
+[86856] TSMI25  ==>  <NONE>
+[86872] Selected Group  ==>  <NONE>
+[86904] TSMI26  ==>  <NONE>
+[86920] All Groups  ==>  全部 编队
+[86944] TSMI27  ==>  <NONE>
+[86960] Do not show  ==>  Do 不/未 显示
+[86986] ToolStripSeparator6  ==>  <NONE>
+[87028] EnableAllRangeIndicatorToggle  ==>  <NONE>
+[87090] Enable all Range Indicators  ==>  启用所有距离指示器
+[87148] DisableAllRangeIndicatorToggle  ==>  <NONE>
+[87212] Disable all Range Indicators  ==>  禁用所有距离指示器
+[87272] AirSensorsToolStripMenuItem.Image  ==>  <NONE>
+[87342] AirSensorsToolStripMenuItem  ==>  <NONE>
+[87400] Air Sensors  ==>  空中传感器
+[87426] SurfaceSensorsToolStripMenuItem.Image  ==>  <NONE>
+[87504] SurfaceSensorsToolStripMenuItem  ==>  <NONE>
+[87570] Surface Sensors  ==>  水面传感器
+[87604] UnderwaterSensorsToolStripMenuItem.Image  ==>  <NONE>
+[87688] UnderwaterSensorsToolStripMenuItem  ==>  <NONE>
+[87760] Underwater Sensors  ==>  水下传感器
+[87800] AirWeaponsToolStripMenuItem.Image  ==>  <NONE>
+[87870] AirWeaponsToolStripMenuItem  ==>  <NONE>
+[87928] Air Weapons  ==>  空中武器
+[87954] SurfaceWeaponsToolStripMenuItem.Image  ==>  <NONE>
+[88032] SurfaceWeaponsToolStripMenuItem  ==>  <NONE>
+[88098] Surface Weapons  ==>  水面武器
+[88132] LandWeaponsToolStripMenuItem.Image  ==>  <NONE>
+[88204] LandWeaponsToolStripMenuItem  ==>  <NONE>
+[88264] Land Weapons  ==>  陆地武器
+[88292] UnderwaterWeaponsToolStripMenuItem.Image  ==>  <NONE>
+[88376] UnderwaterWeaponsToolStripMenuItem  ==>  <NONE>
+[88448] Underwater Weapons  ==>  水下武器
+[88488] TSMI_AircraftRange.Image  ==>  <NONE>
+[88540] TSMI_AircraftRange  ==>  <NONE>
+[88580] Aircraft Range  ==>  航空器航程
+[88612] CommDevicesToolStripMenuItem.Image  ==>  <NONE>
+[88684] CommDevicesToolStripMenuItem  ==>  <NONE>
+[88744] Comms range  ==>  通信范围
+[88770] ShowRangeSymbolsForToolStripMenuItem  ==>  <NONE>
+[88846] Show range symbols for...  ==>  为下列对象显示范围符号...
+[88900] TSMI_RangeSymbols_  ==>  <NONE>
+[88940] TSMI_RangeSymbols_All  ==>  <NONE>
+[88986] All Units  ==>  所有单位
+[89008] TSMI_RangeSymbols_NotShown  ==>  <NONE>
+[89064] ToolStripSeparator7  ==>  <NONE>
+[89106] ShowNonfriendlyToolStripMenuItem  ==>  <NONE>
+[89174] Show Non-friendly Range-Symbols  ==>  显示非友方范围符号
+[89240] MergeRangesymbolsToolStripMenuItem  ==>  <NONE>
+[89312] Merge Range-symbols  ==>  合并范围符号
+[89354] ToolStripSeparator16  ==>  <NONE>
+[89398] SonobuoyVisibilityToolStripMenuItem  ==>  <NONE>
+[89472] Sonobuoy Visibility  ==>  声呐浮标可见性
+[89514] TSMI19  ==>  <NONE>
+[89530] Normal  ==>  <NONE>
+[89546] TSMI20  ==>  <NONE>
+[89562] Ghosted  ==>  <NONE>
+[89580] TSMI21  ==>  <NONE>
+[89596] ReferencePointVisibilityToolStripMenuItem  ==>  <NONE>
+[89682] Reference Point Visibility  ==>  参考点可见性
+[89738] TSMI22  ==>  <NONE>
+[89754] TSMI23  ==>  <NONE>
+[89770] TSMI24  ==>  <NONE>
+[89786] ToolStripSeparator32  ==>  <NONE>
+[89830] ToolStripMenuItem1  ==>  <NONE>
+[89870] Toggle End / Num 1  ==>  <NONE>
+[89910] Illumination Vectors  ==>  雷达照射矢量
+[89954] TSMI1  ==>  <NONE>
+[89968] TSMI2  ==>  <NONE>
+[89982] All  ==>  <NONE>
+[89992] TSMI3  ==>  <NONE>
+[90006] TargetingVectorsToolStripMenuItem  ==>  <NONE>
+[90076] Toggle Home / Num 7  ==>  切换主视图 / 小键盘7
+[90118] Targeting Vectors  ==>  目标瞄准引导矢量
+[90156] TSMI4  ==>  <NONE>
+[90170] TSMI5  ==>  <NONE>
+[90184] TSMI6  ==>  <NONE>
+[90198] DatablacksToolStripMenuItem  ==>  <NONE>
+[90256] Toggle *  ==>  切换 *
+[90276] Datablocks  ==>  <NONE>
+[90300] TSMI7  ==>  <NONE>
+[90314] TSMI8  ==>  <NONE>
+[90328] TSMI9  ==>  <NONE>
+[90342] ToolStripSeparator49  ==>  <NONE>
+[90386] OnlyTrackNumberClassIDToolStripMenuItem  ==>  <NONE>
+[90468] Only track number and class/ID  ==>  仅显示航迹编号与级别/ID
+[90532] TrackNumberClassIDKinematicDataToolStripMenuItem  ==>  <NONE>
+[90632] Track number, class-ID and kinematic data  ==>  航迹编号、级别ID与运动数据
+[90718] EverythingToolStripMenuItem  ==>  <NONE>
+[90776] Everything  ==>  全部
+[90800] DatalinksToolStripMenuItem  ==>  <NONE>
+[90856] Datalinks  ==>  数据链
+[90878] TSMI10  ==>  <NONE>
+[90894] TSMI11  ==>  <NONE>
+[90910] TSMI12  ==>  <NONE>
+[90926] ContactEmissionsToolStripMenuItem  ==>  <NONE>
+[90996] Contact Emissions  ==>  接触辐射
+[91034] TSMI13  ==>  <NONE>
+[91050] Selected Contact  ==>  所选目标
+[91086] TSMI14  ==>  <NONE>
+[91102] TSMI15  ==>  <NONE>
+[91118] ToolStripSeparator35  ==>  <NONE>
+[91162] AllEmissionsToolStripMenuItem  ==>  <NONE>
+[91224] All Emissions  ==>  所有辐射
+[91254] FireControlOnlyToolStripMenuItem  ==>  <NONE>
+[91322] Fire-Control Only  ==>  仅火控
+[91360] AllEmissionsForSelectedContactFireControlOnlyForRestToolStripMenuItem  ==>  <NONE>
+[91502] All Emissions for Selected Contact, Fire-Control Only for Rest  ==>  选定接触显示所有辐射，其余仅火控
+[91630] WakeCavitationToolStripMenuItem  ==>  <NONE>
+[91696] Wake and Cavitation  ==>  尾流与空泡
+[91738] TSMI_WC0  ==>  <NONE>
+[91758] TSMI_WC1  ==>  <NONE>
+[91778] TSMI_WC2  ==>  <NONE>
+[91798] ContrailsToolStripMenuItem  ==>  <NONE>
+[91854] Contrails  ==>  凝结尾迹
+[91876] TSMI_CON0  ==>  <NONE>
+[91898] TSMI_CON1  ==>  <NONE>
+[91920] TSMI_CON2  ==>  <NONE>
+[91942] PlottedCoursesToolStripMenuItem  ==>  <NONE>
+[92008] Plotted Courses  ==>  标绘航线
+[92042] TSMI28  ==>  <NONE>
+[92058] TSMI29  ==>  <NONE>
+[92074] TSMI30  ==>  <NONE>
+[92090] FlightplansToolStripMenuItem  ==>  <NONE>
+[92150] Flightplans  ==>  飞行计划
+[92176] TSMI40  ==>  <NONE>
+[92192] TSMI41  ==>  <NONE>
+[92208] TSMI42  ==>  <NONE>
+[92224] DefinePlottedCoursesColorToolStripMenuItem  ==>  <NONE>
+[92312] Define Plotted Courses Color  ==>  设置标绘航线颜色
+[92372] MissionAreacourseToolStripMenuItem  ==>  <NONE>
+[92444] Mission area/course  ==>  任务区域/航线
+[92486] TSMI31  ==>  <NONE>
+[92502] Selected mission  ==>  所选任务
+[92538] TSMI32  ==>  <NONE>
+[92554] All missions  ==>  所有任务
+[92582] TSMI33  ==>  <NONE>
+[92598] ToolStripSeparator24  ==>  <NONE>
+[92642] TrackUnitToolStripMenuItem  ==>  <NONE>
+[92698] T  ==>  <NONE>
+[92704] Track Selected Unit  ==>  跟踪选定单位
+[92746] TSMI_LOSTool  ==>  <NONE>
+[92774] LOS Tool  ==>  视距工具
+[92794] MinimapsToolStripMenuItem  ==>  <NONE>
+[92848] Minimaps  ==>  小地图
+[92868] GlobalMinimapToolStripMenuItem  ==>  <NONE>
+[92932] Global Minimap  ==>  全局小地图
+[92964] CameraMinimapToolStripMenuItem  ==>  <NONE>
+[93028] Camera Minimap  ==>  相机小地图
+[93060] ScenarioMinimapToolStripMenuItem  ==>  <NONE>
+[93128] Scenario Minimap  ==>  想定小地图
+[93164] TerrainTypeLegendToolStripMenuItem  ==>  <NONE>
+[93236] Terrain Type Legend  ==>  地形类型图例
+[93278] SonarComputerToolStripMenuItem  ==>  <NONE>
+[93342] Sonar Computer  ==>  声呐计算机
+[93374] QuickJumpTSMI  ==>  <NONE>
+[93404] Quick Jump  ==>  <NONE>
+[93428] TSMI_UnitOrders  ==>  <NONE>
+[93462] Unit Orders  ==>  单位命令
+[93488] CMenu_Unit  ==>  <NONE>
+[93512] AttackToolStripMenuItem  ==>  <NONE>
+[93562] Attack Options  ==>  攻击选项
+[93594] ToolStripMenuItem2  ==>  <NONE>
+[93634] Engage Target(s) - Auto  ==>  交战目标(s) - 自动
+[93684] ToolStripMenuItem6  ==>  <NONE>
+[93724] Engage Target(s) - Manual  ==>  交战目标(s) - 手动
+[93778] ToolStripMenuItem7  ==>  <NONE>
+[93818] Bearing-Only Launch (BOL)  ==>  方位-Only 出击/发射 (BOL)
+[93872] TSMI_ChaffSingle  ==>  <NONE>
+[93908] Lay chaff (single burst)  ==>  投放箔条（单次）
+[93960] TSMI_ChaffStream  ==>  <NONE>
+[93996] Lay chaff (continous stream)  ==>  投放箔条（连续播撒）
+[94056] DropTargetToolStripMenuItem  ==>  <NONE>
+[94114] E  ==>  <NONE>
+[94120] Drop Target(s)  ==>  放弃目标
+[94152] DisengageToolStripMenuItem  ==>  <NONE>
+[94208] Ctrl+E  ==>  <NONE>
+[94224] Disengage (Drop all targets)  ==>  脱离接触 (投掷/抛弃 全部 目标)
+[94284] IgnorePlottedCourse_SelectedUnitsToolStripMenuItem  ==>  <NONE>
+[94388] I (Yes/Inherit)  ==>  I（是/继承）
+[94422] Ignore plotted course when attacking - Selected Unit(s)  ==>  攻击时忽略已规划航线 - 所选单元
+[94536] IgnorePlottedCourse_Selected_Yes1  ==>  <NONE>
+[94606] IgnorePlottedCourse_Selected_No1  ==>  <NONE>
+[94674] IgnorePlottedCourse_Selected_Inherit1  ==>  <NONE>
+[94752] IgnorePlottedCourse_AllUnitsToolStripMenuItem1  ==>  <NONE>
+[94848] Ctrl+I (Yes/Inherit)  ==>  <NONE>
+[94892] Ignore plotted course when attacking - All Units  ==>  攻击时忽略已规划航线 - 所有单元
+[94992] IgnorePlottedCourse_All_Yes1  ==>  <NONE>
+[95052] IgnorePlottedCourse_All_No1  ==>  <NONE>
+[95110] IgnorePlottedCourse_All_Inherit1  ==>  <NONE>
+[95178] WeaponsHold_SelectedUnitsToolStripMenuItem_Cont  ==>  <NONE>
+[95276] A (Hold/Inherit)  ==>  一个 (Hold/继承上级)
+[95312] Weapon Control Status (WCS) for all contact types - Selected Unit(s)  ==>  所有接触类型的武器控制状态（WCS）- 所选单元
+[95452] WCS_Selected_Hold_Cont  ==>  <NONE>
+[95500] WEAPONS HOLD  ==>  武器保持（禁止开火）
+[95528] WCS_Selected_Tight_Cont  ==>  <NONE>
+[95578] WEAPONS TIGHT  ==>  武器受限（谨慎开火）
+[95608] WCS_Selected_Free_Cont  ==>  <NONE>
+[95656] WEAPONS FREE  ==>  武器自由（自由开火）
+[95684] WCS_Selected_Inherit_Cont  ==>  <NONE>
+[95738] WeaponsHold_AllUnitsToolStripMenuItem_Cont  ==>  <NONE>
+[95826] Ctrl+A (Hold/Inherit)  ==>  <NONE>
+[95872] Weapon Control Status (WCS) for all contact types - All Units  ==>  所有接触类型的武器控制状态（WCS）- 所有单元
+[95998] WCS_All_Hold_Cont  ==>  <NONE>
+[96036] WCS_All_Tight_Cont  ==>  <NONE>
+[96076] WCS_All_Free_Cont  ==>  <NONE>
+[96114] WCS_All_Inherit_Cont  ==>  <NONE>
+[96158] TSMI_IgnoreDLZChecks  ==>  <NONE>
+[96202] Ignore DLZ checks  ==>  忽略DLZ检查
+[96240] TSMI_ASWSpecificActions  ==>  <NONE>
+[96290] ASW-specific actions  ==>  反潜战专属行动
+[96334] TSMI_DropPassiveSonobuoy  ==>  <NONE>
+[96386] Drop Passive Sonobuoy  ==>  投放被动声呐浮标
+[96432] ShallowOverLayerToolStripMenuItem  ==>  <NONE>
+[96502] Shift+[  ==>  <NONE>
+[96520] Shallow - Over Layer  ==>  Shallow - 超过跃层
+[96564] DeepUnderLayerToolStripMenuItem1  ==>  <NONE>
+[96632] Deep - Under Layer  ==>  Deep - 低于跃层
+[96672] TSMI_DropActiveSonobuoy  ==>  <NONE>
+[96722] Drop Active Sonobuoy  ==>  投放主动声呐浮标
+[96766] ShallowOverLayerToolStripMenuItem1  ==>  <NONE>
+[96838] Shift+]  ==>  <NONE>
+[96856] DeepUnderLayerToolStripMenuItem  ==>  <NONE>
+[96922] TSMI_DippingSonar  ==>  <NONE>
+[96960] Shift+D  ==>  <NONE>
+[96978] Deploy Dipping Sonar  ==>  投放吊放声呐
+[97022] ThrottleAltitudeDepthToolStripMenuItem  ==>  <NONE>
+[97102] Throttle - Altitude/Depth  ==>  油门 - 高度/深度
+[97156] PlotCourseTSMI  ==>  <NONE>
+[97188] PlotCourse_Info_TSMI  ==>  <NONE>
+[97232] Plotted Course Info  ==>  已规划航线信息
+[97274] MagazinesToolStripMenuItem2  ==>  <NONE>
+[97332] Magazines  ==>  弹药库
+[97354] AirOpsToolStripMenuItem1  ==>  <NONE>
+[97406] Air Operations  ==>  航空作业调度 (Air Ops)
+[97438] BoatDockingOpsToolStripMenuItem  ==>  <NONE>
+[97504] Docking Operations  ==>  停靠操作
+[97544] MountsWeaponsTSMI  ==>  <NONE>
+[97582] SensorsTSMI  ==>  <NONE>
+[97608] Sensors  ==>  传感器
+[97626] DamageSystemsStatusToolStripMenuItem  ==>  <NONE>
+[97702] Damage + Systems Status  ==>  损伤与系统状态
+[97752] TSMI_RTB  ==>  <NONE>
+[97772] B  ==>  <NONE>
+[97778] Return To Base (RTB)  ==>  返回基地（RTB）
+[97822] TSMI_SelectNewHome  ==>  <NONE>
+[97862] Select new home base  ==>  <NONE>
+[97906] RefuelifPossibleToolStripMenuItem  ==>  <NONE>
+[97976] SelectTankerAutomaticallyToolStripMenuItem1  ==>  <NONE>
+[98066] SelectTankerManuallyToolStripMenuItem1  ==>  <NONE>
+[98146] SelectTankerFromMissionToolStripMenuItem1  ==>  <NONE>
+[98232] TSMI_SelectMaterialSupplyAuto  ==>  <NONE>
+[98294] Rearm automatically  ==>  自动补充弹药
+[98336] TSMIRearmManually  ==>  <NONE>
+[98374] Rearm manually  ==>  重新装填弹药 manually
+[98406] TSMI_HoldPosition  ==>  <NONE>
+[98444] Hold Position - Selected Unit(s)  ==>  保持位置 - 选定单位
+[98512] HoldPositionAllUnitsToolStripMenuItem1  ==>  <NONE>
+[98592] Ctrl+L  ==>  <NONE>
+[98608] Hold Position - All Units  ==>  Hold 位置 - 全部单位
+[98662] TSMI_SetOrientation  ==>  <NONE>
+[98704] Set orientation  ==>  设置朝向
+[98738] QuickTurnaroundToolStripMenuItem1  ==>  <NONE>
+[98808] Quick Turnaround (airborne aircraft)  ==>  快速整备（滞空战机）
+[98884] ToolStripSeparator40  ==>  <NONE>
+[98928] TSMI_SummonForComms  ==>  <NONE>
+[98970] Summon to re-establish comms  ==>  召唤以重建通信
+[99030] TSMI_IsolatedPOV  ==>  <NONE>
+[99066] Ctrl+Shift+I  ==>  <NONE>
+[99094] Isolated POV  ==>  <NONE>
+[99122] ToolStripSeparator9  ==>  <NONE>
+[99164] TSMI_GroupOps  ==>  <NONE>
+[99194] Group Operations  ==>  编组操作
+[99230] TSMI_GroupSelectedUnits  ==>  <NONE>
+[99280] G  ==>  <NONE>
+[99286] Group Selected Units  ==>  编组选定单位
+[99330] TSMI_DetachUnits  ==>  <NONE>
+[99366] D  ==>  <NONE>
+[99372] Detach Selected Unit(s) From Group  ==>  <NONE>
+[99444] TSMI_FormationEditor  ==>  <NONE>
+[99488] Formation Editor  ==>  编队编辑器
+[99524] TSMI_AllowForbidExternalSupply  ==>  <NONE>
+[99588] ToolStripSeparator11  ==>  <NONE>
+[99632] TSMI_SplitUnit  ==>  <NONE>
+[99664] Split Unit  ==>  拆分单位
+[99688] TSMI_MergeUnit  ==>  <NONE>
+[99720] Merge Unit  ==>  合并单位
+[99744] UnassignToolStripMenuItem  ==>  <NONE>
+[99798] U  ==>  <NONE>
+[99804] Unassign Unit(s)  ==>  取消分配单位
+[99840] TSMI_AssignToMission  ==>  <NONE>
+[99884] Assign to mission:  ==>  分配到任务：
+[99924] TSMI_DoctrineROE  ==>  <NONE>
+[99960] Ctrl+F9  ==>  <NONE>
+[99978] Doctrine / RoE / EMCON  ==>  条令 / 交战规则 / EMCON
+[100026] ToolStripSeparator34  ==>  <NONE>
+[100070] RangeBearingToToolStripMenuItem  ==>  <NONE>
+[100136] Range + Bearing Tool  ==>  距离+方位工具
+[100180] ToolStripSeparator33  ==>  <NONE>
+[100224] UnloadCargoToolStripMenuItem  ==>  <NONE>
+[100284] TSMI_SelectUnitsForPickup  ==>  <NONE>
+[100338] Select unit(s) to pickup  ==>  <NONE>
+[100390] ToolStripSeparator38  ==>  <NONE>
+[100434] TSMI_ScenarioEditor  ==>  <NONE>
+[100476] Scenario Editor  ==>  想定编辑器
+[100510] TSMI_ConvertToSingleUnit  ==>  <NONE>
+[100562] Convert installation to single unit  ==>  将设施转换为单个单位
+[100636] TSMI_EditUnitProperties  ==>  <NONE>
+[100686] Edit unit properties  ==>  编辑单位属性
+[100730] TSMI_NetworkComms  ==>  <NONE>
+[100768] Network Comms  ==>  网络通信
+[100798] TSMI_AddToExistingNetwork  ==>  <NONE>
+[100852] Add to existing network  ==>  添加到现有网络
+[100902] TSMI_AddToNewNetwork  ==>  <NONE>
+[100946] Add to new network…  ==>  添加到新网络…
+[100988] TSMI_RemoveFromAllNetworks  ==>  <NONE>
+[101044] Remove from all networks  ==>  <NONE>
+[101096] TSMI_RemoveFromNetwork  ==>  <NONE>
+[101144] Remove from network  ==>  <NONE>
+[101186] TSMI_SetHQ  ==>  <NONE>
+[101210] Set Unit as HQ  ==>  将单位设为指挥部
+[101242] TSMI_RemoveHQ  ==>  <NONE>
+[101272] Remove HQ  ==>  移除指挥部
+[101294] MagazinesToolStripMenuItem  ==>  <NONE>
+[101350] StoresToolStripMenuItem  ==>  <NONE>
+[101400] Stores  ==>  弹药库
+[101416] AircraftToolStripMenuItem  ==>  <NONE>
+[101470] TSMI_SetUnitProperty  ==>  <NONE>
+[101514] Set Unit Properties  ==>  设置单位属性
+[101556] TSMI_EditAggregateGroundUnit  ==>  <NONE>
+[101616] Edit aggregate unit  ==>  编辑聚合单位（AGU）
+[101658] TSMI_SetUnitProficiency  ==>  <NONE>
+[101708] Set unit proficiency  ==>  设置单位熟练度
+[101752] NoviceToolStripMenuItem  ==>  <NONE>
+[101802] Novice  ==>  新手
+[101818] CadetToolStripMenuItem  ==>  <NONE>
+[101866] Cadet  ==>  学员
+[101880] RegularToolStripMenuItem  ==>  <NONE>
+[101932] Regular  ==>  普通
+[101950] VeteranToolStripMenuItem  ==>  <NONE>
+[102002] Veteran  ==>  老手
+[102020] AceToolStripMenuItem  ==>  <NONE>
+[102064] Ace  ==>  王牌
+[102074] InheritSideToolStripMenuItem  ==>  <NONE>
+[102134] [ Inherit Side ]   ==>  [ 继承阵营 ]
+[102172] TSMI_SetSide  ==>  <NONE>
+[102200] Set Unit Side  ==>  设置单位阵营
+[102230] TSMI_OrbitAnchor  ==>  <NONE>
+[102266] Satellite Orbit Anchor  ==>  卫星轨道锚点
+[102314] TSMI_ChanceOfAppearance  ==>  <NONE>
+[102364] Chance of appearance  ==>  出现概率
+[102408] TSMI_UnitIsAutodetectable  ==>  <NONE>
+[102462] Unit is auto-detectable  ==>  单位可被自动探测
+[102512] TSMI_UnitIsOutOfComms  ==>  <NONE>
+[102558] Unit is out of comms  ==>  单位通信中断
+[102602] TSMI_CopyUnitID  ==>  <NONE>
+[102636] Copy unit ID to clipboard  ==>  复制单位ID到剪贴板
+[102690] TSMI_EditFlightPlan  ==>  <NONE>
+[102732] Change next Waypoint  ==>  更改下一航路点
+[102776] TSMI_CustomizeIcone  ==>  <NONE>
+[102818] Customize Icon  ==>  自定义图标
+[102850] UnitOrdersToolStripMenuItem  ==>  <NONE>
+[102908] Unit Orders - OLD  ==>  单位命令 - 旧版
+[102946] AttackOptionsToolStripMenuItem  ==>  <NONE>
+[103010] EngageTargetsAutoToolStripMenuItem  ==>  <NONE>
+[103082] F1  ==>  <NONE>
+[103090] EngageTargetsManualToolStripMenuItem  ==>  <NONE>
+[103166] Shift+F1  ==>  <NONE>
+[103186] BearingonlyAttackToolStripMenuItem  ==>  <NONE>
+[103258] Ctrl+F1  ==>  <NONE>
+[103276] DropTargetToolStripMenuItem1  ==>  <NONE>
+[103336] DisengageDropAllTargetsToolStripMenuItem  ==>  <NONE>
+[103420] IgnorePlottedCourse_SelectedUnitsToolStripMenuItem1  ==>  <NONE>
+[103526] IgnorePlottedCourse_Selected_Yes  ==>  <NONE>
+[103594] IgnorePlottedCourse_Selected_No  ==>  <NONE>
+[103660] IgnorePlottedCourse_Selected_Inherit  ==>  <NONE>
+[103736] IgnorePlottedCourse_AllUnitsToolStripMenuItem  ==>  <NONE>
+[103830] Ctrl+I I (Yes/Inherit)  ==>  Ctrl+I I（是/继承）
+[103878] IgnorePlottedCourse_All_Yes  ==>  <NONE>
+[103936] IgnorePlottedCourse_All_No  ==>  <NONE>
+[103992] IgnorePlottedCourse_All_Inherit  ==>  <NONE>
+[104058] WeaponsHold_SelectedUnitsToolStripMenuItem_Main  ==>  <NONE>
+[104156] WCS_Selected_Hold_Main  ==>  <NONE>
+[104204] WCS_Selected_Tight_Main  ==>  <NONE>
+[104254] WCS_Selected_Free_Main  ==>  <NONE>
+[104302] WCS_Selected_Inherit_Main  ==>  <NONE>
+[104356] WeaponsHold_AllUnitsToolStripMenuItem_Main  ==>  <NONE>
+[104444] WCS_All_Hold_Main  ==>  <NONE>
+[104482] WCS_All_Tight_Main  ==>  <NONE>
+[104522] WCS_All_Free_Main  ==>  <NONE>
+[104560] WCS_All_Inherit_Main  ==>  <NONE>
+[104604] TSMI_ASWSpecificActions2  ==>  <NONE>
+[104656] ASW-Specific Actions  ==>  反潜战专属行动
+[104700] TSMI_DropPassiveSonobuoy2  ==>  <NONE>
+[104754] PassiveShallowToolStripMenuItem  ==>  <NONE>
+[104820] PassiveDeepToolStripMenuItem  ==>  <NONE>
+[104880] TSMI_DropActiveSonobuoy2  ==>  <NONE>
+[104932] ActiveShallowToolStripMenuItem  ==>  <NONE>
+[104996] ActiveDeepToolStripMenuItem  ==>  <NONE>
+[105054] TSMI_DeployDippingSonar2  ==>  <NONE>
+[105106] ThrottleAltitudeToolStripMenuItem  ==>  <NONE>
+[105176] PlotCourseToolStripMenuItem  ==>  <NONE>
+[105234] Plot course  ==>  标绘航线
+[105260] MagazinesToolStripMenuItem1  ==>  <NONE>
+[105318] AirOpsToolStripMenuItem  ==>  <NONE>
+[105368] DockingOpsToolStripMenuItem  ==>  <NONE>
+[105426] Boat Docking Operations  ==>  舰船停靠操作
+[105476] WeaponsToolStripMenuItem1  ==>  <NONE>
+[105530] SensorsToolStripMenuItem1  ==>  <NONE>
+[105584] DamageControlToolStripMenuItem  ==>  <NONE>
+[105648] ReturnToBaseRTBToolStripMenuItem  ==>  <NONE>
+[105716] SelectNewHomeBaseToolStripMenuItem  ==>  <NONE>
+[105788] RefuelifPossibleToolStripMenuItem1  ==>  <NONE>
+[105860] Refuel  ==>  <NONE>
+[105876] SelectTankerAutomaticallyToolStripMenuItem  ==>  <NONE>
+[105964] SelectTankerManuallyToolStripMenuItem  ==>  <NONE>
+[106042] SelectTankerFromMissionToolStripMenuItem  ==>  <NONE>
+[106126] HoldPositionToolStripMenuItem1  ==>  <NONE>
+[106190] HoldPositionAllUnitsToolStripMenuItem  ==>  <NONE>
+[106268] QuickTurnaroundToolStripMenuItem  ==>  <NONE>
+[106336] ToolStripSeparator26  ==>  <NONE>
+[106380] TSMI_GroupOps2  ==>  <NONE>
+[106412] GroupSelectedUnitsToolStripMenuItem  ==>  <NONE>
+[106486] DetachSelectedUnitsToolStripMenuItem  ==>  <NONE>
+[106562] EditFormationToolStripMenuItem  ==>  <NONE>
+[106626] CargoOperationsToolStripMenuItem  ==>  <NONE>
+[106694] UnloadCargoToolStripMenuItem1  ==>  <NONE>
+[106756] PickupUnitsToolStripMenuItem  ==>  <NONE>
+[106816] ToolStripSeparator2  ==>  <NONE>
+[106858] ToolStripSeparator99  ==>  <NONE>
+[106902] UnassignUnitToolStripMenuItem  ==>  <NONE>
+[106964] AssignToMissionToolStripMenuItem  ==>  <NONE>
+[107032] DoctrineROEEMCONToolStripMenuItem  ==>  <NONE>
+[107102] Doctrine, EMCON, WRA  ==>  条令、EMCON、WRA
+[107146] MissionsToolStripMenuItem  ==>  <NONE>
+[107200] Missions + Ref. Points  ==>  任务+参考点
+[107248] MissionEditorToolStripMenuItem  ==>  <NONE>
+[107312] F11  ==>  <NONE>
+[107322] Mission Editor  ==>  任务编辑器
+[107354] AddNewMissionToolStripMenuItem  ==>  <NONE>
+[107418] Ctrl+F11  ==>  <NONE>
+[107438] Add new mission  ==>  添加新任务
+[107472] ToolStripSeparator18  ==>  <NONE>
+[107516] AirTaskingOrderATOToolStripMenuItem  ==>  <NONE>
+[107590] Ctrl+Shift+F11  ==>  <NONE>
+[107622] Air Tasking Order (ATO)  ==>  空中/防空 Tasking Order (ATO)
+[107672] ToolStripSeparator39  ==>  <NONE>
+[107716] TSMI_OperationManager  ==>  <NONE>
+[107762] Operation Manager  ==>  行动管理器
+[107800] TSMI_OperationPlanner  ==>  <NONE>
+[107846] Operation Planner  ==>  行动规划器
+[107884] TSMI_SerialChalkEditor  ==>  <NONE>
+[107932] Serial/Chalk Editor  ==>  挂载/装载配置编辑器
+[107974] TSMI_LandinPlanner  ==>  <NONE>
+[108014] Landing Planner  ==>  着陆规划器
+[108048] TSMI_Import_ExportTool  ==>  <NONE>
+[108096] Import/Export Tool  ==>  导入/导出工具
+[108136] ToolStripSeparator44  ==>  <NONE>
+[108180] ReferencePointsManager  ==>  <NONE>
+[108228] Area / Reference Points Manager  ==>  区域 / 参考 点数/参考点管理器
+[108294] TSMI_DefineArea_Rectangle  ==>  <NONE>
+[108348] Ctrl+K  ==>  <NONE>
+[108364] Define Area [Rectangle]  ==>  Define 区域 [Rectangle]
+[108414] TSMI_DefineArea_Round  ==>  <NONE>
+[108460] Ctrl+O  ==>  <NONE>
+[108476] Define Area [Circle]  ==>  Define 区域 [圆形区]
+[108520] TSMI_DefineArea_Polygon  ==>  <NONE>
+[108570] Ctrl+P  ==>  <NONE>
+[108586] Define Area [Polygon]  ==>  Define 区域 [多边形]
+[108632] TSMI_CreateZoneFromRP  ==>  <NONE>
+[108678] Define Area [From Selected RPs]  ==>  <NONE>
+[108744] ToolStripSeparator45  ==>  <NONE>
+[108788] AddReferencePointToolStripMenuItem  ==>  <NONE>
+[108860] Ctrl+Ins  ==>  <NONE>
+[108880] Add Reference Point  ==>  添加 参考 点/位置
+[108922] AddReferencePointLocationToolStripMenuItem  ==>  <NONE>
+[109010] Add Reference Point at...  ==>  在...添加参考点
+[109064] DeleteSelectedRefPointsToolStripMenuItem  ==>  <NONE>
+[109148] Ctrl+Del  ==>  <NONE>
+[109168] Delete selected Reference Point(s)  ==>  <NONE>
+[109240] TSMI_DeleteWaypoint  ==>  <NONE>
+[109282] Delete waypoint  ==>  删除航路点
+[109316] DefineReferencePointColorToolStripMenuItem  ==>  <NONE>
+[109404] Define Reference Point Color  ==>  设置参考点颜色
+[109464] RenameReferencePointToolStripMenuItem  ==>  <NONE>
+[109542] Ctrl+R  ==>  <NONE>
+[109558] Rename selected Reference Point  ==>  重命名 已选中 参考 点/位置
+[109624] DeselectAllReferencePointsToolStripMenuItem  ==>  <NONE>
+[109714] Ctrl+End  ==>  <NONE>
+[109734] De-select All Reference Points  ==>  <NONE>
+[109798] ToolStripSeparator19  ==>  <NONE>
+[109842] MakeSelectedRfPointsRelativeToToolStripMenuItem  ==>  <NONE>
+[109940] Make selected Ref Point(s) relative (fixed bearing) to...  ==>  使选定参考点相对于...固定方位
+[110058] ToolStripMenuItem8  ==>  <NONE>
+[110098] Make selected Ref Point(s) relative (rotating bearing) to...  ==>  Make 已选中 Ref 点(s) relative (rotating 方位) 至...
+[110222] ChangeBearingTypeOfSelectedRefPointsToFIXEDToolStripMenuItem  ==>  <NONE>
+[110346] Change bearing type of selected Ref Point(s) to FIXED  ==>  将选定参考点方位类型改为固定
+[110456] ChangeBearingTypeOfSelectedRefPointsToROTATINGToolStripMenuItem  ==>  <NONE>
+[110586] Change bearing type of selected Ref Point(s) to ROTATING  ==>  将选定参考点方位类型改为旋转
+[110702] RemoveRelativityFromSelectedRefPointsToolStripMenuItem  ==>  <NONE>
+[110814] Remove relativity from selected Ref Point(s)  ==>  <NONE>
+[110906] ToolStripSeparator20  ==>  <NONE>
+[110950] LockSelectedRefPointsToolStripMenuItem  ==>  <NONE>
+[111030] Lock selected Ref Point(s)  ==>  锁定选定参考点
+[111086] COMMDataTollStripMenuItem  ==>  <NONE>
+[111140] Open Comm Data Manager  ==>  打开通信数据管理器
+[111188] UnlockSelectedRefPointsToolStripMenuItem  ==>  <NONE>
+[111272] Unlock selected Ref Point(s)  ==>  解锁选定参考点
+[111332] ToolStripSeparator14  ==>  <NONE>
+[111376] NoNavigationZonesToolStripMenuItem  ==>  <NONE>
+[111448] No-Navigation Zones  ==>  禁航区
+[111490] EditExistingToolStripMenuItem2  ==>  <NONE>
+[111554] Edit Existing  ==>  编辑 现有
+[111584] CreateNewFromSelectedRefPointsToolStripMenuItem2  ==>  <NONE>
+[111684] Create new from selected Ref Points  ==>  <NONE>
+[111758] ExclusionZonesToolStripMenuItem  ==>  <NONE>
+[111824] Exclusion Zones  ==>  禁区
+[111858] EditExistingToolStripMenuItem3  ==>  <NONE>
+[111922] Edit existing  ==>  编辑 现有
+[111952] CreateNewFromSelectedRefPointsToolStripMenuItem3  ==>  <NONE>
+[112052] ContactsToolStripMenuItem  ==>  <NONE>
+[112106] Contacts  ==>  接触
+[112126] DropSelectedContactsToolStripMenuItem  ==>  <NONE>
+[112204] P / PgDn / Num 3  ==>  P / PgDn / 小键盘3
+[112240] Drop Contact(s)  ==>  丢弃目标
+[112274] ToolStripSeparator30  ==>  <NONE>
+[112318] MarkContactHostileToolStripMenuItem  ==>  <NONE>
+[112392] H  ==>  <NONE>
+[112398] Mark Hostile  ==>  标记为敌对
+[112426] MarkContactUnfriendlyToolStripMenuItem  ==>  <NONE>
+[112506] Ctrl+H  ==>  <NONE>
+[112522] Mark Unfriendly  ==>  Mark 非友好
+[112556] MarkContactNeutralToolStripMenuItem  ==>  <NONE>
+[112630] Mark Neutral  ==>  标记为中立
+[112658] MarkContactFriendlyToolStripMenuItem  ==>  <NONE>
+[112734] Mark Friendly  ==>  标记为友好
+[112764] ToolStripSeparator31  ==>  <NONE>
+[112808] RenameToolStripMenuItem  ==>  <NONE>
+[112858] R  ==>  <NONE>
+[112864] MarkPositionToolStripMenuItem  ==>  <NONE>
+[112926] Mark position  ==>  标记位置
+[112956] FilteroutContactsToolStripMenuItem  ==>  <NONE>
+[113028] Filter-out contacts  ==>  过滤接触
+[113070] FilteroutAllToolStripMenuItem  ==>  <NONE>
+[113132] FilteroutCivilianToolStripMenuItem  ==>  <NONE>
+[113204] Civilian  ==>  民用
+[113224] FilteroutBiologicalToolStripMenuItem  ==>  <NONE>
+[113300] Biological  ==>  生物
+[113324] FilteroutNeutralToolStripMenuItem  ==>  <NONE>
+[113394] Neutral  ==>  中立
+[113412] FilteroutFriendlyToolStripMenuItem  ==>  <NONE>
+[113484] Friendly  ==>  友好
+[113504] CancelFilteroutForContactsToolStripMenuItem  ==>  <NONE>
+[113594] Cancel filter-out for contacts  ==>  取消接触过滤
+[113658] CancelFilteroutforAllToolStripMenuItem  ==>  <NONE>
+[113738] CancelFilteroutforCivilianToolStripMenuItem  ==>  <NONE>
+[113828] CancelFilteroutforBiologicalToolStripMenuItem  ==>  <NONE>
+[113922] ToolStripSeparator8  ==>  <NONE>
+[113964] CancelFilteroutforNeutralToolStripMenuItem  ==>  <NONE>
+[114052] CancelFilteroutforFriendlyToolStripMenuItem  ==>  <NONE>
+[114142] TSMI_Editor  ==>  <NONE>
+[114168] Editor  ==>  编辑器
+[114184] StartDurationToolStripMenuItem  ==>  <NONE>
+[114248] Scenario Times + Duration  ==>  想定时间与时长
+[114302] TitleDescriptionToolStripMenuItem  ==>  <NONE>
+[114372] Title + Description  ==>  标题与描述
+[114414] ToolStripSeparator12  ==>  <NONE>
+[114458] ToolStripMenuItem10  ==>  <NONE>
+[114500] Database  ==>  <NONE>
+[114520] TSMI_CurrentDB  ==>  <NONE>
+[114552] Current:  ==>  当前：
+[114572] TSMI_UseLatestDB3000  ==>  <NONE>
+[114616] Use latest DB3000  ==>  使用最新DB3000
+[114654] TSMI_UseLatestCWDB  ==>  <NONE>
+[114694] Use latest CWDB  ==>  使用最新CWDB
+[114728] TSMI_LoadOtherDBFile  ==>  <NONE>
+[114772] Load other DB file...  ==>  加载其他数据库文件...
+[114818] TSMI_UpgradeScenarioToLatestDBVersion  ==>  <NONE>
+[114896] Upgrade scenario to latest DB version  ==>  将想定升级到最新数据库版本
+[114974] TSMI_BindScenToCustomDB  ==>  <NONE>
+[115024] Bind Scenario to Custom DB  ==>  将想定绑定到自定义数据库
+[115080] TSMI_MigrateToSpecificDB  ==>  <NONE>
+[115132] Migrate scenario to specific DB  ==>  将想定迁移到指定数据库
+[115198] TSMI_DBTools  ==>  <NONE>
+[115226] DBTools + RamDB  ==>  数据库工具+内存数据库
+[115260] ToolStripSeparator4  ==>  <NONE>
+[115302] TSMI_Campaign  ==>  <NONE>
+[115332] Campaign  ==>  战役
+[115352] CreateNewToolStripMenuItem  ==>  <NONE>
+[115408] Create New  ==>  新建
+[115432] LoadFromFileToolStripMenuItem  ==>  <NONE>
+[115494] Load From File  ==>  <NONE>
+[115526] ToolStripSeparator36  ==>  <NONE>
+[115570] Sides_TSMI  ==>  <NONE>
+[115594] Add / Edit Sides  ==>  添加 / 编辑参战阵营
+[115630] SwitchTo_TSMI  ==>  <NONE>
+[115660] Switch to...  ==>  Switch 至...
+[115688] BriefingToolStripMenuItem  ==>  <NONE>
+[115742] Edit Briefing  ==>  编辑简报
+[115772] TSMI_EditScoring  ==>  <NONE>
+[115808] Edit Scoring  ==>  编辑计分
+[115836] GodsEyeViewToolStripMenuItem  ==>  <NONE>
+[115896] Ctrl+V  ==>  <NONE>
+[115912] God's Eye view (See All)  ==>  上帝视界/全知视角 (See 全部)
+[115964] MinefieldsToolStripMenuItem  ==>  <NONE>
+[116022] Minefields  ==>  雷场
+[116046] CreateMinefieldFromDesignatedAreaToolStripMenuItem  ==>  <NONE>
+[116150] Create minefield in designated area  ==>  在指定区域创建雷场
+[116224] RemoveMinesFromDesignatedAreaToolStripMenuItem  ==>  <NONE>
+[116320] Remove mines from designated area  ==>  <NONE>
+[116390] ToolStripSeparator15  ==>  <NONE>
+[116434] WeatherToolStripMenuItem  ==>  <NONE>
+[116486] Weather  ==>  天气
+[116504] RealismSettingsToolStripMenuItem  ==>  <NONE>
+[116572] Scenario Features + Settings  ==>  想定特性与设置
+[116632] TSMI_MergeScenarios  ==>  <NONE>
+[116674] Merge Scenarios  ==>  合并想定
+[116708] EventEditorToolStripMenuItem  ==>  <NONE>
+[116768] Event Editor  ==>  事件编辑器
+[116796] EventsToolStripMenuItem  ==>  <NONE>
+[116846] Events  ==>  事件
+[116862] TriggersToolStripMenuItem  ==>  <NONE>
+[116916] Triggers  ==>  触发器
+[116936] ConditionsToolStripMenuItem  ==>  <NONE>
+[116994] Conditions  ==>  条件
+[117018] ActionsToolStripMenuItem  ==>  <NONE>
+[117070] Actions  ==>  动作
+[117088] SpecialActionsToolStripMenuItem  ==>  <NONE>
+[117154] SBRToolStripMenuItem  ==>  <NONE>
+[117198] SBR  ==>  <NONE>
+[117208] GenerateTemplateToolStripMenuItem  ==>  <NONE>
+[117278] Generate Template  ==>  生成模板
+[117316] GenerateDeltaToolStripMenuItem  ==>  <NONE>
+[117380] Generate Delta Template  ==>  生成增量模板
+[117430] ApplySBRScriptToolStripMenuItem  ==>  <NONE>
+[117496] Apply SBR script  ==>  应用SBR脚本
+[117532] ToolStripSeparator5  ==>  <NONE>
+[117574] TSMI_UnitOps  ==>  <NONE>
+[117602] Unit actions  ==>  单位动作
+[117630] AddUnitToolStripMenuItem  ==>  <NONE>
+[117682] Ins  ==>  <NONE>
+[117692] Add Unit  ==>  添加 单位
+[117712] AddDecoyToolStripMenuItem  ==>  <NONE>
+[117766] Shift + Ins  ==>  Shift + 在...内
+[117792] Add Decoy  ==>  添加 诱饵
+[117814] AddSatelliteToolStripMenuItem  ==>  <NONE>
+[117876] Add Satellites  ==>  添加卫星
+[117908] AddRemoveAircraftToolStripMenuItem  ==>  <NONE>
+[117980] Ctrl+F6  ==>  <NONE>
+[117998] Edit Aircraft  ==>  编辑 战机/航空器
+[118028] EditDockedBoatsToolStripMenuItem  ==>  <NONE>
+[118096] Ctrl+F7  ==>  <NONE>
+[118114] Edit Docked Boats  ==>  编辑停泊小艇
+[118152] EditCargoToolStripMenuItem  ==>  <NONE>
+[118208] CopyUnitToolStripMenuItem  ==>  <NONE>
+[118262] C  ==>  <NONE>
+[118268] Copy Unit  ==>  复制单位
+[118290] TSMI_CloneUnit  ==>  <NONE>
+[118322] Shift+C  ==>  <NONE>
+[118340] Clone Unit  ==>  克隆 单位
+[118364] MoveUnitToolStripMenuItem  ==>  <NONE>
+[118418] M  ==>  <NONE>
+[118424] Move Unit  ==>  移动单位
+[118446] RenameUnitToolStripMenuItem  ==>  <NONE>
+[118504] Rename Unit  ==>  重命名单位
+[118530] DeleteUnitToolStripMenuItem  ==>  <NONE>
+[118588] Del  ==>  <NONE>
+[118598] Delete Unit  ==>  <NONE>
+[118624] SetFuelAndAirborneTimeToolStripMenuItem  ==>  <NONE>
+[118706] ToolStripSeparator42  ==>  <NONE>
+[118750] UnitIsAutodetectableToolStripMenuItem1  ==>  <NONE>
+[118830] TSMI_UnitSpottedRP  ==>  <NONE>
+[118870] Shift+S  ==>  <NONE>
+[118888] Unit has been spotted  ==>  单位拥有已被 spotted
+[118934] ToolStripSeparator43  ==>  <NONE>
+[118978] SetOrientationToolStripMenuItem1  ==>  <NONE>
+[119046] Set orientation / Pier size  ==>  设置 orientation / 码头尺寸
+[119104] HoldPositionToolStripMenuItem  ==>  <NONE>
+[119166] Hold Position  ==>  保持位置
+[119196] TSMI_AGUCreationFromSelection  ==>  <NONE>
+[119258] Create AGU from selected Units  ==>  <NONE>
+[119322] TSMI_BreakDownAGU  ==>  <NONE>
+[119360] Break down AGU to individual units  ==>  将聚合单位拆分为单个单位
+[119432] TSMI_IsolatedUnitPOV  ==>  <NONE>
+[119476] Isolated POV view  ==>  独立视角视图
+[119514] ToolStripSeparator10  ==>  <NONE>
+[119558] KillAllUnitsofThisSideToolStripMenuItem  ==>  <NONE>
+[119640] Remove all units (of this side)  ==>  移除所有单位（此阵营）
+[119706] TSMI_RemoveAllSideContacts  ==>  <NONE>
+[119762] Remove all contacts (of this side)  ==>  移除所有接触（此阵营）
+[119834] ToolStripMenuItem9  ==>  <NONE>
+[119874] Scenario attachments  ==>  想定附件
+[119918] TSMI_PublishToSteam  ==>  <NONE>
+[119960] Publish scenario to Steam Workshop  ==>  将想定发布到 Steam 创意工坊
+[120032] TSMI_PackageScen  ==>  <NONE>
+[120068] Package scenario for distribution  ==>  打包想定以便分发
+[120138] InstallationsToolStripMenuItem  ==>  <NONE>
+[120202] Import/Export Units  ==>  导入/导出单位
+[120244] SaveSelectedInstallationToFileToolStripMenuItem  ==>  <NONE>
+[120342] Save selected units/groups to file  ==>  将选定单位/编组保存到文件
+[120414] LoadInstallationFromFileToolStripMenuItem  ==>  <NONE>
+[120500] Load units/groups from file  ==>  <NONE>
+[120558] ScenarioMigrationTSMI  ==>  <NONE>
+[120604] Scenario Migration  ==>  想定迁移
+[120644] ExportToToolStripMenuItem  ==>  <NONE>
+[120698] Export to file...  ==>  导出到文件...
+[120736] ImportFromTestExportxmlToolStripMenuItem  ==>  <NONE>
+[120820] Import from file...  ==>  <NONE>
+[120862] ScenToXMLToolStripMenuItem  ==>  <NONE>
+[120918] .scen to XML  ==>  .scen 转 XML
+[120946] TSMI_XMLToScen  ==>  <NONE>
+[120978] XML to .scen  ==>  XML 转 .scen
+[121006] TSMI_ScriptingConsole  ==>  <NONE>
+[121052] Ctrl+Shift+C  ==>  <NONE>
+[121080] Lua Script Console  ==>  Lua脚本 脚本 控制台
+[121120] ToolStripSeparator41  ==>  <NONE>
+[121164] TSMI_MonteCarloAnalysis  ==>  <NONE>
+[121214] Monte Carlo Analysis  ==>  蒙特卡洛分析
+[121258] TSMI_InteractivAnalysisConfig  ==>  <NONE>
+[121320] Analysis Settings  ==>  分析设置
+[121358] TSMI_CustomIcon  ==>  <NONE>
+[121392] Customize Icons (current selection)  ==>  自定义图标（当前选择）
+[121466] RoadSystemToolbox  ==>  <NONE>
+[121504] Road System Toolbox  ==>  <NONE>
+[121546] HelpToolStripMenuItem  ==>  <NONE>
+[121592] Help  ==>  帮助
+[121604] TSMI_DBRequests  ==>  <NONE>
+[121638] DB Requests  ==>  数据库请求
+[121664] HotkeysToolStripMenuItem  ==>  <NONE>
+[121716] Hotkeys  ==>  热键
+[121734] TSMI_TutorialVideos  ==>  <NONE>
+[121776] Tutorial + How-To Videos  ==>  教程+操作视频
+[121828] ToolStripSeparator17  ==>  <NONE>
+[121872] AboutCommandToolStripMenuItem  ==>  <NONE>
+[121934] About Command  ==>  关于 Command
+[121964] ToolStripMenuItem3  ==>  <NONE>

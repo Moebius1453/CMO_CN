@@ -46,7 +46,7 @@ namespace CMOLocalizer
             {
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 logPath = Path.Combine(baseDir, "CMOLocalizer.log");
-                Log("=== CMOLocalizer v3.0 Engine Starting ===");
+                Log("=== CMOLocalizer v4.0 Engine Starting ===");
 
                 // Start hook thread
                 Thread hookThread = new Thread(HookWorker);
@@ -1262,35 +1262,49 @@ namespace CMOLocalizer
                 }
             }
 
-            // 6. Match colon composite e.g. "Status: Operational" -> "状态: 正常运行"
+            // 6. Colon composite. Only for label-like keys: a long sentence that
+            // happens to contain a colon must not be torn in half.
             int colonIdx = trimmed.IndexOf(':');
-            if (colonIdx > 0 && colonIdx < trimmed.Length - 1)
+            if (colonIdx > 0 && colonIdx < trimmed.Length - 1 && colonIdx <= 40)
             {
                 string left = trimmed.Substring(0, colonIdx).Trim();
                 string right = trimmed.Substring(colonIdx + 1).Trim();
-                string transLeft = DoTranslate(left);
-                string transRight = DoTranslate(right);
-                if (transLeft != left || transRight != right)
+                if (left.Length <= 32 && right.Length <= 64)
                 {
-                    return transLeft + ": " + transRight;
+                    string transLeft = DoTranslate(left);
+                    string transRight = DoTranslate(right);
+                    if (transLeft != left && transRight != right)
+                    {
+                        return transLeft + "：" + transRight;
+                    }
+                    if (transLeft != left)
+                    {
+                        return transLeft + "：" + right;
+                    }
                 }
             }
 
-            // 7. Match dash composite e.g. "Target - Hostile" -> "目标 - 敌方"
+            // 7. Dash composite "A - B". Same guard: never split prose.
             int dashIdx = trimmed.IndexOf(" - ");
             if (dashIdx > 0 && dashIdx < trimmed.Length - 3)
             {
                 string left = trimmed.Substring(0, dashIdx).Trim();
                 string right = trimmed.Substring(dashIdx + 3).Trim();
-                string transLeft = DoTranslate(left);
-                string transRight = DoTranslate(right);
-                if (transLeft != left || transRight != right)
+                if (left.Length <= 32 && right.Length <= 48 &&
+                    left.IndexOf(' ') < 0 && right.IndexOf(' ') < 0)
                 {
-                    return transLeft + " - " + transRight;
+                    string transLeft = DoTranslate(left);
+                    string transRight = DoTranslate(right);
+                    if (transLeft != left || transRight != right)
+                    {
+                        return transLeft + " - " + transRight;
+                    }
                 }
             }
 
-            // 8. Partial term & Word-level fallback disabled to prevent broken mixed Chinese-English sentences and UI corruption.
+            // 8. No word-level composition. Word-by-word assembly produced garbled
+            // mixed-language output and corrupted UI text; every display string is
+            // translated as a whole through exactMap or the offset string pool.
             return raw;
         }
 
