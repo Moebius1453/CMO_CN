@@ -20,6 +20,7 @@ public class GuiDriver
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr h);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h, IntPtr hAfter, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
@@ -95,8 +96,11 @@ public class GuiDriver
         {
             ShowWindow(hwnd, SW_RESTORE);
         }
+        SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // HWND_TOPMOST
         BringWindowToTop(hwnd);
-        return SetForegroundWindow(hwnd);
+        bool ok = SetForegroundWindow(hwnd);
+        SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040); // HWND_NOTOPMOST
+        return ok;
     }
 
     public static Bitmap CaptureScreen()

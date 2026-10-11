@@ -553,6 +553,31 @@ namespace CMOLocalizer
                     string trans = TranslateString(col.HeaderText);
                     if (trans != col.HeaderText) col.HeaderText = trans;
                 }
+
+                // 挂载 CellFormatting 事件监听器进行无侵入单元格动态中文化 (不破坏底层数据绑定)
+                int dgvHash = dgv.GetHashCode();
+                if (!hookedItems.Contains(dgvHash))
+                {
+                    hookedItems.Add(dgvHash);
+                    dgv.CellFormatting += (s, e) =>
+                    {
+                        try
+                        {
+                            string sVal = e.Value as string;
+                            if (!string.IsNullOrEmpty(sVal) && !ContainsChinese(sVal))
+                            {
+                                string tr = TranslateCellText(sVal);
+                                if (tr != sVal)
+                                {
+                                    e.Value = tr;
+                                    e.FormattingApplied = true;
+                                }
+                            }
+                        }
+                        catch { }
+                    };
+                }
+
                 // 动态双语渲染数据库列表单元格中的装备名称与分类 (仅针对非编辑只读字符串单元格)
                 try
                 {
@@ -833,6 +858,37 @@ namespace CMOLocalizer
             if (norm.StartsWith("Performance Details for "))
             {
                 return "战术性能详情：" + norm.Substring("Performance Details for ".Length);
+            }
+            if (norm.StartsWith("Operating bands (search & track): "))
+            {
+                return "工作频段 (搜索与跟踪): " + norm.Substring("Operating bands (search & track): ".Length);
+            }
+            if (norm.StartsWith("Operating bands (FC / illumination): "))
+            {
+                return "工作频段 (火控与照射): " + norm.Substring("Operating bands (FC / illumination): ".Length);
+            }
+            if (norm.StartsWith("Operating bands: "))
+            {
+                return "工作频段: " + norm.Substring("Operating bands: ".Length);
+            }
+            if (norm.StartsWith("Max Target Illumination: "))
+            {
+                return "最大目标照射通道数: " + norm.Substring("Max Target Illumination: ".Length);
+            }
+            if (norm.StartsWith("Visual Zoom Detection/Classification: "))
+            {
+                return "可见光变焦探测/识别: " + norm.Substring("Visual Zoom Detection/Classification: ".Length);
+            }
+            if (norm.StartsWith("InfraRed Zoom Detection/Classification: "))
+            {
+                return "红外变焦探测/识别: " + norm.Substring("InfraRed Zoom Detection/Classification: ".Length);
+            }
+
+            // 逗号分隔的复合枚举项 (例如: "Late 1980s Technology, Ground Search (Fixed), Ground Search (Mobile)")
+            if (text.Contains(", "))
+            {
+                string trComp = TranslateCommaComposite(text);
+                if (trComp != text) return trComp;
             }
 
             // Multi-line or multi-sentence breakdown
@@ -1241,11 +1297,197 @@ namespace CMOLocalizer
 
         private static int translatedControlCount = 0;
 
+        private static string TranslateCommaComposite(string text)
+        {
+            if (string.IsNullOrEmpty(text) || !text.Contains(",")) return TranslateString(text);
+            string[] items = text.Split(new string[] { ", " }, StringSplitOptions.None);
+            if (items.Length <= 1) return TranslateString(text);
+
+            List<string> trItems = new List<string>();
+            bool anyTrans = false;
+            for (int i = 0; i < items.Length; i++)
+            {
+                string it = items[i].Trim();
+                string tr = TranslateString(it);
+                if (tr == it && it.EndsWith(" Technology"))
+                {
+                    string gen = it.Substring(0, it.Length - " Technology".Length).Trim();
+                    string trGen = TranslateString(gen);
+                    if (trGen != gen) tr = trGen + "技术水平";
+                }
+                if (tr != it) anyTrans = true;
+                trItems.Add(tr);
+            }
+            return anyTrans ? string.Join("，", trItems.ToArray()) : text;
+        }
+
+        private static string TranslateCellText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            string tr = TranslateString(text);
+            if (tr != text) return tr;
+
+            if (text.Contains("Reserve"))
+            {
+                return text.Replace("(Reserve [Available])", "(后备/预备挂载 [可用])")
+                           .Replace("Reserve [Available]", "后备/预备挂载 [可用]")
+                           .Replace("(Reserve)", "(后备/预备挂载)");
+            }
+
+            if (Regex.IsMatch(text, @"^\d+\s*(hr|小时)(\s*\d+\s*(min|分钟))?$|^\d+\s*(min|分钟)$"))
+            {
+                return text.Replace("hr", "小时").Replace("min", "分钟").Replace("sec", "秒");
+            }
+
+            if (text.Contains(" sorties @ ") || text.Contains(" flying time") || text.Contains("Day and night") || text.Contains("架次"))
+            {
+                return text.Replace("Day and night", "昼夜")
+                           .Replace("Day-only", "仅昼间")
+                           .Replace("Night-only", "仅夜间")
+                           .Replace(" sorties @ ", " 架次 @ ")
+                           .Replace(" flying time", " 飞行时间")
+                           .Replace(" downtime", " 停机整备")
+                           .Replace(" hr", " 小时")
+                           .Replace(" min", " 分钟");
+            }
+
+            if (text.StartsWith("Enabled, ") || text.StartsWith("已启用，"))
+            {
+                return text.Replace("Enabled, ", "已启用，")
+                           .Replace("Day/Night:", "昼/夜:")
+                           .Replace("Day/Night", "昼/夜");
+            }
+            if (text.StartsWith("Disabled"))
+            {
+                return text.Replace("Disabled (Doctrine)", "已禁用 (条令限制)").Replace("Disabled", "已禁用");
+            }
+
+            return text;
+        }
+
+        private static string TranslateLoadoutDetailText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            string[] lines = text.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
+            StringBuilder sb = new StringBuilder();
+            bool anyTrans = false;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                string trLine = line;
+
+                if (line.StartsWith("Pre-briefed weapon state ")
+                    || line.StartsWith("Effective pre-briefed weapon state ")
+                    || line.StartsWith("Loadout's default weapon state ")
+                    || line.StartsWith("预设武器状态")
+                    || line.StartsWith("预先简报的武器状态")
+                    || line.StartsWith("生效的预设武器状态")
+                    || line.StartsWith("挂载方案默认武器状态"))
+                {
+                    string prefix = "预设武器状态: ";
+                    if (line.StartsWith("Effective") || line.StartsWith("生效")) prefix = "生效的预设武器状态: ";
+                    else if (line.StartsWith("Loadout's") || line.StartsWith("挂载")) prefix = "挂载方案默认武器状态: ";
+
+                    string rest = line.Replace("Effective pre-briefed weapon state ", "")
+                                      .Replace("Loadout's default weapon state ", "")
+                                      .Replace("Pre-briefed weapon state ", "")
+                                      .Replace("预先简报的武器状态 ", "")
+                                      .Replace("生效的预设武器状态: ", "")
+                                      .Replace("挂载方案默认武器状态: ", "")
+                                      .Replace("预设武器状态: ", "")
+                                      .Trim();
+                    string trRest = exactMap.ContainsKey(rest) ? exactMap[rest] : TranslateString(rest);
+                    trLine = prefix + trRest;
+                    if (trLine != line) anyTrans = true;
+                }
+                else
+                {
+                    int colonIdx = line.IndexOf(':');
+                    if (colonIdx < 0) colonIdx = line.IndexOf('：');
+                    if (colonIdx > 0 && colonIdx < line.Length - 1)
+                    {
+                        string key = line.Substring(0, colonIdx).Trim();
+                        string val = line.Substring(colonIdx + 1).Trim();
+                        string trKey = exactMap.ContainsKey(key) ? exactMap[key] : TranslateString(key);
+                        string trVal = exactMap.ContainsKey(val) ? exactMap[val] : TranslateString(val);
+                        if (trVal == val)
+                        {
+                            if (val.EndsWith(" capable"))
+                            {
+                                string baseCap = val.Substring(0, val.Length - " capable".Length).Trim();
+                                trVal = TranslateCommaComposite(baseCap) + "作战能力";
+                            }
+                            else if (val.EndsWith(" 能力"))
+                            {
+                                string baseCap = val.Substring(0, val.Length - " 能力".Length).Trim();
+                                trVal = TranslateCommaComposite(baseCap) + "作战能力";
+                            }
+                            else if (val.Contains(", "))
+                            {
+                                trVal = TranslateCommaComposite(val);
+                            }
+                        }
+                        trLine = trKey + ": " + trVal;
+                        if (trLine != line) anyTrans = true;
+                    }
+                }
+
+                if (i > 0) sb.Append("\r\n");
+                sb.Append(trLine);
+            }
+
+            return anyTrans ? sb.ToString() : text;
+        }
+
         private static void TranslateControlText(Control ctrl)
         {
-            // ComboBox, TextBoxBase, ListControl and UpDownBase hold internal query/code keys
+            if (ctrl is Form)
+            {
+                string fText = ctrl.Text;
+                if (!string.IsNullOrEmpty(fText))
+                {
+                    if (fText.StartsWith("Air Ops - "))
+                    {
+                        ctrl.Text = "航空作业 - " + fText.Substring("Air Ops - ".Length);
+                        return;
+                    }
+                    if (fText.StartsWith("Docking Ops - "))
+                    {
+                        ctrl.Text = "船坞作业 - " + fText.Substring("Docking Ops - ".Length);
+                        return;
+                    }
+                    if (fText.StartsWith("Mission Editor for side: "))
+                    {
+                        ctrl.Text = "任务编辑器 - 所属阵营: " + fText.Substring("Mission Editor for side: ".Length);
+                        return;
+                    }
+                    if (fText.Contains("Special Messages"))
+                    {
+                        ctrl.Text = fText.Replace("Special Messages", "专用战情消息");
+                        return;
+                    }
+                }
+            }
+
+            if (ctrl is TextBoxBase)
+            {
+                TextBoxBase tb = (TextBoxBase)ctrl;
+                if (tb.ReadOnly && !string.IsNullOrEmpty(tb.Text))
+                {
+                    string trTb = TranslateLoadoutDetailText(tb.Text);
+                    if (trTb != tb.Text)
+                    {
+                        tb.Text = trTb;
+                    }
+                }
+                return;
+            }
+
+            // ComboBox, ListControl and UpDownBase hold internal query/code keys
             // or user inputs. Overwriting their .Text destroys SelectedIndex and breaks game logic!
-            if (ctrl is ComboBox || ctrl is TextBoxBase || ctrl is ListControl || ctrl is UpDownBase)
+            if (ctrl is ComboBox || ctrl is ListControl || ctrl is UpDownBase)
             {
                 return;
             }
@@ -1253,6 +1495,49 @@ namespace CMOLocalizer
             string t = ctrl.Text;
             if (!string.IsNullOrEmpty(t))
             {
+                // 处理多行挂载详情面板 (如 AirOps / ReadyAircraft 右下角的 Label)
+                if (t.Contains("\n") && (t.Contains("挂载") || t.Contains("Loadout") || t.Contains("Pre-briefed") || t.Contains("能力") || t.Contains("Unlimited")))
+                {
+                    string trMulti = TranslateLoadoutDetailText(t);
+                    if (trMulti != t)
+                    {
+                        ctrl.Text = trMulti;
+                        return;
+                    }
+                }
+                if (t.Contains("Special Messages"))
+                {
+                    ctrl.Text = t.Replace("Special Messages", "专用战情消息");
+                    return;
+                }
+                // 处理 "展开 飞机构列表" 遗留误译修正与 Occupied 动态统计
+                if (t.Contains("飞机构列表"))
+                {
+                    ctrl.Text = t.Replace("飞机构列表", "飞机列表").Replace("展开 ", "展开");
+                    return;
+                }
+                if (t.StartsWith("Occupied "))
+                {
+                    ctrl.Text = "已占用 " + t.Substring("Occupied ".Length);
+                    return;
+                }
+                if (t.Contains(" sorties @ ") || t.Contains("最长时间") || t.Contains("maximum airborne time") || t.Contains("架次 @"))
+                {
+                    string sTr = t.Replace(" sorties @ ", " 架次 @ ")
+                                  .Replace(" maximum airborne time and ", " 最长滞空时间，")
+                                  .Replace(" 最长滞空时间与 ", " 最长滞空时间，")
+                                  .Replace(" turnaround, with ", " 再次出动周转，")
+                                  .Replace(" 再次出动准备，包含 ", " 再次出动周转，")
+                                  .Replace(" standdown ready time", " 停航恢复时间")
+                                  .Replace(" hr", " 小时")
+                                  .Replace(" min", " 分钟");
+                    if (sTr != t)
+                    {
+                        ctrl.Text = sTr;
+                        return;
+                    }
+                }
+
                 string trans = TranslateString(t);
                 if (trans != t)
                 {
@@ -2140,6 +2425,64 @@ namespace CMOLocalizer
                 return "{\"status\":\"ok\",\"closed\":" + closedCount + "}";
             }
 
+            if (cmd == "CLICK_BUTTON")
+            {
+                FormCollection forms = Application.OpenForms;
+                string clickedInfo = null;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f == null || f.IsDisposed || !f.Visible) continue;
+                        Button btn = FindButtonByTextOrName(f, arg);
+                        if (btn != null)
+                        {
+                            string bName = btn.Name;
+                            string bText = btn.Text;
+                            f.BeginInvoke((MethodInvoker)delegate
+                            {
+                                try { btn.PerformClick(); } catch { }
+                            });
+                            clickedInfo = f.Name + "." + bName + "(" + bText + ")";
+                            break;
+                        }
+                        ToolStripItem tsi = FindToolStripItemInControl(f, arg);
+                        if (tsi != null)
+                        {
+                            string tName = tsi.Name;
+                            string tText = tsi.Text;
+                            f.BeginInvoke((MethodInvoker)delegate
+                            {
+                                try { tsi.PerformClick(); } catch { }
+                            });
+                            clickedInfo = f.Name + ".ToolStripItem." + tName + "(" + tText + ")";
+                            break;
+                        }
+                    }
+                }
+                if (clickedInfo != null)
+                {
+                    return "{\"status\":\"ok\",\"clicked\":\"" + JsonEsc(clickedInfo) + "\"}";
+                }
+                return "{\"status\":\"error\",\"message\":\"Button not found: " + JsonEsc(arg) + "\"}";
+            }
+
+            if (cmd == "CLICK_TOOLBAR")
+            {
+                int targetIdx = 0;
+                int.TryParse(arg, out targetIdx);
+                ToolStripItem tsi = FindToolbarButtonByIndex(mainFrm, targetIdx);
+                if (tsi != null && mainFrm != null)
+                {
+                    mainFrm.BeginInvoke((MethodInvoker)delegate
+                    {
+                        try { tsi.PerformClick(); } catch { }
+                    });
+                    return "{\"status\":\"ok\",\"action\":\"CLICK_TOOLBAR\",\"index\":" + targetIdx + "}";
+                }
+                return "{\"status\":\"error\",\"message\":\"Toolbar button not found: " + arg + "\"}";
+            }
+
             if (cmd == "DB_INSPECT" || cmd == "DB_SELECT_ROW")
             {
                 Form dbForm = null;
@@ -2198,6 +2541,59 @@ namespace CMOLocalizer
                 int objId = fId != null ? (int)fId.GetValue(dbForm) : -1;
                 string objName = fName != null ? fName.GetValue(dbForm) as string : "";
                 return "{\"status\":\"ok\",\"id\":" + objId + ",\"name\":\"" + JsonEsc(objName) + "\",\"html_len\":" + (html != null ? html.Length : 0) + ",\"html_sample\":\"" + JsonEsc(html != null ? html.Substring(0, Math.Min(350, html.Length)) : "") + "\"}";
+            }
+
+            if (cmd == "DB_NAVIGATE_ID")
+            {
+                Form dbForm = null;
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            dbForm = f; break;
+                        }
+                    }
+                }
+                if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
+
+                string[] parts = arg.Split(' ');
+                string objType = parts.Length > 0 ? parts[0] : "Sensor";
+                string objIdStr = parts.Length > 1 ? parts[1] : "1438";
+
+                dbForm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        Control[] cbList = dbForm.Controls.Find("CB_ObjectType", true);
+                        if (cbList.Length > 0 && cbList[0] is ComboBox)
+                        {
+                            ComboBox cb = (ComboBox)cbList[0];
+                            for (int i = 0; i < cb.Items.Count; i++)
+                            {
+                                if (cb.Items[i].ToString().IndexOf(objType, StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    cb.SelectedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                        Control[] tbList = dbForm.Controls.Find("tb_ID", true);
+                        if (tbList.Length > 0)
+                        {
+                            tbList[0].Text = objIdStr;
+                        }
+                        Control[] btnList = dbForm.Controls.Find("btn_Go", true);
+                        if (btnList.Length > 0 && btnList[0] is Button)
+                        {
+                            ((Button)btnList[0]).PerformClick();
+                        }
+                    }
+                    catch (Exception ex) { Log("DB_NAVIGATE_ID error: " + ex.Message); }
+                });
+                return "{\"status\":\"ok\",\"action\":\"DB_NAVIGATE_ID\",\"type\":\"" + objType + "\",\"id\":\"" + objIdStr + "\"}";
             }
 
             if (cmd == "SCEN_EXPAND_ALL" || cmd == "SCEN_SELECT" || cmd == "SCEN_LOAD")
@@ -2289,6 +2685,67 @@ namespace CMOLocalizer
             foreach (Control child in root.Controls)
             {
                 Control found = FindControlByTypeOrName(child, target);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static Button FindButtonByTextOrName(Control root, string target)
+        {
+            if (root == null || root.IsDisposed) return null;
+            if (root is Button)
+            {
+                Button b = (Button)root;
+                if ((b.Text != null && b.Text.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (b.Name != null && b.Name.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    return b;
+                }
+            }
+            foreach (Control child in root.Controls)
+            {
+                Button found = FindButtonByTextOrName(child, target);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static ToolStripItem FindToolStripItemInControl(Control root, string target)
+        {
+            if (root == null || root.IsDisposed) return null;
+            if (root is ToolStrip)
+            {
+                ToolStrip ts = (ToolStrip)root;
+                ToolStripItem found = FindMenuItemByText(ts.Items, target);
+                if (found != null) return found;
+            }
+            foreach (Control child in root.Controls)
+            {
+                ToolStripItem found = FindToolStripItemInControl(child, target);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static ToolStripItem FindToolbarButtonByIndex(Control root, int targetBtnIndex)
+        {
+            if (root == null || root.IsDisposed) return null;
+            if (root is ToolStrip && !(root is MenuStrip) && !(root is StatusStrip))
+            {
+                ToolStrip ts = (ToolStrip)root;
+                int btnIdx = 0;
+                for (int i = 0; i < ts.Items.Count; i++)
+                {
+                    if (ts.Items[i] is ToolStripButton)
+                    {
+                        if (btnIdx == targetBtnIndex) return ts.Items[i];
+                        btnIdx++;
+                    }
+                }
+            }
+            foreach (Control child in root.Controls)
+            {
+                ToolStripItem found = FindToolbarButtonByIndex(child, targetBtnIndex);
                 if (found != null) return found;
             }
             return null;

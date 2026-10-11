@@ -94,6 +94,13 @@
   "IsShown": "已显示",
   "Auto-Pause": "自动暂停 (Auto-Pause)",
   "Knots": "节 (Knots)",
+  "Welcome to Basic Submarine Operations 1.1": "欢迎来到《基础潜艇作战教程 1.1》",
+  "In this scenario you will have command of a French nuclear fast attack submarine (SSN). Using pop-up messages, you will be guided through the following topics:": "在本想定中，您将指挥一艘法国海军攻击型核潜艇 (SSN)。通过弹窗消息引导，您将学习以下内容：",
+  "How to engage surface targets with torpedos": "如何使用鱼雷攻击水面目标",
+  "Your mission is to destroy the merchant vessel transiting your area with torpedoes.": "您的任务是使用鱼雷击毁正在穿过任务海区的商船。",
+  "In this tutorial as with others in this series multiple pop-ups will appear with important messages. If you need to review any of these later, you can open the message history in a second window by pressing Ctrl+Shift+M and scrolling to the appropriate message.": "在本教程及本系列其他教程中，重要提示将以弹窗形式出现。若稍后需要回顾，可按 Ctrl+Shift+M 在独立窗口中打开消息历史记录并滚动查阅。",
+  "This tutorial is designed to stop time compression with pop-ups at important moments. Submarine operations are often slow paced due to their covert nature, so feel free to use time compression in the tutorial knowing that any significant developments will be accompanied by a time-stopping pop-up.": "本教程会在关键节点弹出消息并自动暂停时间加速。鉴于潜艇作战强调隐蔽、节奏较慢，您可放心使用时间加速，任何重大态势变化都会自动弹窗暂停。",
+  "To make use of this in your own game-play, or fine-tune pop-up settings for this tutorial go to Game > Game Options > Message Log and select 'Raise Pop-Up' for any event that you wish. Useful pop-ups for submarine operations include 'Contact Change', 'New Contact', 'Special Messages' (this should always be on), 'Unit Damage', 'Unit Lost' and 'New Weapon Contact'.": "若要在日常推演中使用此机制或微调弹窗设置，请前往「推演 > 推演选项 > 消息日志」，为您关注的事件勾选「弹窗提示」。潜艇作战常用的弹窗包括「目标接触变更」、「新目标接触」、「专用战情消息」（建议始终开启）、「单位战损」、「单位沉没」与「新武器接触」。",
   "Delete Unit": "删除单位",
   "Create AGU from selected Units": "从所选单位创建聚合部队 (AGU)",
   "Group View": "编组视图"
