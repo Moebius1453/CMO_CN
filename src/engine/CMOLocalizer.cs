@@ -304,7 +304,16 @@ namespace CMOLocalizer
                             GetWindowText(hWnd, sbText, sbText.Capacity);
                             string txt = sbText.ToString();
 
-                            if (cls == "#32770" || txt.Contains("Application_Startup") || txt.Contains("Error in Application"))
+                            // The start-up error is raised by the game's own
+                            // WinForms form (class WindowsForms10.Window...), NOT a
+                            // #32770 MessageBox, and its title is translated by this
+                            // very dictionary -- so match the class prefix plus the
+                            // phrase in either language.
+                            if (cls == "#32770"
+                                || txt.Contains("Application_Startup")
+                                || txt.Contains("Error in Application")
+                                || txt.Contains("application startup")
+                                || txt.Contains("应用程序启动"))
                             {
                                 Log("AutoDismissStartupDialogs: Closing dialog '" + txt + "'");
                                 // 查找 OK 按钮并点击
