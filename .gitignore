@@ -1,0 +1,28 @@
+# CMO 汉化工程 — 构建产物
+build/
+out/
+*.dll
+*.exe
+*.pdb
+*.zip
+
+# 证据与截图（体积大，不纳入版本库）
+evidence/
+*.png
+*.jpg
+
+# 运行时日志与临时文件
+*.log
+__pycache__/
+*.pyc
+*.tmp
+*.bak
+*.orig
+
+# 游戏运行时解析产物
+CMOLocalizer.log
+
+# 编辑器
+.vs/
+.idea/
+*.user
