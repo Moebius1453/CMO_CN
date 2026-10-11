@@ -94,11 +94,22 @@
 - `evidence/live/dialogs/06_event_editor.png`：【事件编辑器】事件描述、可重复、已启用、概率、已显示列头。
 - `evidence/live/dialogs/07_game_options.png`：【推演选项】通用设置、度量衡单位系统、窗口打开行为、辅助窗口停靠重置。
 
-### 5. 全量 45 个教程实机运行、文本/按键精准匹配与战情消息验证（6 张核心存证）
+### 5. 全量 45 个教程实机运行、文本/按键精准匹配与战情消息验证（15 张核心存证）
 - `evidence/live/tutorials/01_sub_tutorial_1_1_side_briefing.png`：【潜艇教程 1.1】进入战场的阵营简报全中文渲染（操作潜艇深度/航向/航速、声呐操作、汇聚区运作、鱼雷攻击水面目标）。
 - `evidence/live/tutorials/01_sub_tutorial_1_1_special_message.png`：【潜艇教程 1.1】运行态首个专用战情消息弹窗（F3 航线规划、Esc 取消模式、F2 油门/深度、浅水层 Shallow、微速/静音 Creep、空格键推演，100% 中文与按键精准对应）。
 - `evidence/live/tutorials/02_ew_tutorial_side_briefing.png`：【电子战教程】以色列阵营作战简报全量汉化。
 - `evidence/live/tutorials/02_ew_tutorial_special_message.png`：【电子战教程】专用战情消息弹窗（拉马特戴维基地 6 架 F-35I、6 架 F-15I、10 架 F-16I、湾流 G550 预警机、波音 707 加油机与 EA-6B 徘徊者电子战机中文命名）。
 - `evidence/live/tutorials/03_uncle_mark_1_side_briefing.png`：【马克大叔教程 1】解密阵营简报（`<Briefing_Encrypted>`）高难度深度汉化（五段式军用电文格式、白色正式命令与蓝色战术解说评注双色 HTML 渲染、特急电报优先级 FLASH PRIORITY、大西洋盟军最高司令部 CINCLANT）。
 - `evidence/live/tutorials/04_flight_tutorial_1_special_message.png`：【飞行教程 1】专用战情消息弹窗（按 SPACE 开始推演、按 F6 打开空中作业窗口、点击「单位状态」面板「飞机」打开，按键与界面操作 100% 匹配）。
+- `evidence/live/tutorials/07_db_viewer_weapons_translated.png`：【数据库查看器】战机外挂武器包线表 100% 中文化实测（常规航弹/制导武器、打击目标、最大射程、战斗部装药类型、导引设备与肉眼观察探测信息全量汉化，彻底解决混合字符串被 ContainsChinese 跳过的问题）。
+- `evidence/live/tutorials/08_air_ops_ramat_david_fixed.png`：【航空作业 - 拉马特戴维基地】整机与挂载详情面板 100% 中文实测（挂载战术任务构型、昼夜全天候作战能力、220 分钟 @ 200 海里战斗空中巡逻 CAP 完整飞行剖面、部分弹药耗尽 Shotgun 武器状态说明全量汉化）。
+- `evidence/live/tutorials/09_ready_aircraft_g550_fixed.png`：【就绪飞机 - 湾流 G550 预警机】就绪列表与挂载详情全量汉化实测（保形机载早期预警 CAEW、维护检修不可用、后备/预备挂载可用、昼夜 2 架次 @ 30 分钟 10 小时飞行时间及 Winchester 状态说明）。
+- `evidence/live/tutorials/10_right_panel_flying_frame1.png`：【右侧单位状态面板防频闪实测帧 1】飞行动态态势面板持续稳定显示中文（挂载方案超链接可点击且全中文、所属阵营、航向度数、TAS 空速/地速、飞行高度、伤害控制、滑行准备起飞状态 0ms 原生呈现，彻底根除中英文交替闪烁）。
+- `evidence/live/tutorials/10_right_panel_flying_frame2.png`：【右侧单位状态面板防频闪实测帧 2】间隔推演帧连续捕获，证实中文常驻稳定显示无闪烁。
+- `evidence/live/tutorials/11_flight_tutorial_1_victory.png`：【飞行教程 1 通关战情消息】完成飞行与就绪教学指令，达成 100 分通关。
+- `evidence/live/tutorials/12_ew_tutorial_victory.png`：【电子战教程通关战情消息】成功完成电子战突击并达成通关胜利。
+- `evidence/live/tutorials/13_sub_tutorial_1_1_victory.png`：【潜艇教程 1.1 通关战情消息】潜艇占领阵位并使用鱼雷击毁目标达成通关。
+- `evidence/live/tutorials/14_strike_tutorial_1_victory.png`：【对地打击教程 1 通关战情消息】攻击机实施对地航弹投掷完成靶场打击通关。
+- `evidence/live/tutorials/15_surface_tutorial_1_victory.png`：【水面战教程 1 通关战情消息】水面编队打击快艇达成通关。
+
 

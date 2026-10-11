@@ -409,6 +409,10 @@ namespace CMOLocalizer
 
         private static int wpfTranslatedCount = 0;
 
+        private static readonly HashSet<int> hookedWpfElements = new HashSet<int>();
+        [ThreadStatic]
+        private static bool _inWpfTextChanged;
+
         private static void TranslateWpfElement(System.Windows.DependencyObject dep)
         {
             if (dep == null) return;
@@ -451,7 +455,70 @@ namespace CMOLocalizer
                 if (dep is System.Windows.Controls.TextBlock)
                 {
                     System.Windows.Controls.TextBlock tb = (System.Windows.Controls.TextBlock)dep;
-                    if (!string.IsNullOrEmpty(tb.Text))
+                    int tbHash = tb.GetHashCode();
+                    if (!hookedWpfElements.Contains(tbHash))
+                    {
+                        hookedWpfElements.Add(tbHash);
+                        try
+                        {
+                            var desc = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+                                System.Windows.Controls.TextBlock.TextProperty, typeof(System.Windows.Controls.TextBlock));
+                            if (desc != null)
+                            {
+                                desc.AddValueChanged(tb, (s, e) =>
+                                {
+                                    if (_inWpfTextChanged) return;
+                                    try
+                                    {
+                                        _inWpfTextChanged = true;
+                                        System.Windows.Controls.TextBlock targetTb = s as System.Windows.Controls.TextBlock;
+                                        if (targetTb != null && !string.IsNullOrEmpty(targetTb.Text) && !ContainsChinese(targetTb.Text))
+                                        {
+                                            string tr = TranslateString(targetTb.Text);
+                                            if (tr != targetTb.Text) targetTb.Text = tr;
+                                        }
+                                    }
+                                    catch { }
+                                    finally { _inWpfTextChanged = false; }
+                                });
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // 递归处理 Inlines (如包含 Hyperlink 的 Loadout 链接)
+                    if (tb.Inlines != null && tb.Inlines.Count > 0)
+                    {
+                        foreach (System.Windows.Documents.Inline inline in tb.Inlines)
+                        {
+                            if (inline is System.Windows.Documents.Run)
+                            {
+                                var run = (System.Windows.Documents.Run)inline;
+                                if (!string.IsNullOrEmpty(run.Text) && !ContainsChinese(run.Text))
+                                {
+                                    string trRun = TranslateString(run.Text);
+                                    if (trRun != run.Text) run.Text = trRun;
+                                }
+                            }
+                            else if (inline is System.Windows.Documents.Hyperlink)
+                            {
+                                var hl = (System.Windows.Documents.Hyperlink)inline;
+                                foreach (System.Windows.Documents.Inline sub in hl.Inlines)
+                                {
+                                    if (sub is System.Windows.Documents.Run)
+                                    {
+                                        var subRun = (System.Windows.Documents.Run)sub;
+                                        if (!string.IsNullOrEmpty(subRun.Text))
+                                        {
+                                            string trSub = TranslateCellText(subRun.Text);
+                                            if (trSub != subRun.Text) subRun.Text = trSub;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(tb.Text))
                     {
                         string trans = TranslateString(tb.Text);
                         if (trans != tb.Text)
@@ -564,7 +631,7 @@ namespace CMOLocalizer
                         try
                         {
                             string sVal = e.Value as string;
-                            if (!string.IsNullOrEmpty(sVal) && !ContainsChinese(sVal))
+                            if (!string.IsNullOrEmpty(sVal))
                             {
                                 string tr = TranslateCellText(sVal);
                                 if (tr != sVal)
@@ -817,6 +884,49 @@ namespace CMOLocalizer
         private static string TranslateBriefingText(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
+
+            // 1. 数据库武器射程与高度列 (e.g. "200 ft AGL - 65000 ft ASL")
+            if (text.Contains(" ft AGL") || text.Contains(" ft ASL") || text.Contains(" m AGL") || text.Contains(" m ASL"))
+            {
+                text = text.Replace(" ft AGL", " 英尺(真高AGL)")
+                           .Replace(" ft ASL", " 英尺(海拔ASL)")
+                           .Replace(" m AGL", " 米(真高AGL)")
+                           .Replace(" m ASL", " 米(海拔ASL)");
+            }
+
+            // 数据库动力装置油门档位与高度层 (e.g. "Band 1, Loiter Speed", "145.31 kg per minute")
+            if (text.Contains("Band ") || text.Contains("kg per minute"))
+            {
+                text = text.Replace("Band 1", "高度层 1")
+                           .Replace("Band 2", "高度层 2")
+                           .Replace("Band 3", "高度层 3")
+                           .Replace("Band 4", "高度层 4")
+                           .Replace("Loiter Speed", "盘旋待机速度")
+                           .Replace("Cruise Speed", "巡航速度")
+                           .Replace("Military Speed", "军用推力速度")
+                           .Replace("Afterburner Speed", "加力推力速度")
+                           .Replace("kg per minute", "公斤/分钟");
+            }
+
+            // 数据库战机预设挂载方案飞行剖面 (e.g. "3150 nm Strike radius, Hi-Hi-Hi profile...")
+            if (text.Contains("Strike radius") || text.Contains("Ferry Range") || text.Contains("profile.") || text.Contains("reserves."))
+            {
+                return TranslateFlightProfile(text);
+            }
+
+            // 2. 数据库外挂武器包线详情汇总列 (e.g. "Guided Weapon. Targets: ... 最高航速: ... Warhead: ... Can be guided by: ...")
+            if (text.Contains("Targets:") || text.Contains("打击目标:") || text.Contains("Warhead:") || text.Contains("战斗部:") || text.StartsWith("Guided Weapon") || text.StartsWith("Unguided Weapon"))
+            {
+                return TranslateWeaponSummary(text);
+            }
+
+            // 3. 复合枚举串 (如 "Late 1980s Technology, 水面搜索, Ground Search (Fixed)")，即使部分已包含中文，也需翻译剩余英文字段
+            if (text.Contains(", ") && Regex.IsMatch(text, @"[A-Za-z]{3,}"))
+            {
+                string trComp = TranslateCommaComposite(text);
+                if (trComp != text) return trComp;
+            }
+
             if (ContainsChinese(text)) return text;
 
             // Direct exact / normalized match via TranslateString
@@ -1297,6 +1407,142 @@ namespace CMOLocalizer
 
         private static int translatedControlCount = 0;
 
+        private static string TranslateWeaponSummary(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            string s = text;
+            s = s.Replace("Guided Weapon. ", "制导武器。 ")
+                 .Replace("Unguided Weapon. ", "非制导武器。 ")
+                 .Replace("Decoy. ", "诱饵弹。 ")
+                 .Replace("Sensor Pod. ", "传感器/电子战吊舱。 ")
+                 .Replace("Torpedo. ", "鱼雷。 ")
+                 .Replace("Naval Mine. ", "水雷。 ")
+                 .Replace("Depth Charge. ", "深水炸弹。 ")
+                 .Replace("Sonobuoy. ", "声呐浮标。 ")
+                 .Replace("Fuel Tank. ", "外挂副油箱。 ");
+
+            int tgtIdx = s.IndexOf("Targets: ");
+            if (tgtIdx < 0) tgtIdx = s.IndexOf("打击目标: ");
+            if (tgtIdx >= 0)
+            {
+                int prefixLen = s.IndexOf("Targets: ") >= 0 ? "Targets: ".Length : "打击目标: ".Length;
+                int dotIdx = s.IndexOf(". ", tgtIdx + prefixLen);
+                if (dotIdx > tgtIdx)
+                {
+                    string targetsPart = s.Substring(tgtIdx + prefixLen, dotIdx - (tgtIdx + prefixLen));
+                    string trTargets = TranslateCommaComposite(targetsPart);
+                    s = s.Substring(0, tgtIdx) + "打击目标: " + trTargets + s.Substring(dotIdx);
+                }
+            }
+
+            s = s.Replace("Max Speed: ", "最高航速: ")
+                 .Replace("Max Range: ", "最大射程: ")
+                 .Replace(" kts. ", " 节。 ")
+                 .Replace(" nm. ", " 海里。 ")
+                 .Replace("Warheads: ", "战斗部: ")
+                 .Replace("Warhead: ", "战斗部: ")
+                 .Replace("Can be guided by: ", "制导设备: ")
+                 .Replace("Can be directed by: ", "可由以下传感器引导: ")
+                 .Replace("Gun. ", "航炮/火炮。 ")
+                 .Replace("Deployment depth: ", "布设深度: ");
+
+            s = s.Replace("Blast-Frag", "破片杀伤")
+                 .Replace("Blast/Frag", "破片杀伤")
+                 .Replace(" Frag", " 破片")
+                 .Replace(" HEAT", " 破甲")
+                 .Replace(" Penetrator", " 钻地侵彻")
+                 .Replace(" HE.", " 高爆。")
+                 .Replace(" HE ", " 高爆 ")
+                 .Replace(" Nuclear", " 核战斗部")
+                 .Replace(" Continuous Rod", " 连续杆")
+                 .Replace(" Submunitions", " 子母弹");
+
+            return s;
+        }
+
+        private static string TranslateFlightProfile(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            return text.Replace(" minutes at ", " 分钟 @ ")
+                       .Replace(" min at ", " 分钟 @ ")
+                       .Replace(" minutes combat in AB", " 分钟加力空战")
+                       .Replace(" min combat in AB", " 分钟加力空战")
+                       .Replace(" minutes in AB", " 分钟加力飞行")
+                       .Replace(" nm CAP.", " 海里战斗空中巡逻 (CAP)。")
+                       .Replace(" nm CAP", " 海里战斗空中巡逻 (CAP)")
+                       .Replace(" nm AEW.", " 海里空中预警巡逻 (AEW)。")
+                       .Replace(" nm ASW patrol.", " 海里反潜巡逻。")
+                       .Replace(" nm Maritime Surveillance.", " 海里海上监视巡逻。")
+                       .Replace(" nm Ferry Range.", " 海里转场航程。")
+                       .Replace(" nm Strike radius, ", " 海里打击作战半径，")
+                       .Replace("Cruise at optimum altitude and speed.", "按最佳高度与速度巡航。")
+                       .Replace("Cruise at ", "巡航高度 ")
+                       .Replace("Weapon release at max range.", "在最大射程发射武器。")
+                       .Replace("No form-up time.", "无编队集结时间。")
+                       .Replace(" profile.", " 飞行剖面。")
+                       .Replace("Radius: ", "作战半径: ")
+                       .Replace("Transit at ", "巡航转场高度 ")
+                       .Replace("Ingress at ", "突防进入高度 ")
+                       .Replace("Egress at ", "脱离返航高度 ")
+                       .Replace(", on-station loiter", "，阵位巡逻待机")
+                       .Replace(", on-station ", "，阵位滞空 ")
+                       .Replace("Form-up ", "编队集结 ")
+                       .Replace(" at 2k ft.", " @ 高度 2千英尺。")
+                       .Replace(" at 36k ft", " @ 36千英尺")
+                       .Replace("% reserves and ", "% 备份油量与 ")
+                       .Replace("% reserves", "% 备份油量")
+                       .Replace(" min loiter", " 分钟盘旋待机")
+                       .Replace("Hi-Lo-Hi", "高-低-高 (Hi-Lo-Hi)")
+                       .Replace("Lo-Lo-Lo", "低-低-低 (Lo-Lo-Lo)")
+                       .Replace("Hi-Hi-Hi", "高-高-高 (Hi-Hi-Hi)")
+                       .Replace("low-level dash", "低空突防冲刺")
+                       .Replace("k ft", "千英尺")
+                       .Replace(" nm", " 海里");
+        }
+
+        private static string TranslateLoadoutValue(string val)
+        {
+            if (string.IsNullOrEmpty(val)) return val;
+            if (val == "-" || val == "无" || val == "无限制") return val;
+
+            if (exactMap.ContainsKey(val)) return exactMap[val];
+            string norm = Regex.Replace(val.Trim(), @"\s+", " ");
+            if (normExactMap.ContainsKey(norm)) return normExactMap[norm];
+
+            if (val.StartsWith("Shotgun:") || val.StartsWith("Winchester:"))
+            {
+                return val.Replace("Shotgun: ", "主武器耗尽返航 (Shotgun): ")
+                          .Replace("Winchester: ", "弹尽返航 (Winchester): ")
+                          .Replace("Return to base after one engagement with WVR weapons.", "在进行一次视距内交战后返航。")
+                          .Replace("Return to base after one engagement with BVR weapons.", "在进行一次超视距交战后返航。")
+                          .Replace("Allow targets of opportunity with air-to-air guns.", "允许使用航炮攻击机会目标。");
+            }
+
+            if (val.EndsWith(" capable") || val.EndsWith(" 能力") || val.StartsWith("Day and night") || val.StartsWith("Day-only") || val.StartsWith("Night-only"))
+            {
+                string cap = val.Replace(" capable", "").Replace(" 能力", "").Trim();
+                return cap.Replace("Day and night", "昼夜")
+                          .Replace("Day-only", "仅昼间")
+                          .Replace("Night-only", "仅夜间")
+                          .Replace("All-weather", "全天候")
+                          + "作战能力";
+            }
+
+            if (val.Contains(" minutes at ") || val.Contains(" nm CAP") || val.Contains("Transit at ") || val.Contains("Ingress at ") || val.Contains(" profile"))
+            {
+                return TranslateFlightProfile(val);
+            }
+
+            if (val.Contains(", "))
+            {
+                return TranslateCommaComposite(val);
+            }
+
+            string tr = TranslateString(val);
+            if (tr != val) return tr;
+            return val;
+        }
+
         private static string TranslateCommaComposite(string text)
         {
             if (string.IsNullOrEmpty(text) || !text.Contains(",")) return TranslateString(text);
@@ -1330,9 +1576,20 @@ namespace CMOLocalizer
 
             if (text.Contains("Reserve"))
             {
-                return text.Replace("(Reserve [Available])", "(后备/预备挂载 [可用])")
+                text = text.Replace("(Reserve [Available])", "(后备/预备挂载 [可用])")
                            .Replace("Reserve [Available]", "后备/预备挂载 [可用]")
                            .Replace("(Reserve)", "(后备/预备挂载)");
+            }
+
+            if (text.Contains("Maintenance"))
+            {
+                text = text.Replace("(Maintenance [Unavailable])", "(维护检修 [不可用])")
+                           .Replace("Maintenance [Unavailable]", "维护检修 [不可用]");
+            }
+
+            if (text.Contains("CAEW"))
+            {
+                text = text.Replace("Conformal Airborne Early Warning (CAEW)", "保形机载早期预警 (CAEW)");
             }
 
             if (Regex.IsMatch(text, @"^\d+\s*(hr|小时)(\s*\d+\s*(min|分钟))?$|^\d+\s*(min|分钟)$"))
@@ -1340,9 +1597,9 @@ namespace CMOLocalizer
                 return text.Replace("hr", "小时").Replace("min", "分钟").Replace("sec", "秒");
             }
 
-            if (text.Contains(" sorties @ ") || text.Contains(" flying time") || text.Contains("Day and night") || text.Contains("架次"))
+            if (text.Contains(" sorties @ ") || text.Contains(" flying time") || text.Contains("Day and night") || text.Contains("架次") || text.Contains("downtime"))
             {
-                return text.Replace("Day and night", "昼夜")
+                text = text.Replace("Day and night", "昼夜")
                            .Replace("Day-only", "仅昼间")
                            .Replace("Night-only", "仅夜间")
                            .Replace(" sorties @ ", " 架次 @ ")
@@ -1352,9 +1609,10 @@ namespace CMOLocalizer
                            .Replace(" min", " 分钟");
             }
 
-            if (text.StartsWith("Enabled, ") || text.StartsWith("已启用，"))
+            if (text.Contains("Enabled") || text.Contains("已启用") || text.Contains("Day/Night"))
             {
-                return text.Replace("Enabled, ", "已启用，")
+                text = text.Replace("Enabled, ", "已启用，")
+                           .Replace("Enabled", "已启用")
                            .Replace("Day/Night:", "昼/夜:")
                            .Replace("Day/Night", "昼/夜");
             }
@@ -1410,25 +1668,8 @@ namespace CMOLocalizer
                     {
                         string key = line.Substring(0, colonIdx).Trim();
                         string val = line.Substring(colonIdx + 1).Trim();
-                        string trKey = exactMap.ContainsKey(key) ? exactMap[key] : TranslateString(key);
-                        string trVal = exactMap.ContainsKey(val) ? exactMap[val] : TranslateString(val);
-                        if (trVal == val)
-                        {
-                            if (val.EndsWith(" capable"))
-                            {
-                                string baseCap = val.Substring(0, val.Length - " capable".Length).Trim();
-                                trVal = TranslateCommaComposite(baseCap) + "作战能力";
-                            }
-                            else if (val.EndsWith(" 能力"))
-                            {
-                                string baseCap = val.Substring(0, val.Length - " 能力".Length).Trim();
-                                trVal = TranslateCommaComposite(baseCap) + "作战能力";
-                            }
-                            else if (val.Contains(", "))
-                            {
-                                trVal = TranslateCommaComposite(val);
-                            }
-                        }
+                        string trKey = exactMap.ContainsKey(key) ? exactMap[key] : (normExactMap.ContainsKey(key) ? normExactMap[key] : TranslateString(key));
+                        string trVal = TranslateLoadoutValue(val);
                         trLine = trKey + ": " + trVal;
                         if (trLine != line) anyTrans = true;
                     }
@@ -1468,6 +1709,11 @@ namespace CMOLocalizer
                         ctrl.Text = fText.Replace("Special Messages", "专用战情消息");
                         return;
                     }
+                    if (fText.StartsWith("就绪飞机:") && fText.Contains(" at "))
+                    {
+                        ctrl.Text = fText.Replace(" at ", " 位于 ");
+                        return;
+                    }
                 }
             }
 
@@ -1482,6 +1728,10 @@ namespace CMOLocalizer
                         tb.Text = trTb;
                     }
                 }
+                else if (!string.IsNullOrEmpty(tb.Text) && tb.Text.StartsWith("Enter Database ID for this "))
+                {
+                    tb.Text = "输入该型装备的数据库 ID...";
+                }
                 return;
             }
 
@@ -1495,8 +1745,10 @@ namespace CMOLocalizer
             string t = ctrl.Text;
             if (!string.IsNullOrEmpty(t))
             {
-                // 处理多行挂载详情面板 (如 AirOps / ReadyAircraft 右下角的 Label)
-                if (t.Contains("\n") && (t.Contains("挂载") || t.Contains("Loadout") || t.Contains("Pre-briefed") || t.Contains("能力") || t.Contains("Unlimited")))
+                // 处理单行或多行挂载详情面板 (如 AirOps / ReadyAircraft 右下角的各项 Label)
+                if (t.Contains("挂载") || t.Contains("作战能力") || t.Contains("飞行剖面") || t.Contains("武器状态") || t.Contains("攻击高度") ||
+                    t.Contains("Loadout") || t.Contains("Pre-briefed") || t.Contains("Effective pre-briefed") || t.Contains("Unlimited") ||
+                    t.StartsWith("TimeOfDay") || t.StartsWith("NumberOfLoadouts") || t.Contains("Capable") || t.Contains("capable"))
                 {
                     string trMulti = TranslateLoadoutDetailText(t);
                     if (trMulti != t)
@@ -2465,6 +2717,38 @@ namespace CMOLocalizer
                     return "{\"status\":\"ok\",\"clicked\":\"" + JsonEsc(clickedInfo) + "\"}";
                 }
                 return "{\"status\":\"error\",\"message\":\"Button not found: " + JsonEsc(arg) + "\"}";
+            }
+
+            if (cmd == "RUN_LUA")
+            {
+                try
+                {
+                    Type tLua = null;
+                    foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        tLua = a.GetType("Command_Core.Lua.LuaSandBox");
+                        if (tLua != null) break;
+                    }
+                    if (tLua != null)
+                    {
+                        MethodInfo mSing = tLua.GetMethod("Singleton", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                        object sandBox = mSing != null ? mSing.Invoke(null, null) : null;
+                        if (sandBox != null)
+                        {
+                            MethodInfo mRun = tLua.GetMethod("RunScript", new Type[] { typeof(string), typeof(bool), typeof(string), typeof(string) });
+                            if (mRun != null)
+                            {
+                                object res = mRun.Invoke(sandBox, new object[] { arg, true, "", "" });
+                                return "{\"status\":\"ok\",\"action\":\"RUN_LUA\"}";
+                            }
+                        }
+                    }
+                    return "{\"status\":\"error\",\"message\":\"LuaSandBox not available\"}";
+                }
+                catch (Exception ex)
+                {
+                    return "{\"status\":\"error\",\"message\":\"" + JsonEsc(ex.Message) + "\"}";
+                }
             }
 
             if (cmd == "CLICK_TOOLBAR")
