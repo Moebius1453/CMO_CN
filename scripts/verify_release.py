@@ -34,6 +34,20 @@ FUNC_WORDS = re.compile(
 PLACEHOLDER = re.compile(r"\{[0-9]+\}|%[sdif]|\{[A-Za-z]+\}")
 BRACKETS = {"(": ")", "[": "]", "（": "）", "【": "】", "〔": "〕"}
 
+# English fragments that must stay verbatim inside a Chinese translation:
+# licence identifiers, URLs, citations, registered names, code credits.  These
+# are stripped before the residual-function-word check so a citation such as
+# "Survey Review XXII" or "CC BY 4.0" is not reported as an untranslated word.
+PROTECTED = re.compile(
+    r"(https?://\S+"
+    r"|\bCC\s+BY(?:-[A-Z]{2})?\s*[\d.]*"
+    r"|\b(?:MIT|GNU|BSD|Apache|LGPL|GPL)\b[^\s，。]*"
+    r"|\(C\)\s*[^\r\n，。]*"
+    r"|\b(?:Survey Review|Springer|Elsevier|Wiley|IEEE)\b[^\r\n，。]*"
+    r"|\[[^\]]*\]"
+    r"|《[^》]*》"
+    r"|「[^」]*」)", re.I)
+
 failures: list[str] = []
 
 
@@ -64,8 +78,10 @@ def check_quality(entries: dict[str, str], label: str, pool_vals: set[str]) -> N
         m = HAN_SPACE.search(dst)
         if m:
             fail(f"{label}[{src!r}]={dst!r} has a space between Han characters")
-        # Only flag when the leftover English word is not part of a kept acronym.
-        residual = [w for w in re.findall(r"[A-Za-z]{2,}", dst)
+        # Only flag when the leftover English word is not part of a kept acronym
+        # or a protected licence / URL / citation fragment.
+        scanned = PROTECTED.sub(" ", dst)
+        residual = [w for w in re.findall(r"[A-Za-z]{2,}", scanned)
                     if w.lower() in {"the", "of", "and", "for", "with", "from",
                                      "to", "in", "on", "at", "by", "is", "are",
                                      "will", "be"}]
