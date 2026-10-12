@@ -27,6 +27,8 @@ echo "==> building CMO_Chinese_Setup.exe"
 RES=()
 RES+=(-resource:"$(W "$OUT/CMOLocalizer.dll")",CMOLocalizer.dll)
 RES+=(-resource:"$(W "$ROOT/dict/CMOLocalizer.json")",CMOLocalizer.json)
+RES+=(-resource:"$(W "$ROOT/assets/donate/wechat_pay.png")",QR_WeChat)
+RES+=(-resource:"$(W "$ROOT/assets/donate/alipay.jpg")",QR_Alipay)
 for t in "$ROOT"/assets/db_templates/*.html; do
   RES+=(-resource:"$(W "$t")","TPL_$(basename "$t")")
 done

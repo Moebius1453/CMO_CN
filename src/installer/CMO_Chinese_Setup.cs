@@ -15,13 +15,14 @@ namespace CMOLocalizerInstaller
         private Button btnBrowse;
         private Button btnInstall;
         private Button btnUninstall;
+        private Button btnDonate;
         private TextBox txtLog;
         private Label lblStatus;
 
         public InstallerForm(string initialPath)
         {
-            this.Text = "Command: Modern Operations (CMO) 专家级中文汉化一键安装工具 v4.0.0";
-            this.Size = new Size(680, 480);
+            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.0.0";
+            this.Size = new Size(680, 525);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -36,7 +37,7 @@ namespace CMOLocalizerInstaller
             this.Controls.Add(lblTitle);
 
             Label lblSub = new Label();
-            lblSub.Text = "采用 CLR AppDomainManager 无损内存级双重本地化引擎 | 不修改原版 EXE | 支持随时一键还原";
+            lblSub.Text = "采用 CLR AppDomainManager 零侵入内存级双重本地化引擎 | 不修改原版 EXE | 支持一键还原";
             lblSub.ForeColor = Color.DimGray;
             lblSub.AutoSize = true;
             lblSub.Location = new Point(22, 50);
@@ -75,7 +76,7 @@ namespace CMOLocalizerInstaller
             btnInstall.ForeColor = Color.White;
             btnInstall.FlatStyle = FlatStyle.Flat;
             btnInstall.Location = new Point(22, 190);
-            btnInstall.Size = new Size(300, 48);
+            btnInstall.Size = new Size(300, 46);
             btnInstall.Click += new EventHandler(OnInstallClick);
             this.Controls.Add(btnInstall);
 
@@ -83,22 +84,43 @@ namespace CMOLocalizerInstaller
             btnUninstall.Text = "一键还原原版英文";
             btnUninstall.Font = new Font("Microsoft YaHei UI", 11f, FontStyle.Regular);
             btnUninstall.Location = new Point(347, 190);
-            btnUninstall.Size = new Size(300, 48);
+            btnUninstall.Size = new Size(300, 46);
             btnUninstall.Click += new EventHandler(OnUninstallClick);
             this.Controls.Add(btnUninstall);
+
+            btnDonate = new Button();
+            btnDonate.Text = "☕ 觉得好用？请作者喝杯咖啡 / 可乐";
+            btnDonate.Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold);
+            btnDonate.BackColor = Color.FromArgb(254, 248, 237);
+            btnDonate.ForeColor = Color.FromArgb(180, 95, 20);
+            btnDonate.FlatStyle = FlatStyle.Flat;
+            btnDonate.FlatAppearance.BorderColor = Color.FromArgb(235, 195, 135);
+            btnDonate.Location = new Point(22, 246);
+            btnDonate.Size = new Size(625, 34);
+            btnDonate.Cursor = Cursors.Hand;
+            btnDonate.Click += new EventHandler(OnDonateClick);
+            this.Controls.Add(btnDonate);
 
             txtLog = new TextBox();
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.BackColor = Color.FromArgb(245, 247, 250);
-            txtLog.Location = new Point(22, 255);
-            txtLog.Size = new Size(625, 165);
+            txtLog.Location = new Point(22, 290);
+            txtLog.Size = new Size(625, 175);
             this.Controls.Add(txtLog);
 
-            Log("欢迎使用 Command: Modern Operations (CMO) 专家级中文汉化安装程序。");
-            Log("本汉化涵盖：主界面菜单、作战条令(Doctrine)、交战规则(ROE)、任务编辑器、推演消息日志、热键与数据库视图。");
+            Log("欢迎使用 Command: Modern Operations (CMO) 完整中文汉化安装程序。");
+            Log("本汉化涵盖：主界面、菜单、作战条令(RoE)、任务编辑、航空作业、全部45个教程及全球4608处地名。");
             RefreshStatus();
+        }
+
+        private void OnDonateClick(object sender, EventArgs e)
+        {
+            using (DonateForm df = new DonateForm())
+            {
+                df.ShowDialog(this);
+            }
         }
 
         private void Log(string msg)
@@ -178,37 +200,246 @@ namespace CMOLocalizerInstaller
         }
     }
 
+    public class DonateForm : Form
+    {
+        public DonateForm()
+        {
+            this.Text = "☕ 请作者喝杯咖啡 / 可乐 - 感谢您的支持与鼓励";
+            this.Size = new Size(580, 525);
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Regular);
+            this.BackColor = Color.White;
+
+            Label lblTitle = new Label();
+            lblTitle.Text = "❤️ 感谢支持 CMO 中文本地化项目";
+            lblTitle.Font = new Font("Microsoft YaHei UI", 13f, FontStyle.Bold);
+            lblTitle.ForeColor = Color.FromArgb(180, 85, 20);
+            lblTitle.AutoSize = true;
+            lblTitle.Location = new Point(20, 16);
+            this.Controls.Add(lblTitle);
+
+            Label lblDesc = new Label();
+            lblDesc.Text = "本汉化补丁完全免费开源，由爱好者利用业余时间持续维护更新。\n如果您觉得汉化体验还不错，欢迎扫码请作者喝杯咖啡或可乐，感谢您的支持！";
+            lblDesc.ForeColor = Color.FromArgb(80, 80, 80);
+            lblDesc.AutoSize = true;
+            lblDesc.Location = new Point(22, 48);
+            this.Controls.Add(lblDesc);
+
+            // 微信支付卡片
+            Panel pnlWeChat = new Panel();
+            pnlWeChat.Location = new Point(25, 100);
+            pnlWeChat.Size = new Size(245, 335);
+            pnlWeChat.BorderStyle = BorderStyle.FixedSingle;
+            pnlWeChat.BackColor = Color.FromArgb(250, 254, 250);
+            this.Controls.Add(pnlWeChat);
+
+            Label lblWeChat = new Label();
+            lblWeChat.Text = "微信支付";
+            lblWeChat.Font = new Font("Microsoft YaHei UI", 11f, FontStyle.Bold);
+            lblWeChat.ForeColor = Color.FromArgb(7, 193, 96);
+            lblWeChat.Dock = DockStyle.Top;
+            lblWeChat.Height = 32;
+            lblWeChat.TextAlign = ContentAlignment.MiddleCenter;
+            pnlWeChat.Controls.Add(lblWeChat);
+
+            PictureBox pbWeChat = new PictureBox();
+            pbWeChat.Dock = DockStyle.Fill;
+            pbWeChat.SizeMode = PictureBoxSizeMode.Zoom;
+            pbWeChat.Image = LoadEmbeddedImage("QR_WeChat");
+            pnlWeChat.Controls.Add(pbWeChat);
+            pbWeChat.BringToFront();
+
+            // 支付宝卡片
+            Panel pnlAlipay = new Panel();
+            pnlAlipay.Location = new Point(295, 100);
+            pnlAlipay.Size = new Size(245, 335);
+            pnlAlipay.BorderStyle = BorderStyle.FixedSingle;
+            pnlAlipay.BackColor = Color.FromArgb(250, 252, 255);
+            this.Controls.Add(pnlAlipay);
+
+            Label lblAlipay = new Label();
+            lblAlipay.Text = "支付宝";
+            lblAlipay.Font = new Font("Microsoft YaHei UI", 11f, FontStyle.Bold);
+            lblAlipay.ForeColor = Color.FromArgb(22, 119, 255);
+            lblAlipay.Dock = DockStyle.Top;
+            lblAlipay.Height = 32;
+            lblAlipay.TextAlign = ContentAlignment.MiddleCenter;
+            pnlAlipay.Controls.Add(lblAlipay);
+
+            PictureBox pbAlipay = new PictureBox();
+            pbAlipay.Dock = DockStyle.Fill;
+            pbAlipay.SizeMode = PictureBoxSizeMode.Zoom;
+            pbAlipay.Image = LoadEmbeddedImage("QR_Alipay");
+            pnlAlipay.Controls.Add(pbAlipay);
+            pbAlipay.BringToFront();
+
+            Button btnClose = new Button();
+            btnClose.Text = "关 闭";
+            btnClose.Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Regular);
+            btnClose.Location = new Point(230, 448);
+            btnClose.Size = new Size(110, 32);
+            btnClose.Click += (s, e) => this.Close();
+            this.Controls.Add(btnClose);
+        }
+
+        private Image LoadEmbeddedImage(string resName)
+        {
+            try
+            {
+                Assembly asm = Assembly.GetExecutingAssembly();
+                string[] allRes = asm.GetManifestResourceNames();
+                foreach (string name in allRes)
+                {
+                    if (name.EndsWith(resName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        using (Stream stream = asm.GetManifestResourceNames() != null ? asm.GetManifestResourceStream(name) : null)
+                        {
+                            if (stream != null)
+                            {
+                                using (Image tmp = Image.FromStream(stream))
+                                {
+                                    return new Bitmap(tmp);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+    }
+
     public static class InstallerCore
     {
         public static string DetectGamePath()
         {
+            // 1. 如果安装程序直接放在游戏根目录下运行
             string cur = AppDomain.CurrentDomain.BaseDirectory;
             if (File.Exists(Path.Combine(cur, "Command.exe"))) return cur;
 
-            string[] commonPaths = new string[]
+            // 2. 通过注册表检测 Steam 游戏安装路径 (支持 32/64 位及 CurrentUser)
+            string[] uninstallKeys = new string[]
             {
-                @"G:\soft\steam\steamapps\common\Command - Modern Operations",
-                @"C:\Program Files (x86)\Steam\steamapps\common\Command - Modern Operations",
-                @"D:\Steam\steamapps\common\Command - Modern Operations",
-                @"D:\SteamLibrary\steamapps\common\Command - Modern Operations",
-                @"E:\Steam\steamapps\common\Command - Modern Operations",
-                @"E:\SteamLibrary\steamapps\common\Command - Modern Operations"
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 1076160",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 1076160"
             };
 
-            foreach (string p in commonPaths)
+            foreach (string sub in uninstallKeys)
             {
-                if (File.Exists(Path.Combine(p, "Command.exe"))) return p;
+                try
+                {
+                    using (RegistryKey key = Registry.LocalMachine.OpenSubKey(sub))
+                    {
+                        if (key != null)
+                        {
+                            object loc = key.GetValue("InstallLocation");
+                            if (loc != null && File.Exists(Path.Combine(loc.ToString(), "Command.exe")))
+                                return loc.ToString();
+                        }
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(sub))
+                    {
+                        if (key != null)
+                        {
+                            object loc = key.GetValue("InstallLocation");
+                            if (loc != null && File.Exists(Path.Combine(loc.ToString(), "Command.exe")))
+                                return loc.ToString();
+                        }
+                    }
+                }
+                catch { }
             }
 
+            // 3. 读取 Steam 主目录并解析所有 Steam 库文件夹 (libraryfolders.vdf)
+            string steamMainDir = null;
             try
             {
-                using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 1076160"))
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
                 {
                     if (key != null)
                     {
-                        object loc = key.GetValue("InstallLocation");
-                        if (loc != null && File.Exists(Path.Combine(loc.ToString(), "Command.exe")))
-                            return loc.ToString();
+                        object sp = key.GetValue("SteamPath");
+                        if (sp != null) steamMainDir = sp.ToString().Replace('/', '\\');
+                    }
+                }
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(steamMainDir))
+            {
+                try
+                {
+                    using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Valve\Steam"))
+                    {
+                        if (key != null)
+                        {
+                            object ip = key.GetValue("InstallPath");
+                            if (ip != null) steamMainDir = ip.ToString().Replace('/', '\\');
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrEmpty(steamMainDir) && Directory.Exists(steamMainDir))
+            {
+                // 检查 Steam 默认主库
+                string mainCmo = Path.Combine(steamMainDir, @"steamapps\common\Command - Modern Operations");
+                if (File.Exists(Path.Combine(mainCmo, "Command.exe"))) return mainCmo;
+
+                // 解析 libraryfolders.vdf 获取用户的所有自定义多盘符库
+                string vdfPath = Path.Combine(steamMainDir, @"steamapps\libraryfolders.vdf");
+                if (File.Exists(vdfPath))
+                {
+                    try
+                    {
+                        string vdfText = File.ReadAllText(vdfPath);
+                        var matches = System.Text.RegularExpressions.Regex.Matches(vdfText, "\"path\"\\s+\"([^\"]+)\"");
+                        foreach (System.Text.RegularExpressions.Match m in matches)
+                        {
+                            if (m.Success && m.Groups.Count > 1)
+                            {
+                                string libPath = m.Groups[1].Value.Replace("\\\\", "\\");
+                                string cmoInLib = Path.Combine(libPath, @"steamapps\common\Command - Modern Operations");
+                                if (File.Exists(Path.Combine(cmoInLib, "Command.exe"))) return cmoInLib;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // 4. 自动全盘驱动器遍历扫描 (涵盖常见安装盘符与自建库)
+            try
+            {
+                DriveInfo[] drives = DriveInfo.GetDrives();
+                string[] checkRel = new string[]
+                {
+                    @"soft\steam\steamapps\common\Command - Modern Operations",
+                    @"Steam\steamapps\common\Command - Modern Operations",
+                    @"SteamLibrary\steamapps\common\Command - Modern Operations",
+                    @"Program Files (x86)\Steam\steamapps\common\Command - Modern Operations",
+                    @"Program Files\Steam\steamapps\common\Command - Modern Operations",
+                    @"Games\Steam\steamapps\common\Command - Modern Operations",
+                    @"Games\SteamLibrary\steamapps\common\Command - Modern Operations"
+                };
+
+                foreach (DriveInfo d in drives)
+                {
+                    if (!d.IsReady) continue;
+                    foreach (string rel in checkRel)
+                    {
+                        string p = Path.Combine(d.RootDirectory.FullName, rel);
+                        if (File.Exists(Path.Combine(p, "Command.exe"))) return p;
                     }
                 }
             }
