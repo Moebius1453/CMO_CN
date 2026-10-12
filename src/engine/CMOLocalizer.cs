@@ -643,6 +643,7 @@ namespace CMOLocalizer
                         }
                         catch { }
                     };
+                    dgv.Invalidate();
                 }
 
                 // 动态双语渲染数据库列表单元格中的装备名称与分类 (仅针对非编辑只读字符串单元格)
@@ -1576,20 +1577,27 @@ namespace CMOLocalizer
 
             if (text.Contains("Reserve"))
             {
-                text = text.Replace("(Reserve [Available])", "(后备/预备挂载 [可用])")
-                           .Replace("Reserve [Available]", "后备/预备挂载 [可用]")
-                           .Replace("(Reserve)", "(后备/预备挂载)");
+                text = text.Replace("(Reserve [Available])", "(后备 [可用])")
+                           .Replace("Reserve [Available]", "后备 [可用]")
+                           .Replace("(Reserve)", "(后备)");
             }
 
             if (text.Contains("Maintenance"))
             {
-                text = text.Replace("(Maintenance [Unavailable])", "(维护检修 [不可用])")
-                           .Replace("Maintenance [Unavailable]", "维护检修 [不可用]");
+                text = text.Replace("(Maintenance [Unavailable])", "(维护 [不可用])")
+                           .Replace("Maintenance [Unavailable]", "维护 [不可用]");
             }
 
             if (text.Contains("CAEW"))
             {
-                text = text.Replace("Conformal Airborne Early Warning (CAEW)", "保形机载早期预警 (CAEW)");
+                text = text.Replace("Conformal Airborne Early Warning (CAEW)", "保形空中预警 (CAEW)");
+            }
+
+            if (text.Contains("Ferry"))
+            {
+                text = text.Replace("(Ferry)", "(转场)")
+                           .Replace("Ferry Flight", "转场飞行")
+                           .Replace("Ferry", "转场");
             }
 
             if (Regex.IsMatch(text, @"^\d+\s*(hr|小时)(\s*\d+\s*(min|分钟))?$|^\d+\s*(min|分钟)$"))
@@ -1709,9 +1717,11 @@ namespace CMOLocalizer
                         ctrl.Text = fText.Replace("Special Messages", "专用战情消息");
                         return;
                     }
-                    if (fText.StartsWith("就绪飞机:") && fText.Contains(" at "))
+                    if ((fText.StartsWith("就绪飞机") || fText.StartsWith("Ready Aircraft")) && fText.Contains(" at "))
                     {
-                        ctrl.Text = fText.Replace(" at ", " 位于 ");
+                        ctrl.Text = fText.Replace("Ready Aircraft: ", "就绪飞机: ")
+                                         .Replace("Ready Aircraft：", "就绪飞机：")
+                                         .Replace(" at ", " @ ");
                         return;
                     }
                 }

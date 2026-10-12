@@ -26,7 +26,7 @@
 | Add Unit | 添加单位 |
 | Air Operations | 空中作业 |
 | Air Sensors | 对空传感器 |
-| Air Tasking Order (ATO) | 空中任务指令 (ATO) |
+| Air Tasking Order (ATO) | 空中出动计划 (ATO) |
 | Air Weapons | 对空武器 |
 | Aircraft Range | 飞机航程 |
 | All Emissions | 全部辐射 |
@@ -99,7 +99,7 @@
 | Detach Selected Unit(s) From Group | 将所选单位脱离编队 |
 | Disable all Range Indicators | 禁用全部距离指示 |
 | Disconnect | 断开连接 |
-| Disengage (Drop all targets) | 脱离交战（放弃全部目标） |
+| Disengage (Drop all targets) | 脱离接触 (放弃所有目标) |
 | Do not show | 不显示 |
 | Docking Operations | 船坞作业 |
 | Doctrine / RoE / EMCON | 条令 / 交战规则 / 辐射控制 |
@@ -136,12 +136,12 @@
 | Generate Template | 生成模板 |
 | Ghosted | 虚影显示 |
 | Global Minimap | 全局小地图 |
-| God's Eye view (See All) | 上帝视角（全知） |
+| God's Eye view (See All) | 上帝视界 (全知视角) |
 | Group Operations | 编队操作 |
 | Group Selected Units | 编组所选单位 |
 | Help | 帮助 |
 | Hold Position | 保持位置 |
-| Hold Position - All Units | 原地待命（全部单位） |
+| Hold Position - All Units | 保持原地待命 - 所有单位 |
 | Hold Position - Selected Unit(s) | 原地待命（所选单位） |
 | Hotkeys | 快捷键 |
 | I (Yes/Inherit) | I (是/继承) |
@@ -183,7 +183,7 @@
 | Mark Hostile | 标记为敌对 |
 | Mark Neutral | 标记为中立 |
 | Mark position | 标记位置 |
-| Mark Unfriendly | 标记为非友方 |
+| Mark Unfriendly | 标记为非友好 |
 | Merge Range-symbols | 合并范围符号 |
 | Merge Scenarios | 合并想定 |
 | Merge Unit | 合并单位 |
@@ -240,7 +240,7 @@
 | Remove HQ | 取消指挥部 |
 | Remove mines from designated area | 清除指定区域水雷 |
 | Remove relativity from selected Ref Point(s) | 取消所选参考点的相对定位 |
-| Rename selected Reference Point | 重命名所选参考点 |
+| Rename selected Reference Point | 重命名选中的参考点 |
 | Rename Unit | 重命名单位 |
 | Return To Base (RTB) | 返回基地 (RTB) |
 | Right Arrow / Num 4 | 方向键右 / 小键盘 4 |
@@ -271,7 +271,7 @@
 | Set unit proficiency | 设置单位熟练度 |
 | Set Unit Properties | 设置单位属性 |
 | Set Unit Side | 设置单位阵营 |
-| Shallow - Over Layer | 浅水（温跃层之上） |
+| Shallow - Over Layer | 浅水层 - 跃层上方 |
 | Shift + Ins | （按键名·保留英文） |
 | Show ghosted group members for... | 编组成员虚影显示... |
 | Show Non-friendly Range-Symbols | 显示非友方范围符号 |
@@ -292,7 +292,7 @@
 | Summon to re-establish comms | 召唤以恢复通信 |
 | Surface Sensors | 对海传感器 |
 | Surface Weapons | 对海武器 |
-| Switch to GROUP View | 切换到编组视图 |
+| Switch to GROUP View | 切换至编组视图 |
 | Switch to... | 切换阵营... |
 | Targeting Vectors | 瞄准矢量 |
 | Terrain Type Legend | 地形图例 |
@@ -310,7 +310,7 @@
 | Underwater Sensors | 对潜传感器 |
 | Underwater Weapons | 对潜武器 |
 | Unit actions | 单位操作 |
-| Unit has been spotted | 设为已被敌方发现 |
+| Unit has been spotted | 单位已被敌方发现 |
 | Unit is auto-detectable | 单位可被自动探测 |
 | Unit is out of comms | 单位通信中断 |
 | Unit Orders | 单位命令 |
