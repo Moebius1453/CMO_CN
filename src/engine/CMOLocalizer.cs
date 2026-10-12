@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -49,6 +55,8 @@ namespace CMOLocalizer
                 logPath = Path.Combine(baseDir, "CMOLocalizer.log");
                 Log("=== CMOLocalizer v4.0 Engine Starting ===");
 
+                SetupChineseDateTimeCulture();
+
                 // Start hook thread
                 Thread hookThread = new Thread(HookWorker);
                 hookThread.IsBackground = true;
@@ -68,6 +76,246 @@ namespace CMOLocalizer
             base.InitializeNewDomain(appDomainInfo);
         }
 
+        private static bool uiCultureConfigured = false;
+        private static void PatchCulture(CultureInfo ci)
+        {
+            if (ci == null) return;
+            try
+            {
+                BindingFlags bf = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                FieldInfo fRoCi = typeof(CultureInfo).GetField("m_isReadOnly", bf);
+                if (fRoCi != null) fRoCi.SetValue(ci, false);
+
+                DateTimeFormatInfo dtf = ci.DateTimeFormat;
+                FieldInfo fRoDtf = typeof(DateTimeFormatInfo).GetField("m_isReadOnly", bf);
+                if (fRoDtf != null) fRoDtf.SetValue(dtf, false);
+
+                dtf.LongDatePattern = "yyyy'年'M'月'd'日' dddd";
+                dtf.DayNames = new string[] { "星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六" };
+                dtf.AbbreviatedDayNames = new string[] { "周日", "周一", "周二", "周三", "周四", "周五", "周六" };
+                dtf.MonthNames = new string[] { "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "" };
+                dtf.AbbreviatedMonthNames = new string[] { "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", "" };
+            }
+            catch { }
+        }
+
+        private static void SetupChineseDateTimeCulture()
+        {
+            try
+            {
+                PatchCulture(CultureInfo.GetCultureInfo("en-US"));
+                PatchCulture(CultureInfo.GetCultureInfo("en-us"));
+                PatchCulture(CultureInfo.InvariantCulture);
+                PatchCulture(CultureInfo.CurrentCulture);
+                PatchCulture(Thread.CurrentThread.CurrentCulture);
+
+                try { CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("en-US"); } catch { }
+                try { CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("en-US"); } catch { }
+                Log("SetupChineseDateTimeCulture configured successfully.");
+            }
+            catch (Exception ex)
+            {
+                Log("SetupChineseDateTimeCulture error: " + ex.Message);
+            }
+        }
+
+        private class MapPlaceEntry
+        {
+            public string Name;
+            public double Lat;
+            public double Lon;
+            public int Level;
+        }
+
+        private static readonly List<MapPlaceEntry> mapPlaces = new List<MapPlaceEntry>();
+        private static TcpListener tileListener = null;
+
+        private static void StartLocalTileServer(string baseDir)
+        {
+            try
+            {
+                string synWwp = Path.Combine(baseDir, @"WW\PlacenameSets\Synoptic\0000_0000.wwp");
+                string citWwp = Path.Combine(baseDir, @"WW\PlacenameSets\Cities\0000_0000.wwp");
+                Action<string, int> loadWwp = (path, lvl) =>
+                {
+                    if (!File.Exists(path)) return;
+                    try
+                    {
+                        using (BinaryReader br = new BinaryReader(File.OpenRead(path), Encoding.UTF8))
+                        {
+                            int count = br.ReadInt32();
+                            for (int i = 0; i < count; i++)
+                            {
+                                string name = br.ReadString();
+                                float lat = br.ReadSingle();
+                                float lon = br.ReadSingle();
+                                br.ReadUInt32();
+                                mapPlaces.Add(new MapPlaceEntry { Name = name, Lat = lat, Lon = lon, Level = lvl });
+                            }
+                        }
+                    }
+                    catch { }
+                };
+
+                loadWwp(synWwp, 0);
+                loadWwp(citWwp, 1);
+
+                tileListener = new TcpListener(IPAddress.Loopback, 0);
+                tileListener.Start();
+                int port = ((IPEndPoint)tileListener.LocalEndpoint).Port;
+
+                string localUrl = "http://127.0.0.1:" + port + "/MapTiles/Labels/";
+                offsetMap[1789870] = localUrl;
+                offsetMap[21564] = "zh-CN";
+                offsetMap[62636] = "zh-CN";
+                Log("LocalTileServer started on " + localUrl + " with " + mapPlaces.Count + " Chinese landmarks.");
+
+                Thread serverThread = new Thread(() =>
+                {
+                    while (true)
+                    {
+                        try
+                        {
+                            TcpClient client = tileListener.AcceptTcpClient();
+                            ThreadPool.QueueUserWorkItem(_ => HandleTileClient(client, baseDir));
+                        }
+                        catch { break; }
+                    }
+                });
+                serverThread.IsBackground = true;
+                serverThread.Start();
+            }
+            catch (Exception ex)
+            {
+                Log("StartLocalTileServer error: " + ex.Message);
+            }
+        }
+
+        private static void HandleTileClient(TcpClient client, string baseDir)
+        {
+            try
+            {
+                using (client)
+                using (NetworkStream ns = client.GetStream())
+                using (StreamReader sr = new StreamReader(ns, Encoding.ASCII))
+                using (BinaryWriter bw = new BinaryWriter(ns))
+                {
+                    string reqLine = sr.ReadLine();
+                    if (string.IsNullOrEmpty(reqLine)) return;
+
+                    // Parse "GET /MapTiles/Labels/{z}/{x}/{y}.png HTTP/1.1"
+                    int z = 3, x = 0, y = 0;
+                    Match m = Regex.Match(reqLine, @"/(\d+)/(\d+)/(\d+)\.png");
+                    if (m.Success)
+                    {
+                        int.TryParse(m.Groups[1].Value, out z);
+                        int.TryParse(m.Groups[2].Value, out x);
+                        int.TryParse(m.Groups[3].Value, out y);
+                    }
+
+                    byte[] pngBytes = RenderChineseTileBytes(z, x, y);
+                    string header = string.Format(
+                        "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {0}\r\nConnection: close\r\n\r\n",
+                        pngBytes.Length);
+                    bw.Write(Encoding.ASCII.GetBytes(header));
+                    bw.Write(pngBytes);
+                    bw.Flush();
+                }
+            }
+            catch { }
+        }
+
+        private static byte[] RenderChineseTileBytes(int z, int x, int y)
+        {
+            double n = Math.Pow(2.0, z);
+            double minLon = x / n * 360.0 - 180.0;
+            double maxLon = (x + 1) / n * 360.0 - 180.0;
+            double maxLat = Math.Atan(Math.Sinh(Math.PI * (1.0 - 2.0 * y / n))) * 180.0 / Math.PI;
+            double minLat = Math.Atan(Math.Sinh(Math.PI * (1.0 - 2.0 * (y + 1) / n))) * 180.0 / Math.PI;
+
+            List<MapPlaceEntry> inTile = new List<MapPlaceEntry>();
+            for (int i = 0; i < mapPlaces.Count; i++)
+            {
+                MapPlaceEntry p = mapPlaces[i];
+                if (p.Lon >= minLon && p.Lon <= maxLon && p.Lat >= minLat && p.Lat <= maxLat)
+                {
+                    if (z <= 5) { if (p.Level == 0) inTile.Add(p); }
+                    else { inTile.Add(p); }
+                }
+            }
+
+            using (Bitmap bmp = new Bitmap(256, 256, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Color.Transparent);
+                    if (inTile.Count > 0)
+                    {
+                        g.SmoothingMode = SmoothingMode.AntiAlias;
+                        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                        inTile.Sort((a, b) => a.Level.CompareTo(b.Level));
+
+                        StringFormat sf = new StringFormat();
+                        sf.Alignment = StringAlignment.Center;
+                        sf.LineAlignment = StringAlignment.Center;
+
+                        List<RectangleF> occupied = new List<RectangleF>();
+                        foreach (MapPlaceEntry p in inTile)
+                        {
+                            double xExact = (p.Lon + 180.0) / 360.0 * n;
+                            double latRad = p.Lat * Math.PI / 180.0;
+                            double yExact = (1.0 - Math.Log(Math.Tan(latRad) + 1.0 / Math.Cos(latRad)) / Math.PI) / 2.0 * n;
+                            float rawPx = (float)((xExact - x) * 256.0);
+                            float rawPy = (float)((yExact - y) * 256.0);
+
+                            float fontSize = (p.Level == 0) ? (z <= 3 ? 9.5f : (z <= 4 ? 10.5f : 11.5f)) : (z <= 7 ? 9.0f : 8.5f);
+                            FontStyle fStyle = (p.Level == 0) ? FontStyle.Bold : FontStyle.Regular;
+
+                            using (Font f = new Font("Microsoft YaHei", fontSize, fStyle))
+                            {
+                                SizeF sz = g.MeasureString(p.Name, f);
+                                float halfW = sz.Width * 0.5f;
+                                float halfH = sz.Height * 0.5f;
+                                float px = Math.Max(halfW + 3f, Math.Min(256f - halfW - 3f, rawPx));
+                                float py = Math.Max(halfH + 3f, Math.Min(256f - halfH - 3f, rawPy));
+
+                                RectangleF bbox = new RectangleF(px - halfW - 2f, py - halfH - 2f, sz.Width + 4f, sz.Height + 4f);
+                                bool collides = false;
+                                foreach (RectangleF occ in occupied)
+                                {
+                                    if (bbox.IntersectsWith(occ)) { collides = true; break; }
+                                }
+                                if (collides) continue;
+                                occupied.Add(bbox);
+
+                                using (GraphicsPath gp = new GraphicsPath())
+                                {
+                                    gp.AddString(p.Name, new FontFamily("Microsoft YaHei"), (int)fStyle, fontSize, new PointF(px, py), sf);
+                                    Color penC = (p.Level == 0) ? Color.FromArgb(220, 15, 15, 15) : Color.FromArgb(200, 25, 25, 25);
+                                    float penW = (p.Level == 0) ? 3.0f : 2.2f;
+                                    using (Pen pen = new Pen(penC, penW))
+                                    {
+                                        pen.LineJoin = LineJoin.Round;
+                                        g.DrawPath(pen, gp);
+                                    }
+                                    Color txtC = (p.Level == 0) ? Color.FromArgb(255, 255, 255) : Color.FromArgb(240, 240, 240);
+                                    using (SolidBrush br = new SolidBrush(txtC))
+                                    {
+                                        g.FillPath(br, gp);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    bmp.Save(ms, ImageFormat.Png);
+                    return ms.ToArray();
+                }
+            }
+        }
+
         private static void HookWorker()
         {
             try
@@ -84,6 +332,9 @@ namespace CMOLocalizer
                 {
                     Log("Warning: CMOLocalizer.json not found at " + dictPath);
                 }
+
+                // 启动本地毫秒级中文瓦片动态渲染服务器，接管在线英文瓦片请求
+                StartLocalTileServer(baseDir);
 
                 // Start UI watcher loop in a background thread to translate WinForms controls
                 Thread uiThread = new Thread(StartUIWatcher);
@@ -233,7 +484,16 @@ namespace CMOLocalizer
                                 {
                                     frm.BeginInvoke((MethodInvoker)delegate
                                     {
-                                        try { TranslateControlTree(frm); } catch { }
+                                        try
+                                        {
+                                            if (!uiCultureConfigured || Thread.CurrentThread.CurrentCulture.DateTimeFormat.LongDatePattern != "yyyy'年'M'月'd'日' dddd")
+                                            {
+                                                uiCultureConfigured = true;
+                                                SetupChineseDateTimeCulture();
+                                            }
+                                            TranslateControlTree(frm);
+                                        }
+                                        catch { }
                                     });
                                 }
                                 else

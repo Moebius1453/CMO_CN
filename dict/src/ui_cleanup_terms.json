@@ -322,5 +322,21 @@
   "of the selected boats are unavailable for operations, and will not launch.": "的已选中小艇不是可用用于作战, 与将不发射.",
   "unable to ferry; removed from mission": "无法至转场调机; 已移除来自任务",
   "unknown": "未知",
-  "will be ready after": "将为就绪在...之后"
+  "will be ready after": "将为就绪在...之后",
+  "layer": "图层",
+  "Layer": "图层",
+  "Layer:": "图层:",
+  "layers": "图层",
+  "Layers": "图层",
+  "Add Layer": "添加图层",
+  "No Layer": "无温跃层",
+  "CommandLayer": "Command图层",
+  "source-layer": "源图层",
+  "Above Layer": "温跃层上方",
+  "Below Layer": "温跃层下方",
+  "Under the layer": "温跃层下方",
+  "Over the layer": "温跃层上方",
+  "Shallow - Over Layer": "浅水层 - 跃层上方",
+  "Stamen Terrain - Labels ": "Stamen 地形标注 ",
+  "Stamen Terrain - Lines ": "Stamen 地形线要素 "
 }
