@@ -338,5 +338,14 @@
   "Over the layer": "温跃层上方",
   "Shallow - Over Layer": "浅水层 - 跃层上方",
   "Stamen Terrain - Labels ": "Stamen 地形标注 ",
-  "Stamen Terrain - Lines ": "Stamen 地形线要素 "
+  "Stamen Terrain - Lines ": "Stamen 地形线要素 ",
+  "Afterburner": "全加力",
+  "Military": "军用推力",
+  "Cruise": "经济巡航",
+  "Loiter": "盘旋待机",
+  "Hover": "悬停",
+  "Flank": "最大极速",
+  "Full": "全速前进",
+  "Creep": "微速潜行",
+  "Stop": "停车"
 }

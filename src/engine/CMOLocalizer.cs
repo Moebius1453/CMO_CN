@@ -793,6 +793,41 @@ namespace CMOLocalizer
                 else if (dep is System.Windows.Controls.ContentControl)
                 {
                     System.Windows.Controls.ContentControl cc = (System.Windows.Controls.ContentControl)dep;
+                    int ccHash = cc.GetHashCode();
+                    if (!hookedWpfElements.Contains(ccHash))
+                    {
+                        hookedWpfElements.Add(ccHash);
+                        try
+                        {
+                            var desc = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+                                System.Windows.Controls.ContentControl.ContentProperty, typeof(System.Windows.Controls.ContentControl));
+                            if (desc != null)
+                            {
+                                desc.AddValueChanged(cc, (s, e) =>
+                                {
+                                    if (_inWpfTextChanged) return;
+                                    try
+                                    {
+                                        _inWpfTextChanged = true;
+                                        var targetCc = s as System.Windows.Controls.ContentControl;
+                                        if (targetCc != null && targetCc.Content is string)
+                                        {
+                                            string str = (string)targetCc.Content;
+                                            if (!string.IsNullOrEmpty(str) && !ContainsChinese(str))
+                                            {
+                                                string tr = TranslateString(str);
+                                                if (tr != str) targetCc.Content = tr;
+                                            }
+                                        }
+                                    }
+                                    catch { }
+                                    finally { _inWpfTextChanged = false; }
+                                });
+                            }
+                        }
+                        catch { }
+                    }
+
                     if (cc.Content is string)
                     {
                         string s = (string)cc.Content;
@@ -822,9 +857,37 @@ namespace CMOLocalizer
             catch { }
         }
 
+        private static readonly HashSet<int> hookedTextChanged = new HashSet<int>();
+        [ThreadStatic]
+        private static bool _inControlTextChanged;
+
+        private static void HookControlTextChanged(Control ctrl)
+        {
+            if (ctrl == null || ctrl is TextBoxBase || ctrl is ComboBox || ctrl is ListControl || ctrl is UpDownBase) return;
+            int h = ctrl.GetHashCode();
+            if (hookedTextChanged.Contains(h)) return;
+            hookedTextChanged.Add(h);
+
+            ctrl.TextChanged += (s, e) =>
+            {
+                if (_inControlTextChanged) return;
+                Control c = s as Control;
+                if (c == null || c.IsDisposed) return;
+                try
+                {
+                    _inControlTextChanged = true;
+                    TranslateControlText(c);
+                }
+                catch { }
+                finally { _inControlTextChanged = false; }
+            };
+        }
+
         private static void TranslateControlTree(Control ctrl)
         {
             if (ctrl == null) return;
+            HookControlTextChanged(ctrl);
+
             if (ctrl.GetType().Name.ToLower().Contains("tree") || ctrl.GetType().Name.ToLower().Contains("scen"))
             {
                 Log("TranslateControlTree visited special control: " + ctrl.GetType().FullName);
@@ -962,6 +1025,14 @@ namespace CMOLocalizer
             else if (ctrl.GetType().Name == "DarkTreeView")
             {
                 TranslateDarkTreeView(ctrl);
+            }
+            else if (ctrl.GetType().Name == "DarkListView")
+            {
+                TranslateDarkListView(ctrl);
+            }
+            else if (ctrl is ComboBox)
+            {
+                LocalizeDBViewerComboBox((ComboBox)ctrl);
             }
             else if (ctrl is WebBrowser)
             {
@@ -1142,9 +1213,77 @@ namespace CMOLocalizer
             catch { }
         }
 
+        private static string TranslateDatabaseDescriptionText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            try
+            {
+                // 1. Operators 列表国家名全量替换
+                if (text.StartsWith("Operators:") || text.StartsWith("使用方") || text.StartsWith("列装国家"))
+                {
+                    string prefix = "列装国家与地区:";
+                    int colonIdx = text.IndexOf(':');
+                    string body = colonIdx >= 0 ? text.Substring(colonIdx + 1) : text;
+                    string[] countries = body.Split(',');
+                    for (int i = 0; i < countries.Length; i++)
+                    {
+                        string cTrim = countries[i].Trim();
+                        if (exactMap.ContainsKey(cTrim)) countries[i] = " " + exactMap[cTrim];
+                        else if (normExactMap.ContainsKey(cTrim)) countries[i] = " " + normExactMap[cTrim];
+                        else countries[i] = " " + cTrim;
+                    }
+                    return prefix + string.Join(",", countries);
+                }
+
+                // 2. 字段前缀替换
+                text = text.Replace("OVERVIEW:", "概况说明：")
+                           .Replace("DETAILS:", "技术细节：")
+                           .Replace("SPECIFICATIONS:", "战术技术指标：")
+                           .Replace("NOTES:", "注意事项：")
+                           .Replace("SOURCES:", "参考资料来源：")
+                           .Replace("Fact:", "技术评述：")
+                           .Replace("Diameter:", "弹径/直径:")
+                           .Replace("Platforms:", "搭载平台:")
+                           .Replace("Range:", "有效射程:")
+                           .Replace("Maneuverability:", "机动过载能力:")
+                           .Replace("IOC:", "服役起始年份 (IOC):")
+                           .Replace("Wingspan:", "翼展:")
+                           .Replace("Guidance:", "制导方式:")
+                           .Replace("Warhead:", "战斗部:")
+                           .Replace("Length:", "长度:")
+                           .Replace("Weight:", "发射全重/重量:")
+                           .Replace("Speed:", "最高航速/飞行速度:");
+
+                // 3. 常见参数单位与描述中英双语优化
+                if (text.Contains("beyond-visual-range") || text.Contains("fire-and-forget") || text.Contains("active radar-guided"))
+                {
+                    text = text.Replace("beyond-visual-range", "超视距 (BVR)")
+                               .Replace("fire-and-forget", "发射后不管 (Fire-and-Forget)")
+                               .Replace("active radar-guided air-to-air missile", "主动雷达制导空空导弹")
+                               .Replace("air-to-air missile", "空空导弹")
+                               .Replace("air-to-surface missile", "空地/空舰导弹")
+                               .Replace("surface-to-air missile", "地空导弹")
+                               .Replace("anti-ship missile", "反舰导弹");
+                }
+            }
+            catch { }
+            return text;
+        }
+
         private static string TranslateBriefingText(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
+
+            // 0. 数据库百科段落与关键指标标签翻译 (OVERVIEW, DETAILS, SPECIFICATIONS, Operators 等)
+            if (text.StartsWith("OVERVIEW:") || text.StartsWith("DETAILS:") || text.StartsWith("SPECIFICATIONS:") ||
+                text.StartsWith("NOTES:") || text.StartsWith("SOURCES:") || text.StartsWith("Fact:") ||
+                text.StartsWith("Diameter:") || text.StartsWith("Platforms:") || text.StartsWith("Range:") ||
+                text.StartsWith("Maneuverability:") || text.StartsWith("IOC:") || text.StartsWith("Operators:") ||
+                text.StartsWith("Wingspan:") || text.StartsWith("Guidance:") || text.StartsWith("Warhead:") ||
+                text.StartsWith("Length:") || text.StartsWith("Weight:") || text.StartsWith("Speed:"))
+            {
+                return TranslateDatabaseDescriptionText(text);
+            }
 
             // 1. 数据库武器射程与高度列 (e.g. "200 ft AGL - 65000 ft ASL")
             if (text.Contains(" ft AGL") || text.Contains(" ft ASL") || text.Contains(" m AGL") || text.Contains(" m ASL"))
@@ -1398,6 +1537,196 @@ namespace CMOLocalizer
         private static PropertyInfo _dtvNodesProp;
         private static PropertyInfo _dtnTextProp;
         private static PropertyInfo _dtnNodesProp;
+
+        private static string TranslateDBComboItem(string rawText)
+        {
+            if (string.IsNullOrEmpty(rawText)) return rawText;
+            string t = rawText.Trim();
+            if (t == "None") return "全部 / 不限";
+            if (t == "Not selected") return "未选择 (全部子类型)";
+            if (t.StartsWith("Show all platforms")) return "显示全部平台 (含现实与假想)";
+            if (t.StartsWith("Show only real-life")) return "仅显示现实服役平台";
+            if (t.StartsWith("Show only hypothetical")) return "仅显示假想/计划平台";
+            if (t == "Weapon") return "武器装备 (Weapon)";
+            if (t == "Aircraft") return "飞机 / 航空器 (Aircraft)";
+            if (t == "Ship") return "水面舰艇 (Ship)";
+            if (t == "Submarine") return "水下潜艇 (Submarine)";
+            if (t == "Facility") return "地面设施 (Facility)";
+            if (t == "Satellite") return "人造卫星 (Satellite)";
+            if (t == "Ground Unit") return "地面作战单位 (Ground Unit)";
+            return TranslateString(rawText);
+        }
+
+        private static readonly HashSet<int> hookedDBCombos = new HashSet<int>();
+        private static void LocalizeDBViewerComboBox(ComboBox cb)
+        {
+            if (cb == null) return;
+            int h = cb.GetHashCode();
+            if (hookedDBCombos.Contains(h)) return;
+            hookedDBCombos.Add(h);
+
+            try
+            {
+                cb.DrawMode = DrawMode.OwnerDrawFixed;
+                cb.DrawItem += (s, e) =>
+                {
+                    if (e.Index < 0) return;
+                    ComboBox box = s as ComboBox;
+                    if (box == null) return;
+
+                    try
+                    {
+                        e.DrawBackground();
+                        string rawText = box.GetItemText(box.Items[e.Index]);
+                        string transText = TranslateDBComboItem(rawText);
+
+                        Color textColor = (e.State & DrawItemState.Selected) == DrawItemState.Selected ? Color.White : Color.FromArgb(220, 220, 220);
+                        using (SolidBrush brush = new SolidBrush(textColor))
+                        using (Font font = new Font(box.Font.FontFamily, 9f, FontStyle.Regular))
+                        {
+                            StringFormat sf = new StringFormat();
+                            sf.LineAlignment = StringAlignment.Center;
+                            Rectangle r = e.Bounds;
+                            r.X += 2;
+                            e.Graphics.DrawString(transText, font, brush, r, sf);
+                        }
+                        e.DrawFocusRectangle();
+                    }
+                    catch { }
+                };
+
+                cb.Paint += (s, e) =>
+                {
+                    ComboBox box = s as ComboBox;
+                    if (box == null || string.IsNullOrEmpty(box.Text)) return;
+                    try
+                    {
+                        string tr = TranslateDBComboItem(box.Text);
+                        if (tr != box.Text)
+                        {
+                            Rectangle textRect = new Rectangle(3, 3, Math.Max(10, box.Width - 22), Math.Max(10, box.Height - 6));
+                            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(60, 63, 65)))
+                            {
+                                e.Graphics.FillRectangle(bgBrush, textRect);
+                            }
+                            using (SolidBrush fgBrush = new SolidBrush(Color.FromArgb(220, 220, 220)))
+                            {
+                                StringFormat sf = new StringFormat();
+                                sf.LineAlignment = StringAlignment.Center;
+                                sf.FormatFlags = StringFormatFlags.NoWrap;
+                                e.Graphics.DrawString(tr, box.Font, fgBrush, textRect, sf);
+                            }
+                        }
+                    }
+                    catch { }
+                };
+                cb.Invalidate();
+            }
+            catch { }
+        }
+
+        private static string TranslateDBListEntry(string t)
+        {
+            if (string.IsNullOrEmpty(t)) return t;
+            string s = t;
+
+            // 1. 替换方括号内的平台子类型 [Bomber], [Fighter], [Tanker] 等
+            s = Regex.Replace(s, @"\[([A-Za-z0-9\s/\-]+)\]", m =>
+            {
+                string inner = m.Groups[1].Value;
+                string trInner = TranslateString(inner);
+                if (trInner != inner) return "[" + trInner + "]";
+                return m.Value;
+            });
+
+            // 2. 替换 " -- <Country> (<Service>)" 结构
+            int dashIdx = s.IndexOf(" -- ");
+            if (dashIdx > 0)
+            {
+                string leftPart = s.Substring(0, dashIdx);
+                string rightPart = s.Substring(dashIdx + 4);
+
+                // 解析右侧: Country [Year] (Service), Year
+                int parenIdx = rightPart.IndexOf(" (");
+                if (parenIdx > 0)
+                {
+                    string countryStr = rightPart.Substring(0, parenIdx).Trim();
+                    string trCountry = TranslateString(countryStr);
+                    string rest = rightPart.Substring(parenIdx);
+
+                    rest = rest.Replace("(Air Force)", "(空军)")
+                               .Replace("(Navy)", "(海军)")
+                               .Replace("(Army)", "(陆军)")
+                               .Replace("(Marines)", "(海军陆战队)")
+                               .Replace("(Marine Corps)", "(海军陆战队)")
+                               .Replace("(Coast Guard)", "(海岸警卫队)")
+                               .Replace("(Long Range Aviation [DA])", "(远程航空兵 [DA])")
+                               .Replace("(Naval Aviation [AV-MF])", "(海军航空兵 [AV-MF])")
+                               .Replace("(Air Defense Troops [PVO])", "(国土防空军 [PVO])")
+                               .Replace("(Frontal Aviation [FA])", "(前线航空兵 [FA])")
+                               .Replace("(Military Transport Aviation [VTA])", "(军事运输航空兵 [VTA])")
+                               .Replace("(Commercial)", "(商业民航)")
+                               .Replace("(Border Guard)", "(边防部队)")
+                               .Replace("(Royal Air Force)", "(皇家空军)")
+                               .Replace("(Royal Navy)", "(皇家海军)");
+
+                    rightPart = trCountry + rest;
+                }
+                s = leftPart + " -- " + rightPart;
+            }
+
+            // 3. 著名导弹与平台代号双语化
+            s = s.Replace("AMRAAM", "AMRAAM [先进中距空空导弹]")
+                 .Replace("Sidewinder", "Sidewinder [响尾蛇近距弹]")
+                 .Replace("Sparrow", "Sparrow [麻雀半主动弹]")
+                 .Replace("Phoenix", "Phoenix [不死鸟远程弹]")
+                 .Replace("Harpoon", "Harpoon [鱼叉反舰导弹]")
+                 .Replace("Tomahawk", "Tomahawk [战斧巡航导弹]")
+                 .Replace("Maverick", "Maverick [小牛空地导弹]")
+                 .Replace("Hellfire", "Hellfire [地狱火导弹]")
+                 .Replace("HARM", "HARM [哈姆反辐射导弹]")
+                 .Replace("Paveway", "Paveway [铺路激光制导炸弹]")
+                 .Replace("Bison B", "Bison B [野牛B]")
+                 .Replace("Beluga", "Beluga [大白鲸]")
+                 .Replace("Atlas", "Atlas [阿特拉斯]");
+
+            return s;
+        }
+
+        private static void TranslateDarkListView(Control ctrl)
+        {
+            if (ctrl == null) return;
+            try
+            {
+                PropertyInfo piItems = ctrl.GetType().GetProperty("Items");
+                if (piItems == null) return;
+                System.Collections.IList items = piItems.GetValue(ctrl, null) as System.Collections.IList;
+                if (items == null) return;
+
+                bool changed = false;
+                for (int i = 0; i < items.Count && i < 3000; i++)
+                {
+                    object item = items[i];
+                    if (item == null) continue;
+                    PropertyInfo piText = item.GetType().GetProperty("Text");
+                    if (piText != null)
+                    {
+                        string t = piText.GetValue(item, null) as string;
+                        if (!string.IsNullOrEmpty(t) && !ContainsChinese(t))
+                        {
+                            string tr = TranslateDBListEntry(t);
+                            if (tr != t)
+                            {
+                                piText.SetValue(item, tr, null);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+                if (changed) ctrl.Invalidate();
+            }
+            catch { }
+        }
 
         private static void TranslateDarkTreeView(Control ctrl)
         {
@@ -2043,14 +2372,14 @@ namespace CMOLocalizer
                     ctrl.Text = "已占用 " + t.Substring("Occupied ".Length);
                     return;
                 }
-                if (t.Contains(" sorties @ ") || t.Contains("最长时间") || t.Contains("maximum airborne time") || t.Contains("架次 @"))
+                if ((t.Contains(" sorties @ ") || t.Contains("maximum airborne time") || t.Contains(" turnaround")) && !t.Contains("停航"))
                 {
                     string sTr = t.Replace(" sorties @ ", " 架次 @ ")
                                   .Replace(" maximum airborne time and ", " 最长滞空时间，")
                                   .Replace(" 最长滞空时间与 ", " 最长滞空时间，")
                                   .Replace(" turnaround, with ", " 再次出动周转，")
                                   .Replace(" 再次出动准备，包含 ", " 再次出动周转，")
-                                  .Replace(" standdown ready time", " 停航恢复时间")
+                                  .Replace(" standdown ready time", " 停航战备恢复时间")
                                   .Replace(" hr", " 小时")
                                   .Replace(" min", " 分钟");
                     if (sTr != t)
@@ -2159,9 +2488,64 @@ namespace CMOLocalizer
             return result;
         }
 
+        private static readonly Dictionary<string, string> docCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private static string TranslateLoadDocTag(string raw)
+        {
+            try
+            {
+                Match m = Regex.Match(raw, @"\[LOADDOC\](.*?)\[/LOADDOC\]", RegexOptions.IgnoreCase);
+                if (m.Success)
+                {
+                    string htmlName = m.Groups[1].Value.Trim();
+                    string cached;
+                    lock (docCache)
+                    {
+                        if (docCache.TryGetValue(htmlName, out cached))
+                        {
+                            return raw.Replace(m.Value, cached);
+                        }
+                    }
+
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string scenDir = Path.Combine(baseDir, "Scenarios");
+                    string summary = "特别消息: " + htmlName;
+                    if (Directory.Exists(scenDir))
+                    {
+                        string[] matches = Directory.GetFiles(scenDir, htmlName, SearchOption.AllDirectories);
+                        if (matches != null && matches.Length > 0)
+                        {
+                            string html = File.ReadAllText(matches[0], Encoding.UTF8);
+                            string plain = Regex.Replace(html, @"<style[^>]*>.*?</style>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                            plain = Regex.Replace(plain, @"<script[^>]*>.*?</script>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                            plain = Regex.Replace(plain, @"<[^>]+>", " ");
+                            plain = plain.Replace("&nbsp;", " ").Replace("&quot;", "\"").Replace("&lt;", "<").Replace("&gt;", ">").Replace("&#39;", "'");
+                            plain = Regex.Replace(plain, @"\s+", " ").Trim();
+                            if (!string.IsNullOrEmpty(plain))
+                            {
+                                summary = plain.Length > 120 ? plain.Substring(0, 118) + "..." : plain;
+                            }
+                        }
+                    }
+
+                    lock (docCache) { docCache[htmlName] = summary; }
+                    return raw.Replace(m.Value, summary);
+                }
+            }
+            catch { }
+            return raw;
+        }
+
         private static string DoTranslate(string raw)
         {
             if (IsForbiddenCodeOrEnum(raw)) return raw;
+
+            // 0. 特别消息内嵌 HTML 文档标签转中文摘要: [LOADDOC]xxx.html[/LOADDOC]
+            if (raw.Contains("[LOADDOC]") && raw.Contains("[/LOADDOC]"))
+            {
+                string trDoc = TranslateLoadDocTag(raw);
+                if (!string.IsNullOrEmpty(trDoc) && trDoc != raw) return trDoc;
+            }
+
             // 1. Exact match
             if (exactMap.ContainsKey(raw)) return exactMap[raw];
 
@@ -3121,28 +3505,33 @@ namespace CMOLocalizer
                 {
                     try
                     {
-                        Control[] cbList = dbForm.Controls.Find("CB_ObjectType", true);
-                        if (cbList.Length > 0 && cbList[0] is ComboBox)
+                        PropertyInfo piCb = dbForm.GetType().GetProperty("CB_ObjectType", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (piCb != null)
                         {
-                            ComboBox cb = (ComboBox)cbList[0];
-                            for (int i = 0; i < cb.Items.Count; i++)
+                            ComboBox cb = piCb.GetValue(dbForm, null) as ComboBox;
+                            if (cb != null)
                             {
-                                if (cb.Items[i].ToString().IndexOf(objType, StringComparison.OrdinalIgnoreCase) >= 0)
+                                for (int i = 0; i < cb.Items.Count; i++)
                                 {
-                                    cb.SelectedIndex = i;
-                                    break;
+                                    if (cb.Items[i].ToString().IndexOf(objType, StringComparison.OrdinalIgnoreCase) >= 0)
+                                    {
+                                        cb.SelectedIndex = i;
+                                        break;
+                                    }
                                 }
                             }
                         }
-                        Control[] tbList = dbForm.Controls.Find("tb_ID", true);
-                        if (tbList.Length > 0)
+                        PropertyInfo piTb = dbForm.GetType().GetProperty("DBIDGOTO", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (piTb != null)
                         {
-                            tbList[0].Text = objIdStr;
+                            Control tb = piTb.GetValue(dbForm, null) as Control;
+                            if (tb != null) tb.Text = objIdStr;
                         }
-                        Control[] btnList = dbForm.Controls.Find("btn_Go", true);
-                        if (btnList.Length > 0 && btnList[0] is Button)
+                        PropertyInfo piBtn = dbForm.GetType().GetProperty("SearchDBIDButton", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (piBtn != null)
                         {
-                            ((Button)btnList[0]).PerformClick();
+                            Button btn = piBtn.GetValue(dbForm, null) as Button;
+                            if (btn != null) btn.PerformClick();
                         }
                     }
                     catch (Exception ex) { Log("DB_NAVIGATE_ID error: " + ex.Message); }
