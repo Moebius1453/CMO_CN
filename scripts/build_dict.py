@@ -69,7 +69,8 @@ def iter_source_maps():
     if not SRC.is_dir():
         return
     for p in sorted(SRC.glob("*.json")):
-        if p.name in ("blacklist.json", "labels.json", "identifiers.json", "force_offsets.json"):
+        if p.name in ("blacklist.json", "labels.json", "identifiers.json",
+                      "force_offsets.json", "dlc_briefing_fixes.json"):
             continue
         data = load(p)
         if isinstance(data, dict):
@@ -223,13 +224,20 @@ def build() -> dict:
     # memory are rendered via WebView2 DOM tree traversal in CMOLocalizer.cs.
     # We clean and merge all briefing entries into `exact` (never into `offsets`),
     # fixing Zulu mistranslations and spacing so they pass the release gate.
+    # DLC briefing prose is WebView2-rendered (never engine-pool injected), so it
+    # is merged with allow_sensitive=True: the script/schema guard is meant for
+    # engine strings, and it false-positives on prose such as task-unit numbers
+    # ("544.01.06 (") or telegram styles ("... underground;" -> CODE_EXPR).
     brief1_file = DICT / "briefing_dict.json"
     brief2_file = DICT / "brief_translations.json"
+    brief3_file = SRC / "dlc_briefing_fixes.json"
     all_briefs: dict[str, str] = {}
     if brief1_file.is_file():
         all_briefs.update(load(brief1_file))
     if brief2_file.is_file():
         all_briefs.update(load(brief2_file))
+    if brief3_file.is_file():
+        all_briefs.update(load(brief3_file))
 
     for en, zh in all_briefs.items():
         if not en or not zh or en in blacklist:

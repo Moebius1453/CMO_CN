@@ -271,7 +271,7 @@
   "MASINT": "测量与特征侦察 (MASINT)",
   "HF/DF": "高频测向 (HF/DF)",
   "HF/DF w/ OTH Targeting": "高频测向 (HF/DF) 具备超视距目标指示",
-  "Emitter Locator (For ARM Missiles)": "Emitter Locator (For ARM Missiles)",
+  "Emitter Locator (For ARM Missiles)": "辐射源定位器(用于反辐射导弹)",
   "Emitter Locator System (ELS)": "Emitter Locator System (ELS)",
   "Weapon Seeker, Anti-Radiation": "导引头，反辐射",
   "IFF Deception System": "敌我识别欺骗系统",
