@@ -30,3 +30,7 @@ CMOLocalizer.log
 # 生成物（可重现）
 dict/worklist.json
 dict/CMOLocalizer.json.bak
+
+# maestro runtime lock/state (live process 6648)
+.workflow/search-daemon.json
+.workflow/wiki-index-publisher.lock
