@@ -1,0 +1,181 @@
+{
+  "version": 3,
+  "generatedAt": 1791844812830,
+  "entries": [
+    {
+      "id": "knowhow-dcs-20261012-2009",
+      "type": "knowhow",
+      "title": "打包与发布操作必须严格遵守用户单向指令原则",
+      "summary": "",
+      "tags": [
+        "打包",
+        "package",
+        "发布",
+        "权限",
+        "决策"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:29.453Z",
+      "updated": "2026-10-12T12:09:29.453Z",
+      "scope": null,
+      "category": "decision",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DCS-20261012-2009-001",
+      "type": "knowhow",
+      "title": "背景",
+      "summary": "在完成功能开发与验证（如地图汉化、UI修复）时，智能体曾自行调用 `package.sh` 生成分发产物。用户明确指示：“写入项目记忆我没让你打包不要自己打包”。",
+      "tags": [
+        "打包",
+        "package",
+        "发布",
+        "权限",
+        "决策",
+        "decision"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:29.453Z",
+      "updated": "2026-10-12T12:09:29.453Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-dcs-20261012-2009",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DCS-20261012-2009-002",
+      "type": "knowhow",
+      "title": "决策内容",
+      "summary": "1. **严格禁止自作主张打包**：即使功能已开发完成且测试全通，也严禁自动触发 `package.sh`、绿色包打包或任何 Release 动作。 2. **职责边界**： - 自动执行范围：功能编码、词库构建、引擎编译、本地部署、实机验证、门禁测试。 - 用户独占指令范围：打包（`package.sh`）、Tag 发布、GitHub Release 上传。 3. **完成标准**：汇报工作成果与实机证据即可，等待用户决定是否打包分发。",
+      "tags": [
+        "打包",
+        "package",
+        "发布",
+        "权限",
+        "决策",
+        "decision"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:29.453Z",
+      "updated": "2026-10-12T12:09:29.453Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-dcs-20261012-2009",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-doc-20261012-release",
+      "type": "knowhow",
+      "title": "禁止擅自执行Release打包与发布",
+      "summary": "",
+      "tags": [
+        "打包",
+        "package",
+        "发布",
+        "release",
+        "权限",
+        "禁令"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:28.823Z",
+      "updated": "2026-10-12T12:09:28.823Z",
+      "scope": null,
+      "category": "review",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DOC-20261012-release-001",
+      "type": "knowhow",
+      "title": "核心铁律",
+      "summary": "1. 未经用户明确下达指令（如明确说“打包”、“打个包”、“发布Release”），**绝对严禁擅自执行 ==> version 4.0.0 ==> building CMOLocalizer.dll ==> building CMO_Chinese_Setup.exe total 9897 drwxr-xr-x 1 admin 197609 0 Oct 12 20:09 . drwxr-xr-x 1 admin 197609 0 Oct 11 23:",
+      "tags": [
+        "打包",
+        "package",
+        "发布",
+        "release",
+        "权限",
+        "禁令"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:28.823Z",
+      "updated": "2026-10-12T12:09:28.823Z",
+      "scope": null,
+      "category": "review",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-doc-20261012-release",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "spec:project:review-standards",
+      "type": "spec",
+      "title": "Review Standards",
+      "summary": "",
+      "tags": [
+        "review",
+        "checklist",
+        "gate",
+        "approval",
+        "standard"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:28.828Z",
+      "updated": "2026-10-12T12:09:28.833Z",
+      "scope": "project",
+      "category": "review",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "spec:project:review-standards-001",
+      "type": "spec",
+      "title": "禁止擅自执行Release打包与发布",
+      "summary": "### 禁止擅自执行Release打包与发布 ## 规则约束：未经用户明确要求严禁自行打包与发布 ### 核心铁律 1. 未经用户明确下达指令（如明确说“打包”、“打个包”、“发布Release”），**绝对严禁擅自执行 ==> version 4.0.0 ==> building CMOLocalizer.dll ==> building CMO_Chinese_Setup.exe total 9897 drwxr-xr-x 1 admi",
+      "tags": [
+        "打包",
+        "package",
+        "发布",
+        "release",
+        "权限",
+        "禁令"
+      ],
+      "status": "active",
+      "created": "2026-10-12T12:09:28.828Z",
+      "updated": "2026-10-12T12:09:28.833Z",
+      "scope": "project",
+      "category": "review",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "master@934fc6e",
+      "parent": "spec:project:review-standards",
+      "related": [
+        "knowhow-doc-20261012-release"
+      ],
+      "repoId": null
+    }
+  ]
+}

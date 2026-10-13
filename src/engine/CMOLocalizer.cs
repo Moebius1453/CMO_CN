@@ -1112,7 +1112,6 @@ namespace CMOLocalizer
                             if (p === 'SCRIPT' || p === 'STYLE') continue;
                             var val = node.nodeValue;
                             if (val && val.trim().length > 0) {
-                                node.__cmo_zh = true;
                                 var idx = window.__cmo_nodes.length;
                                 window.__cmo_nodes.push(node);
                                 items.push(idx + '\t' + val);
@@ -1172,7 +1171,7 @@ namespace CMOLocalizer
 
                         if (updates.Count > 0)
                         {
-                            string updatePayload = Uri.EscapeDataString(string.Join("\n===CMO_SEP===\n", updates.ToArray()));
+                            string updatePayload = Uri.EscapeDataString(string.Join("\n===CMO_SEP===\n", updates.ToArray())).Replace("'", "%27");
                             string jsApply = @"(function(){
                                 try {
                                     if (!window.__cmo_nodes) return;
@@ -1320,8 +1319,18 @@ namespace CMOLocalizer
                 return TranslateWeaponSummary(text);
             }
 
-            // 3. 复合枚举串 (如 "Late 1980s Technology, 水面搜索, Ground Search (Fixed)")，即使部分已包含中文，也需翻译剩余英文字段
-            if (text.Contains(", ") && Regex.IsMatch(text, @"[A-Za-z]{3,}"))
+            // 3. 优先对完整段落进行精确或归一化匹配（防止含逗号的完整句子被逗号枚举拆分破坏）
+            if (!ContainsChinese(text))
+            {
+                string trans = TranslateString(text);
+                if (trans != text) return trans;
+
+                string normFull = Regex.Replace(text.Trim(), @"\s+", " ");
+                if (normExactMap.ContainsKey(normFull)) return normExactMap[normFull];
+            }
+
+            // 4. 复合枚举串 (如 "Late 1980s Technology, 水面搜索, Ground Search (Fixed)")，仅针对不含句号的短枚举列表
+            if (!text.Contains(".") && text.Length < 160 && text.Contains(", ") && Regex.IsMatch(text, @"[A-Za-z]{3,}"))
             {
                 string trComp = TranslateCommaComposite(text);
                 if (trComp != text) return trComp;
@@ -1329,12 +1338,7 @@ namespace CMOLocalizer
 
             if (ContainsChinese(text)) return text;
 
-            // Direct exact / normalized match via TranslateString
-            string trans = TranslateString(text);
-            if (trans != text) return trans;
-
             string norm = Regex.Replace(text.Trim(), @"\s+", " ");
-            if (normExactMap.ContainsKey(norm)) return normExactMap[norm];
 
             // Database Viewer dynamic numeric patterns (e.g. "15 seconds Observe...", "30 seconds (Cadet)")
             if (norm.EndsWith("seconds Observe, Orient, Decide, and Act (reaction time)"))
@@ -1395,7 +1399,7 @@ namespace CMOLocalizer
             }
 
             // 逗号分隔的复合枚举项 (例如: "Late 1980s Technology, Ground Search (Fixed), Ground Search (Mobile)")
-            if (text.Contains(", "))
+            if (!text.Contains(".") && text.Length < 160 && text.Contains(", "))
             {
                 string trComp = TranslateCommaComposite(text);
                 if (trComp != text) return trComp;
