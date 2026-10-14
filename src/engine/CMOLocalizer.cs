@@ -1228,8 +1228,33 @@ namespace CMOLocalizer
                 {
                     TranslateComboItems(cb);
                 }
+                TranslateKnownEnumCombo(cb);
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Enum pickers whose values are also engine colour tokens ("Blue" is both
+        /// an alert level and a side colour), so they cannot live in the global
+        /// dictionary.  Matched by control name instead.
+        /// </summary>
+        private static void TranslateKnownEnumCombo(ComboBox cb)
+        {
+            string n = cb.Name ?? "";
+            if (n.IndexOf("AlertLevel", StringComparison.OrdinalIgnoreCase) < 0) return;
+            for (int i = 0; i < cb.Items.Count; i++)
+            {
+                string raw = cb.GetItemText(cb.Items[i]).Trim();
+                string tr = null;
+                if (raw == "Blue") tr = "蓝色警戒";
+                else if (raw == "Yellow") tr = "黄色警戒";
+                else if (raw == "Orange") tr = "橙色警戒";
+                else if (raw == "Red") tr = "红色警戒";
+                else if (raw == "Green") tr = "绿色警戒";
+                else if (raw == "White") tr = "白色警戒";
+                if (tr == null) continue;
+                try { cb.Items[i] = tr; } catch { }
+            }
         }
 
         private static void LocalizeListBoxSafe(ListBox lb)
@@ -1351,10 +1376,11 @@ namespace CMOLocalizer
             if (ctrl == null) return;
             HookControlTextChanged(ctrl);
 
-            if (ctrl.GetType().Name.ToLower().Contains("tree") || ctrl.GetType().Name.ToLower().Contains("scen"))
-            {
-                Log("TranslateControlTree visited special control: " + ctrl.GetType().FullName);
-            }
+            // Combo/item surfaces are localized at the item layer, never through
+            // .Text, so they need their own pass during the scan.
+            LocalizeComboBoxSafe(ctrl as ComboBox);
+            ListBox lbScan = ctrl as ListBox;
+            if (lbScan != null) LocalizeListBoxSafe(lbScan);
 
             TranslateControlText(ctrl);
 
@@ -4761,6 +4787,51 @@ namespace CMOLocalizer
                 return "{\"status\":\"ok\",\"action\":\"" + cmd + "\",\"query\":\"" + JsonEsc(arg) + "\"}";
             }
 
+            if (cmd == "DROP_DOWN")
+            {
+                string want = arg.Trim();
+                ComboBox hit = null;
+                string ownerName = "";
+                FormCollection fc2 = Application.OpenForms;
+                if (fc2 != null)
+                {
+                    foreach (Form f3 in fc2)
+                    {
+                        if (f3 == null || f3.IsDisposed || !f3.Visible) continue;
+                        foreach (Control c3 in AllControls(f3))
+                        {
+                            ComboBox c3b = c3 as ComboBox;
+                            if (c3b == null) continue;
+                            if (want.Length == 0 || c3b.Name.IndexOf(want, StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                hit = c3b;
+                                ownerName = f3.GetType().Name;
+                                break;
+                            }
+                        }
+                        if (hit != null) break;
+                    }
+                }
+                if (hit == null) return "{\"status\":\"error\",\"message\":\"combo not found: " + JsonEsc(want) + "\"}";
+                ComboBox target = hit;
+                Form ownerForm = target.FindForm();
+                if (ownerForm != null)
+                {
+                    ownerForm.BeginInvoke((MethodInvoker)delegate
+                    {
+                        try
+                        {
+                            LocalizeComboBoxSafe(target);
+                            target.DroppedDown = true;
+                            target.Invalidate();
+                        }
+                        catch { }
+                    });
+                }
+                return "{\"status\":\"ok\",\"action\":\"DROP_DOWN\",\"form\":\"" + JsonEsc(ownerName)
+                    + "\",\"combo\":\"" + JsonEsc(target.Name) + "\",\"text\":\"" + JsonEsc(target.Text) + "\"}";
+            }
+
             if (cmd == "WPF_DUMP" || cmd == "DUMP_COMBOS" || cmd == "XLATE_BATCH")
             {
                 if (cmd == "XLATE_BATCH")
@@ -4940,6 +5011,16 @@ namespace CMOLocalizer
                 try { n += ClickWpfButton(System.Windows.Media.VisualTreeHelper.GetChild(dep, i), want); } catch { }
             }
             return n;
+        }
+
+        private static IEnumerable<Control> AllControls(Control root)
+        {
+            if (root == null) yield break;
+            foreach (Control c in root.Controls)
+            {
+                yield return c;
+                foreach (Control sub in AllControls(c)) yield return sub;
+            }
         }
 
         private static void CollectCombos(Control root, StringBuilder sb, ref bool first)

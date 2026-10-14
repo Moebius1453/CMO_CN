@@ -77,5 +77,11 @@
  "Not an issue. Measure the distance between the base and the SA-5 (\"CTRL + D\" & click or select the base and watch the cursor data to see the range as you move the mouse (XXXnm from Sel). I read the SA-5 as 340nm, and the outer limit of the mission 2 box is about 320nm so put in a maximum strike radius of 320 halfway down the center column.": "这不是问题。测量基地与 SA-5 之间的距离（按「CTRL + D」并点击，或选中基地后移动鼠标，观察光标数据中的距离读数(距所选目标 XXX 海里）。我实测 SA-5 为 340 海里，而任务 2 方框的外缘约为 320 海里，因此在中间列的中部填入最大打击半径 320。",
  "Special Actions and then select the special action named 'Ready ASW Helicopter' and click 'execute'. The helicopter will then be immediately ready to take off and make another attack.": "特别行动，然后选择名为「准备反潜直升机」的特别行动并点击「执行」。该直升机随后将立即做好起飞准备，并可再次发起攻击。",
  "When you detect a suitable contact, launch a RHIB to identify it by opening the Docking Ops window (F7), selecting a RHIB and clicking 'Launch Individually'. Keep an eye on fuel consumption and range for your deployed RHIBs and helicopter. You can recall embarked units be selecting them and pressing 'B' (Return To": "当你发现合适的接触目标时，按 F7 打开【小艇作业】窗口，选择一艘硬壳充气艇（RHIB）并点击「单艇释放」以派其前往识别目标。请留意已派出的小艇与直升机的燃油消耗与航程。要召回搭载单位，可选中它们并按「B」(返回",
- "Select HMAS Stuart and order it to replenish from HMAS Sirius by using the right-click unit context menu and selecting 'UNREP if possible' > 'Select Provider Manually' and then clicking on HMAS Sirius": "选中「斯图尔特」号（HMAS Stuart），使用右键单位上下文菜单并选择「如有可能则进行海上补给 (UNREP) > 手动选择补给舰」，然后点击「天狼星」号（HMAS Sirius），命令其前往实施补给。"
+ "Select HMAS Stuart and order it to replenish from HMAS Sirius by using the right-click unit context menu and selecting 'UNREP if possible' > 'Select Provider Manually' and then clicking on HMAS Sirius": "选中「斯图尔特」号（HMAS Stuart），使用右键单位上下文菜单并选择「如有可能则进行海上补给 (UNREP) > 手动选择补给舰」，然后点击「天狼星」号（HMAS Sirius），命令其前往实施补给。",
+ "Drop Guidance When Intercept Appears Impossible": "当拦截已无可能时放弃制导",
+ "Chicken": "谨慎规避 (Chicken)",
+ "Littoral": "近岸水域 (Littoral)",
+ "Direct": "直接 (Direct)",
+ "Cautious": "谨慎 (Cautious)",
+ "Aggressive": "积极 (Aggressive)"
 }
