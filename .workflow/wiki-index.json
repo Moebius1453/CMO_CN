@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "generatedAt": 1791844812830,
+  "generatedAt": 1791994223144,
   "entries": [
     {
       "id": "knowhow-dcs-20261012-2009",
@@ -73,6 +73,42 @@
       "createdBy": null,
       "sourceRef": null,
       "parent": "knowhow-dcs-20261012-2009",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-dcs-20261014-github-releases",
+      "type": "knowhow",
+      "title": "发布标准必须更新GitHub Releases与安装包",
+      "summary": "用户明确要求（2026-10-14）：“以后让你发布都要更新 releases 以及安装包”。",
+      "tags": [],
+      "status": "active",
+      "created": "2026-10-14T11:44:56.055Z",
+      "updated": "2026-10-14T11:44:56.055Z",
+      "scope": null,
+      "category": "decision",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-dcs-20261014-push",
+      "type": "knowhow",
+      "title": "每次完成任务后立即 push",
+      "summary": "用户明确要求（2026-10-14）：“以后每次完成一个任务就 push 一次”。",
+      "tags": [],
+      "status": "active",
+      "created": "2026-10-14T05:33:33.031Z",
+      "updated": "2026-10-14T05:33:33.031Z",
+      "scope": null,
+      "category": "decision",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
       "related": [],
       "repoId": null
     },

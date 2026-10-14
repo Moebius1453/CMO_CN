@@ -70,7 +70,8 @@ def iter_source_maps():
         return
     for p in sorted(SRC.glob("*.json")):
         if p.name in ("blacklist.json", "labels.json", "identifiers.json",
-                      "force_offsets.json", "dlc_briefing_fixes.json"):
+                      "force_offsets.json", "dlc_briefing_fixes.json",
+                      "term_replacements.json"):
             continue
         data = load(p)
         if isinstance(data, dict):
@@ -125,6 +126,25 @@ def sanitize(en: str, zh: str, allow_sensitive: bool = False) -> str | None:
     if en.count("\n") != zh.count("\n"):
         return None
     return zh
+
+
+def load_term_replacements() -> tuple[list[tuple[re.Pattern, str]], list[re.Pattern]]:
+    """Naming standard: deterministic value rewrites plus banned-pattern gate."""
+    path = SRC / "term_replacements.json"
+    if not path.is_file():
+        return [], []
+    data = load(path)
+    rules = [(re.compile(r["pattern"]), r["to"])
+             for r in data.get("replacements", []) if isinstance(r, dict)]
+    banned = [re.compile(b["pattern"]) for b in data.get("banned", [])
+              if isinstance(b, dict)]
+    return rules, banned
+
+
+def apply_naming_standard(text: str, rules: list[tuple[re.Pattern, str]]) -> str:
+    for pattern, repl in rules:
+        text = pattern.sub(repl, text)
+    return text
 
 
 def build() -> dict:
@@ -301,6 +321,34 @@ def build() -> dict:
                     exact[en_str] = zh
     known = set(text_to_offset.values())
     offsets = {k: v for k, v in offsets.items() if k in known}
+
+    # --- UI dictionary wins over briefing prose --------------------------
+    # Briefing batches are merged last and some of them translate short UI
+    # labels as telegraphic sentences ("Load" -> "挂载" came from a briefing).
+    # The curated glossary and menu terminology are authoritative for their
+    # keys, so re-apply them after everything else has been merged.
+    for name in ("glossary.json", "menu_terms.json", "sentence_fragment_fixes.json",
+                 "legacy_fixes.json", "ui_cleanup_terms.json"):
+        path = (DICT / name) if name == "glossary.json" else (SRC / name)
+        if not path.is_file():
+            continue
+        data = load(path)
+        for en, zh in data.items():
+            if not isinstance(zh, str) or not en or en.startswith("_"):
+                continue
+            if en in blacklist or en not in exact:
+                continue
+            # Curated short labels only: full-sentence briefing prose legitimately
+            # lives in the briefing batches and must not be overwritten here.
+            if len(en) > 40 or chr(10) in en:
+                continue
+            exact[en] = zh
+
+    # --- naming standard: one Chinese spelling per equipment/term ---------
+    name_rules, _banned = load_term_replacements()
+    if name_rules:
+        exact = {k: apply_naming_standard(v, name_rules) for k, v in exact.items()}
+        offsets = {k: apply_naming_standard(v, name_rules) for k, v in offsets.items()}
 
     ordered_offsets = {str(k): offsets[k] for k in sorted(offsets)}
     ordered_exact = {k: exact[k] for k in sorted(exact)}

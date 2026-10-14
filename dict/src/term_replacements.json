@@ -1,0 +1,69 @@
+{
+  "_comment": "装备与术语中文名称规范库（单一写法）。build_dict.py 在合并完所有来源后，按键值对 value 做确定性正则替换，保证同一装备在全库只有一种中文写法。verify_terminology.py 依据 banned 列表做回归门禁。",
+  "version": "4.1.3",
+  "protect_token": "\u0001",
+  "replacements": [
+    {
+      "name": "chinese-python-variants",
+      "pattern": "[“「\"]?\\s*(?:怪蛇|蟒蛇|巨蟒)\\s*[”」\"]?\\s*-?\\s*(\\d+)",
+      "to": "「怪蛇」\\1"
+    },
+    {
+      "name": "chinese-python-bare",
+      "pattern": "[“「\"]?\\s*(?:蟒蛇|巨蟒)\\s*[”」\"]?",
+      "to": "「怪蛇」"
+    },
+    {
+      "name": "protect-bilingual-python-ref",
+      "pattern": "「怪蛇」(\\d+)\\s*[（(]\\s*Python\\s*-?\\s*\\1\\s*[）)]",
+      "to": "\u0001\\1\u0001"
+    },
+    {
+      "name": "bare-english-python",
+      "pattern": "(?<![A-Za-z])Python\\s*-?\\s*(\\d+)",
+      "to": "「怪蛇」\\1"
+    },
+    {
+      "name": "restore-bilingual-python-ref",
+      "pattern": "\u0001(\\d+)\u0001",
+      "to": "「怪蛇」\\1（Python \\1）"
+    },
+    {
+      "name": "drop-redundant-python-paren",
+      "pattern": "「怪蛇」\\s*[（(]\\s*Python\\s*[）)]",
+      "to": "「怪蛇」"
+    },
+    {
+      "name": "bare-english-python-nonumeral",
+      "pattern": "(?<![A-Za-z])Python(?![A-Za-z])(?!\\s*\\d)",
+      "to": "「怪蛇」"
+    },
+    {
+      "name": "collapse-duplicate-python",
+      "pattern": "「怪蛇」(\\d+)「怪蛇」\\1",
+      "to": "「怪蛇」\\1"
+    }
+  ],
+  "banned": [
+    {
+      "pattern": "(?<![制诱指领导辅引推教倡编报向同因劝开传误疏督就主自反波巡])导的",
+      "reason": "homing 的标准中文译名为「寻的」，机翻「导的」为典型误译"
+    },
+    {
+      "pattern": "维子",
+      "reason": "parent 误译为「维子」，应为「上级」"
+    },
+    {
+      "pattern": "武器未段",
+      "reason": "Weapons 页签误译，应为「武器发射」"
+    },
+    {
+      "pattern": "(?<![A-Za-z（(])Python\\s*-?\\s*\\d",
+      "reason": "Rafael Python 系列统一写作「怪蛇」N，不得残留英文原名（仅允许「怪蛇」N（Python N）双语对照）"
+    },
+    {
+      "pattern": "(?:蟒蛇|巨蟒)",
+      "reason": "Python 的另一种译法，与「怪蛇」并存会造成名称不统一"
+    }
+  ]
+}
