@@ -66,7 +66,7 @@ def main():
 
 ### 安装方式
 
-- **一键安装器（推荐）**：下载并运行 `CMO_Chinese_Setup.exe`，自动识别 Steam 游戏目录并一键完成汉化。
+- **一键安装器（推荐）**：下载并运行 `CMO_Chinese_Setup_v{version}.exe`，自动识别 Steam 游戏目录并一键完成汉化。
 - **绿色免安装包**：下载 `CMO_Chinese_Pack_{version}.zip`，解压后覆盖到游戏根目录即可。
 """
 
@@ -117,8 +117,14 @@ def main():
     existing_assets = {a["name"]: a["id"] for a in release_info.get("assets", [])}
 
     # Files to upload
+    setup_file = BUILD_DIR / f"CMO_Chinese_Setup_v{version}.exe"
+    if not setup_file.is_file():
+        setup_file = BUILD_DIR / f"CMO_Chinese_Setup_{version}.exe"
+    if not setup_file.is_file():
+        setup_file = BUILD_DIR / "CMO_Chinese_Setup.exe"
+
     files_to_upload = [
-        BUILD_DIR / "CMO_Chinese_Setup.exe",
+        setup_file,
         BUILD_DIR / f"CMO_Chinese_Pack_{version}.zip"
     ]
 

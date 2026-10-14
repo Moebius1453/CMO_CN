@@ -1,1 +1,3 @@
 {"type":"cli","id":"CLI-1791806968680-1","timestamp":"2026-10-12T12:09:28.680Z","command":"spec add","args":{"category":"review","scope":"project","keywords":"打包,package,发布,release,权限,禁令"}}
+{"type":"cli","id":"CLI-1791937450314-1","timestamp":"2026-10-14T00:24:10.314Z","command":"load","args":{"type":"auto","id":"knowhow-DOC-20261012-release-001"}}
+{"type":"cli","id":"CLI-1791937450318-1","timestamp":"2026-10-14T00:24:10.318Z","command":"load","args":{"type":"auto","id":"knowhow-DCS-20261012-2009-001"}}

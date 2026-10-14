@@ -61,7 +61,7 @@
 | Change bearing type of selected Ref Point(s) to ROTATING | 将所选参考点方位类型改为随动 |
 | Change next Waypoint | 修改下一航路点 |
 | Civilian | 民用 |
-| Clear | 晴 |
+| Clear | 清除 |
 | Clone Unit | 克隆单位 |
 | Comms range | 通信范围 |
 | Conditions | 条件 |

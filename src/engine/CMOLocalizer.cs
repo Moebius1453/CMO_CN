@@ -499,6 +499,7 @@ namespace CMOLocalizer
                                 }
                                 else
                                 {
+                                    PatchMainFormFonts(frm);
                                     TranslateControlTree(frm);
                                 }
                             }
@@ -733,10 +734,27 @@ namespace CMOLocalizer
                                     {
                                         _inWpfTextChanged = true;
                                         System.Windows.Controls.TextBlock targetTb = s as System.Windows.Controls.TextBlock;
-                                        if (targetTb != null && !string.IsNullOrEmpty(targetTb.Text) && !ContainsChinese(targetTb.Text))
+                                        if (targetTb != null && !string.IsNullOrEmpty(targetTb.Text))
                                         {
-                                            string tr = TranslateString(targetTb.Text);
-                                            if (tr != targetTb.Text) targetTb.Text = tr;
+                                            string cur = targetTb.Text;
+                                            if (cur.Contains("kg") && (cur.Contains("fuel") || cur.Contains("燃油") || cur.Contains("Tank") || cur.Contains("坦克") || cur.Contains("reserve")))
+                                            {
+                                                string trF = TranslateFuelPanelText(cur);
+                                                if (trF != cur)
+                                                {
+                                                    targetTb.Text = trF;
+                                                    return;
+                                                }
+                                            }
+                                            if (!ContainsChinese(cur))
+                                            {
+                                                string tr = TranslateString(cur);
+                                                if (string.IsNullOrEmpty(tr) || tr == cur)
+                                                {
+                                                    tr = TranslateMilitaryUnitName(cur);
+                                                }
+                                                if (tr != cur) targetTb.Text = tr;
+                                            }
                                         }
                                     }
                                     catch { }
@@ -781,7 +799,21 @@ namespace CMOLocalizer
                     }
                     else if (!string.IsNullOrEmpty(tb.Text))
                     {
+                        string cur = tb.Text;
+                        if (cur.Contains("kg") && (cur.Contains("fuel") || cur.Contains("燃油") || cur.Contains("Tank") || cur.Contains("坦克") || cur.Contains("reserve")))
+                        {
+                            string trF = TranslateFuelPanelText(cur);
+                            if (trF != cur)
+                            {
+                                tb.Text = trF;
+                                return;
+                            }
+                        }
                         string trans = TranslateString(tb.Text);
+                        if (string.IsNullOrEmpty(trans) || trans == tb.Text)
+                        {
+                            trans = TranslateMilitaryUnitName(tb.Text);
+                        }
                         if (trans != tb.Text)
                         {
                             string old = tb.Text;
@@ -861,6 +893,34 @@ namespace CMOLocalizer
         private static readonly HashSet<int> hookedTextChanged = new HashSet<int>();
         [ThreadStatic]
         private static bool _inControlTextChanged;
+
+        private static bool fontsPatched = false;
+        private static void PatchMainFormFonts(Form form)
+        {
+            if (fontsPatched || form == null || form.GetType().Name != "MainForm") return;
+            try
+            {
+                Type t = form.GetType();
+                foreach (FieldInfo fi in t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                {
+                    if (fi.FieldType == typeof(Font))
+                    {
+                        Font oldF = fi.GetValue(form) as Font;
+                        if (oldF != null && oldF.FontFamily.Name != "Microsoft YaHei")
+                        {
+                            Font newF = new Font("Microsoft YaHei", oldF.Size, oldF.Style);
+                            fi.SetValue(form, newF);
+                            Log("Patched MainForm Font field " + fi.Name + " from " + oldF.FontFamily.Name + " to Microsoft YaHei");
+                        }
+                    }
+                }
+                fontsPatched = true;
+            }
+            catch (Exception ex)
+            {
+                Log("PatchMainFormFonts error: " + ex.Message);
+            }
+        }
 
         private static void HookControlTextChanged(Control ctrl)
         {
@@ -953,6 +1013,34 @@ namespace CMOLocalizer
             catch { }
         }
 
+        private static string TranslateFuelPanelText(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return raw;
+            if (!raw.Contains("kg") && !raw.Contains("fuel") && !raw.Contains("燃油") && !raw.Contains("Bingo") && !raw.Contains("Tank") && !raw.Contains("坦克")) return raw;
+
+            string s = raw;
+            // 彻底修正副油箱机翻为陆军坦克的错误
+            s = s.Replace("坦克 #", "副油箱 #");
+            s = Regex.Replace(s, @"\bTank\s*#", "副油箱 #", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"\bFuelTank\b", "燃油箱", RegexOptions.IgnoreCase);
+
+            // 补全燃油面板中残存的英文词汇
+            s = s.Replace("remaining fuel", "剩余燃油");
+            s = s.Replace("fuel burn rate", "燃油消耗率");
+            s = s.Replace("/ minute", "/ 分钟");
+            s = s.Replace("reserve", "预留备用油量");
+            s = s.Replace("total fuel", "总燃油量");
+            s = s.Replace("mission fuel", "任务燃油");
+            s = s.Replace("nm to base:", "海里至基地:");
+            s = s.Replace("nm to tanker:", "海里至加油机:");
+            s = s.Replace("nm to Bingo fuel", "海里到达返航油量(Bingo)");
+            s = s.Replace("nm to Joker fuel", "海里到达警戒油量(Joker)");
+            s = s.Replace("to base:", "至基地:");
+            s = s.Replace("to Bingo", "到达返航油量(Bingo)");
+
+            return s;
+        }
+
         private static void TranslateControlTree(Control ctrl)
         {
             if (ctrl == null) return;
@@ -964,6 +1052,20 @@ namespace CMOLocalizer
             }
 
             TranslateControlText(ctrl);
+
+            if (ctrl.Parent != null && ctrl.Parent.GetType().Name.IndexOf("FormationEditor", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                // 解决编队编辑器按钮太窄导致文字截断为省略号 “...” 的问题
+                if ((ctrl is ButtonBase || ctrl.GetType().Name.IndexOf("Button", StringComparison.OrdinalIgnoreCase) >= 0) && ctrl.Width < 70)
+                {
+                    ctrl.Width = 70;
+                }
+                // 解决 “正在排序” 标签与下拉框重叠问题
+                if (ctrl.Text == "正在排序" || ctrl.Text == "Sort by:" || ctrl.Name == "c08SpHZVOS6")
+                {
+                    ctrl.Width = Math.Max(ctrl.Width, 65);
+                }
+            }
 
             if (ctrl is ToolStrip)
             {
@@ -1643,11 +1745,106 @@ namespace CMOLocalizer
             }
         }
 
+        private static string TranslateMilitaryUnitName(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return raw;
+            string s = raw;
+
+            // 1. 如果有数量前缀如 "2x ", "6x "
+            string prefix = "";
+            Match mQty = Regex.Match(s, @"^(\d+x\s+)(.*)$");
+            if (mQty.Success)
+            {
+                prefix = mQty.Groups[1].Value;
+                s = mQty.Groups[2].Value;
+            }
+
+            // 2. 检查是否有整词精确翻译
+            if (exactMap.ContainsKey(s))
+            {
+                return prefix + exactMap[s];
+            }
+
+            // 3. 通用飞机/直升机/装备类型词与中国公认军用绰号规范注入
+            s = s.Replace("Tanker", "加油机")
+                 .Replace("Fighter", "战斗机")
+                 .Replace("Bomber", "轰炸机")
+                 .Replace("Multirole (Fighter/Attack)", "多用途战机 (战斗/攻击)")
+                 .Replace("Multirole", "多用途战机")
+                 .Replace("Falcon", "「战隼」")
+                 .Replace("Sufa", "苏法/风暴")
+                 .Replace("Eagle", "「鹰」")
+                 .Replace("Strike Eagle", "「攻击鹰」")
+                 .Replace("Tomcat", "「雄猫」")
+                 .Replace("Raptor", "「猛禽」")
+                 .Replace("Lightning II", "「闪电」II")
+                 .Replace("Thunderbolt II", "「雷电」II")
+                 .Replace("Hornet", "「大黄蜂」")
+                 .Replace("Super Hornet", "「超级大黄蜂」")
+                 .Replace("Growler", "「咆哮者」")
+                 .Replace("Prowler", "「徘徊者」")
+                 .Replace("Hawkeye", "「鹰眼」")
+                 .Replace("Sentry", "「哨兵」")
+                 .Replace("Black Hawk", "「黑鹰」")
+                 .Replace("Blackhawk", "「黑鹰」")
+                 .Replace("Apache", "「阿帕奇」")
+                 .Replace("Chinook", "「支努干」")
+                 .Replace("Sea King", "「海王」")
+                 .Replace("Seahawk", "「海鹰」")
+                 .Replace("Guardian", "「卫士」")
+                 .Replace("Longbow", "「长弓」")
+                 .Replace("Osprey", "「鱼鹰」")
+                 .Replace("Hercules", "「大力神」")
+                 .Replace("Galaxy", "「银河」")
+                 .Replace("Globemaster", "「环球霸王」")
+                 .Replace("Poseidon", "「海神」")
+                 .Replace("Orion", "「猎户座」")
+                 .Replace("Nahshon-Eitam", "纳雄-埃塔姆")
+                 .Replace("Nahshon", "纳雄")
+                 .Replace("Saknayee", "萨克奈")
+                 .Replace("Kohav", "科哈夫")
+                 .Replace("Har Ramon", "哈尔拉蒙")
+                 .Replace("Ramat David", "拉马特戴维")
+                 .Replace("Wing Loong", "「翼龙」")
+                 .Replace("Rainbow", "「彩虹」")
+                 .Replace("Mighty Dragon", "「威龙」")
+                 .Replace("Flounder", "「飞豹」")
+                 .Replace("Flanker", "「侧卫」")
+                 .Replace("Fullback", "「鸭嘴兽」")
+                 .Replace("Fencer", "「击剑手」")
+                 .Replace("Frogfoot", "「蛙足」")
+                 .Replace("Fishbed", "「鱼窝」")
+                 .Replace("Flogger", "「鞭挞者」")
+                 .Replace("Foxbat", "「狐蝠」")
+                 .Replace("Foxhound", "「捕狐犬」")
+                 .Replace("Fulcrum", "「支点」")
+                 .Replace("Backfire", "「逆火」")
+                 .Replace("Badger", "「獾」")
+                 .Replace("Bear", "「熊」")
+                 .Replace("Blackjack", "「海盗旗」")
+                 .Replace("Alligator", "「短吻鳄」")
+                 .Replace("Helix", "「蜗牛」")
+                 .Replace("Hind", "「雌鹿」")
+                 .Replace("Havoc", "「浩劫」")
+                 .Replace("Tyulpan", "「郁金香」")
+                 .Replace("Akatsiya", "「金合欢」")
+                 .Replace("Gvozdika", "「康乃馨」")
+                 .Replace("Giatsint", "「风信子」")
+                 .Replace("Pion", "「芍药」")
+                 .Replace("Msta", "「姆斯塔河」");
+
+            return prefix + s;
+        }
+
         private static void TranslateTreeNode(TreeNode node)
         {
             if (node == null) return;
             string trans = TranslateString(node.Text);
-            if (trans != node.Text) node.Text = trans;
+            if (string.IsNullOrEmpty(trans) || trans == node.Text)
+            {
+                trans = TranslateMilitaryUnitName(node.Text);
+            }
+            if (!string.IsNullOrEmpty(trans) && trans != node.Text) node.Text = trans;
             foreach (TreeNode child in node.Nodes)
             {
                 TranslateTreeNode(child);
@@ -1662,11 +1859,18 @@ namespace CMOLocalizer
         {
             if (string.IsNullOrEmpty(rawText)) return rawText;
             string t = rawText.Trim();
-            if (t == "None") return "全部 / 不限";
+
+            // 通用状态与过滤
+            if (t == "None") return "无 / 不限";
             if (t == "Not selected") return "未选择 (全部子类型)";
+            if (t == "Active") return "已激活 (Active)";
+            if (t == "Inactive") return "未激活 (Inactive)";
+            if (t == "Waiting for trigger") return "等待触发 (Waiting for trigger)";
             if (t.StartsWith("Show all platforms")) return "显示全部平台 (含现实与假想)";
             if (t.StartsWith("Show only real-life")) return "仅显示现实服役平台";
             if (t.StartsWith("Show only hypothetical")) return "仅显示假想/计划平台";
+
+            // 数据库查看器对象大类
             if (t == "Weapon") return "武器装备 (Weapon)";
             if (t == "Aircraft") return "飞机 / 航空器 (Aircraft)";
             if (t == "Ship") return "水面舰艇 (Ship)";
@@ -1674,30 +1878,98 @@ namespace CMOLocalizer
             if (t == "Facility") return "地面设施 (Facility)";
             if (t == "Satellite") return "人造卫星 (Satellite)";
             if (t == "Ground Unit") return "地面作战单位 (Ground Unit)";
+            if (t == "Sensor") return "传感器 / 探测系统 (Sensor)";
+
+            // 数据库查看器传感器子类型 (声呐、雷达、电子战、激光探测等)
+            if (t == "BottomFixedSonar_PassiveOnly") return "海底固定声呐 [仅被动]";
+            if (t == "Bow_Sonar_ActivePassive") return "舰艏声呐 [主被动]";
+            if (t == "DippingSonar_ActiveOnly") return "吊放声呐 [仅主动]";
+            if (t == "DippingSonar_ActivePassive") return "吊放声呐 [主被动]";
+            if (t == "DippingSonar_PassiveOnly") return "吊放声呐 [仅被动]";
+            if (t == "EMP_Projector") return "电磁脉冲发射器 (EMP)";
+            if (t == "HullSonar_ActiveOnly") return "舰壳声呐 [仅主动]";
+            if (t == "HullSonar_ActivePassive") return "舰壳声呐 [主被动]";
+            if (t == "HullSonar_PassiveOnly") return "舰壳声呐 [仅被动]";
+            if (t == "LaserDesignator") return "激光指示器 (Laser Designator)";
+            if (t == "LaserRangefinder") return "激光测距仪 (Laser Rangefinder)";
+            if (t == "LaserSpotTracker") return "激光光斑跟踪器 (LST)";
+            if (t == "LIDAR") return "激光雷达 (LIDAR)";
+            if (t == "Microwave_Emitter") return "微波辐射源 / 大功率微波";
+            if (t == "MineNeutralization_DiverExpl") return "潜水员人工灭雷炸药";
+            if (t == "MineNeutralization_Explosive") return "灭雷炸药 / 灭雷具";
+            if (t == "MineNeutralization_Moored") return "定深锚雷灭雷具";
+            if (t == "MineSweep_AcousticInfluenc") return "音响扫雷具";
+            if (t == "MineSweep_MagneticInfluen") return "磁性扫雷具";
+            if (t == "MineSweep_MechanicalCable") return "机械截割扫雷具";
+            if (t == "MineSweep_MultiInfluence") return "复合物理场扫雷具";
+            if (t == "MineSweep_TwoShipMagneti") return "双舰对拖磁性扫雷具";
+            if (t == "NonDetectingEmitter") return "非探测辐射源 / 无源诱饵";
+            if (t == "PCLS") return "潜艇通信激光系统 (PCLS)";
+
+            // 新建任务分类 (Category)
+            if (t == "Mission") return "常规任务 (Mission)";
+            if (t == "Task Pool") return "兵力池 (Task Pool)";
+            if (t == "Package") return "任务编组 (Package)";
+
+            // 新建任务级别/型号 (Class)
+            if (t.StartsWith("Strike")) return "突击打击 [含空空拦截] (Strike)";
+            if (t == "Patrol") return "巡逻 (Patrol)";
+            if (t == "Support") return "支援 (Support)";
+            if (t == "Ferry") return "转场 (Ferry)";
+            if (t == "Mining") return "布雷 (Mining)";
+            if (t == "Mine-clearing") return "扫雷 (Mine-clearing)";
+            if (t == "Cargo") return "运输 (Cargo)";
+
+            // 任务类型 (Type - AAW/ASuW/ASW/SEAD 规范缩写保留)
+            if (t == "AAW Patrol") return "防空巡逻 (AAW)";
+            if (t == "ASuW Patrol (Naval)") return "对海巡逻 [水面] (ASuW)";
+            if (t == "ASuW Patrol (Ground)") return "对陆巡逻 [地面] (ASuW)";
+            if (t == "ASuW Patrol (Mixed)") return "海陆复合巡逻 (ASuW)";
+            if (t == "ASW Patrol") return "反潜巡逻 (ASW)";
+            if (t == "SEAD Patrol") return "防空压制巡逻 (SEAD)";
+            if (t == "Sea Control Patrol") return "制海巡逻 (Sea Control)";
+            if (t == "Naval ASuW Strike") return "对海突击打击 (ASuW Strike)";
+            if (t == "Land Strike") return "对陆突击打击 (Land Strike)";
+            if (t == "Air Intercept") return "空空拦截 (Air Intercept)";
+
+            // 任务编辑器参数
+            if (t == "Cruise") return "巡航 (Cruise)";
+            if (t == "Loiter") return "待机/滞空 (Loiter)";
+            if (t == "Full") return "全速 (Full)";
+            if (t == "Flank") return "最大极速 (Flank)";
+            if (t == "Unspecified") return "未指定 (Unspecified)";
+            if (t == "By Class") return "按级别/型号 (By Class)";
+            if (t == "Random within area") return "区域内随机巡逻";
+            if (t == "Repeatable loop") return "循环巡逻";
+            if (t.Contains("Tankers Refuelling Tankers"))
+            {
+                if (t.StartsWith("Inherited")) return "继承自上级，总是使用 [加油机相互加油除外]";
+                return "总是使用 [加油机相互加油除外]";
+            }
+            if (t == "1x flight") return "单批编队 (1x flight)";
+            if (t == "All flights") return "全部出动 (All flights)";
+
+            // 编队编辑器队形 (Formation)
+            if (t == "Line") return "一字线形编队 (Line)";
+            if (t == "Column") return "单纵队形 (Column)";
+            if (t == "Wedge") return "楔形编队 (Wedge)";
+            if (t == "Vee") return "V字编队 (Vee)";
+            if (t == "Echelon") return "梯形编队 (Echelon)";
+            if (t == "Diamond") return "菱形编队 (Diamond)";
+            if (t == "Circle") return "环形编队 (Circle)";
+
             return TranslateString(rawText);
         }
 
         private static readonly HashSet<int> hookedDBCombos = new HashSet<int>();
 
         /// <summary>
-        /// The DarkUI combo boxes in the Database Viewer paint themselves: their
-        /// OnPaint/OnDrawItem overrides never call base, so WinForms never raises the
-        /// Paint/DrawItem events and an owner-draw overlay cannot work. Translate the
-        /// project text at the data level instead, so the game's own painter renders
-        /// the Chinese text:
-        ///   * plain item lists (object type, hypothetical filter) -> replace the item
-        ///     string, keeping the English token so engine side matching still works;
-        ///   * data-bound lists (country, sub-type) -> translate the display column of
-        ///     the bound table in place; the ID kept in ValueMember is untouched, so
-        ///     filtering stays correct.
-        /// Runs on every UI watch pass so a re-bound list is translated again.
+        /// True for combo boxes hosted by the Database Viewer, New Mission,
+        /// Mission Editor, or Formation Editor.
         /// </summary>
-        /// <summary>
-        /// True only for combo boxes hosted by the Database Viewer. The item text of
-        /// other windows may be matched by the engine, so they are left untouched.
-        /// </summary>
-        private static bool IsInDatabaseViewer(Control ctrl)
+        private static bool IsInTargetLocalizableForm(Control ctrl, out string formName)
         {
+            formName = "";
             Control c = ctrl;
             int guard = 0;
             while (c != null && guard++ < 32)
@@ -1705,7 +1977,15 @@ namespace CMOLocalizer
                 Form f = c as Form;
                 if (f != null)
                 {
-                    return f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0;
+                    string fn = f.GetType().Name;
+                    if (fn.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        fn.IndexOf("NewMission", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        fn.IndexOf("MissionEditor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        fn.IndexOf("FormationEditor", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        formName = fn;
+                        return true;
+                    }
                 }
                 c = c.Parent;
             }
@@ -1717,17 +1997,18 @@ namespace CMOLocalizer
             if (cb == null) return;
             try
             {
-                if (!IsInDatabaseViewer(cb)) return;
-                // DO NOT touch CB_ObjectType! InternalDBViewer uses CB_ObjectType.Text /
-                // SelectedItem.ToString() ("Aircraft", "Ship", "Weapon", etc.) in string
-                // comparisons in DisplayInfoInDetailsPanel. Modifying its items breaks
-                // the detail pane rendering completely!
-                if (cb.Name == "CB_ObjectType") return;
+                string formName;
+                if (!IsInTargetLocalizableForm(cb, out formName)) return;
+                // DO NOT touch CB_ObjectType in InternalDBViewer!
+                if (formName.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0 && cb.Name == "CB_ObjectType")
+                {
+                    return;
+                }
 
                 if (!hookedDBCombos.Contains(cb.GetHashCode()))
                 {
                     hookedDBCombos.Add(cb.GetHashCode());
-                    Log("LocalizeDBViewerComboBox: " + cb.Name + " type=" + cb.GetType().FullName
+                    Log("LocalizeTargetFormComboBox: " + cb.Name + " form=" + formName + " type=" + cb.GetType().FullName
                         + " items=" + cb.Items.Count + " bound=" + (cb.DataSource != null));
                 }
                 if (cb.DataSource != null) TranslateComboDisplayColumn(cb);
@@ -1958,6 +2239,10 @@ namespace CMOLocalizer
                     if (!string.IsNullOrEmpty(raw))
                     {
                         string trans = TranslateString(raw);
+                        if (string.IsNullOrEmpty(trans) || trans == raw)
+                        {
+                            trans = TranslateMilitaryUnitName(raw);
+                        }
                         if (!string.IsNullOrEmpty(trans) && trans != raw)
                         {
                             _dtnTextProp.SetValue(node, trans, null);
@@ -2486,6 +2771,11 @@ namespace CMOLocalizer
                         ctrl.Text = "任务编辑器 - 所属阵营: " + fText.Substring("Mission Editor for side: ".Length);
                         return;
                     }
+                    if (fText.StartsWith("Formation Editor"))
+                    {
+                        ctrl.Text = fText.Replace("Formation Editor", "编队编辑器");
+                        return;
+                    }
                     if (fText.Contains("Special Messages"))
                     {
                         ctrl.Text = fText.Replace("Special Messages", "专用战情消息");
@@ -2532,9 +2822,26 @@ namespace CMOLocalizer
                 return;
             }
 
+            // 彻底解决全局时间清空按钮 Clear 误译为天气“晴”的错误
+            if ((ctrl is ButtonBase || ctrl.GetType().Name.IndexOf("Button", StringComparison.OrdinalIgnoreCase) >= 0) &&
+                (ctrl.Text == "Clear" || ctrl.Text == "晴"))
+            {
+                ctrl.Text = "清除";
+                return;
+            }
+
             string t = ctrl.Text;
             if (!string.IsNullOrEmpty(t))
             {
+                if (t == "Spacing") { ctrl.Text = "间距"; return; }
+                if (t == "Misc") { ctrl.Text = "其他设置"; return; }
+                if (t == "Pick area") { ctrl.Text = "选取区域"; return; }
+                if (t == "Create area") { ctrl.Text = "创建区域"; return; }
+                if ((t == "Clear" || t == "晴") && ctrl.Name.IndexOf("Clear", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    ctrl.Text = "清除";
+                    return;
+                }
                 // 处理单行或多行挂载详情面板 (如 AirOps / ReadyAircraft 右下角的各项 Label)
                 if (t.Contains("挂载") || t.Contains("作战能力") || t.Contains("飞行剖面") || t.Contains("武器状态") || t.Contains("攻击高度") ||
                     t.Contains("Loadout") || t.Contains("Pre-briefed") || t.Contains("Effective pre-briefed") || t.Contains("Unlimited") ||

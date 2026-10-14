@@ -2,7 +2,7 @@
 # Build the release artifacts for the current VERSION.
 #
 #   build/CMOLocalizer.dll          runtime engine
-#   build/CMO_Chinese_Setup.exe     one-click installer (embeds dll + dict + templates)
+#   build/CMO_Chinese_Setup_v<ver>.exe  one-click installer (embeds dll + dict + templates)
 #   build/CMO_Chinese_Pack_<ver>.zip   green/portable pack (unzip over the game root)
 set -euo pipefail
 
