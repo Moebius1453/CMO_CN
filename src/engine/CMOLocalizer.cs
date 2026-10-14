@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -883,6 +884,35 @@ namespace CMOLocalizer
             };
         }
 
+        /// <summary>
+        /// Self-drawn dark text boxes keep their placeholder in WatermarkText, not in
+        /// Text, so the generic control-text pass never reaches it.
+        /// </summary>
+        private static void TranslateWatermark(Control ctrl)
+        {
+            try
+            {
+                PropertyInfo pi = ctrl.GetType().GetProperty("WatermarkText", BindingFlags.Public | BindingFlags.Instance);
+                if (pi == null || pi.PropertyType != typeof(string) || !pi.CanRead || !pi.CanWrite) return;
+                string wm = pi.GetValue(ctrl, null) as string;
+                if (string.IsNullOrEmpty(wm)) return;
+                string tr;
+                if (wm.StartsWith("Enter Database ID for this "))
+                {
+                    // The game rebuilds this placeholder from the (now Chinese) object
+                    // type label, so it can be mixed-language on every re-render.
+                    tr = "输入该型装备的数据库 ID...";
+                }
+                else
+                {
+                    if (ContainsChinese(wm)) return;
+                    tr = TranslateString(wm);
+                }
+                if (!string.IsNullOrEmpty(tr) && tr != wm) pi.SetValue(ctrl, tr, null);
+            }
+            catch { }
+        }
+
         private static void TranslateControlTree(Control ctrl)
         {
             if (ctrl == null) return;
@@ -1562,71 +1592,123 @@ namespace CMOLocalizer
         }
 
         private static readonly HashSet<int> hookedDBCombos = new HashSet<int>();
+
+        /// <summary>
+        /// The DarkUI combo boxes in the Database Viewer paint themselves: their
+        /// OnPaint/OnDrawItem overrides never call base, so WinForms never raises the
+        /// Paint/DrawItem events and an owner-draw overlay cannot work. Translate the
+        /// project text at the data level instead, so the game's own painter renders
+        /// the Chinese text:
+        ///   * plain item lists (object type, hypothetical filter) -> replace the item
+        ///     string, keeping the English token so engine side matching still works;
+        ///   * data-bound lists (country, sub-type) -> translate the display column of
+        ///     the bound table in place; the ID kept in ValueMember is untouched, so
+        ///     filtering stays correct.
+        /// Runs on every UI watch pass so a re-bound list is translated again.
+        /// </summary>
+        /// <summary>
+        /// True only for combo boxes hosted by the Database Viewer. The item text of
+        /// other windows may be matched by the engine, so they are left untouched.
+        /// </summary>
+        private static bool IsInDatabaseViewer(Control ctrl)
+        {
+            Control c = ctrl;
+            int guard = 0;
+            while (c != null && guard++ < 32)
+            {
+                Form f = c as Form;
+                if (f != null)
+                {
+                    return f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0;
+                }
+                c = c.Parent;
+            }
+            return false;
+        }
+
         private static void LocalizeDBViewerComboBox(ComboBox cb)
         {
             if (cb == null) return;
-            int h = cb.GetHashCode();
-            if (hookedDBCombos.Contains(h)) return;
-            hookedDBCombos.Add(h);
-
             try
             {
-                cb.DrawMode = DrawMode.OwnerDrawFixed;
-                cb.DrawItem += (s, e) =>
+                if (!IsInDatabaseViewer(cb)) return;
+                if (!hookedDBCombos.Contains(cb.GetHashCode()))
                 {
-                    if (e.Index < 0) return;
-                    ComboBox box = s as ComboBox;
-                    if (box == null) return;
-
-                    try
-                    {
-                        e.DrawBackground();
-                        string rawText = box.GetItemText(box.Items[e.Index]);
-                        string transText = TranslateDBComboItem(rawText);
-
-                        Color textColor = (e.State & DrawItemState.Selected) == DrawItemState.Selected ? Color.White : Color.FromArgb(220, 220, 220);
-                        using (SolidBrush brush = new SolidBrush(textColor))
-                        using (Font font = new Font(box.Font.FontFamily, 9f, FontStyle.Regular))
-                        {
-                            StringFormat sf = new StringFormat();
-                            sf.LineAlignment = StringAlignment.Center;
-                            Rectangle r = e.Bounds;
-                            r.X += 2;
-                            e.Graphics.DrawString(transText, font, brush, r, sf);
-                        }
-                        e.DrawFocusRectangle();
-                    }
-                    catch { }
-                };
-
-                cb.Paint += (s, e) =>
-                {
-                    ComboBox box = s as ComboBox;
-                    if (box == null || string.IsNullOrEmpty(box.Text)) return;
-                    try
-                    {
-                        string tr = TranslateDBComboItem(box.Text);
-                        if (tr != box.Text)
-                        {
-                            Rectangle textRect = new Rectangle(3, 3, Math.Max(10, box.Width - 22), Math.Max(10, box.Height - 6));
-                            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(60, 63, 65)))
-                            {
-                                e.Graphics.FillRectangle(bgBrush, textRect);
-                            }
-                            using (SolidBrush fgBrush = new SolidBrush(Color.FromArgb(220, 220, 220)))
-                            {
-                                StringFormat sf = new StringFormat();
-                                sf.LineAlignment = StringAlignment.Center;
-                                sf.FormatFlags = StringFormatFlags.NoWrap;
-                                e.Graphics.DrawString(tr, box.Font, fgBrush, textRect, sf);
-                            }
-                        }
-                    }
-                    catch { }
-                };
-                cb.Invalidate();
+                    hookedDBCombos.Add(cb.GetHashCode());
+                    Log("LocalizeDBViewerComboBox: " + cb.Name + " type=" + cb.GetType().FullName
+                        + " items=" + cb.Items.Count + " bound=" + (cb.DataSource != null));
+                }
+                if (cb.DataSource != null) TranslateComboDisplayColumn(cb);
+                else TranslateComboItems(cb);
             }
             catch { }
+        }
+
+        private static void TranslateComboItems(ComboBox cb)
+        {
+            bool changed = false;
+            for (int i = 0; i < cb.Items.Count; i++)
+            {
+                string raw = cb.GetItemText(cb.Items[i]);
+                if (string.IsNullOrEmpty(raw) || ContainsChinese(raw)) continue;
+                string tr = TranslateDBComboItem(raw);
+                if (string.IsNullOrEmpty(tr) || tr == raw) continue;
+                try
+                {
+                    cb.Items[i] = tr;
+                    changed = true;
+                }
+                catch { }
+            }
+            if (changed) cb.Invalidate();
+        }
+
+        /// <summary>
+        /// Translate the display column of a data-bound combo box. Only the display
+        /// column is touched; the ValueMember column keeps the database key the game
+        /// filters on.
+        /// </summary>
+        private static void TranslateComboDisplayColumn(ComboBox cb)
+        {
+            string col = cb.DisplayMember;
+            if (string.IsNullOrEmpty(col)) return;
+
+            DataTable dt = null;
+            object src = cb.DataSource;
+            DataView dv = src as DataView;
+            if (dv != null) dt = dv.Table;
+            if (dt == null) dt = src as DataTable;
+            if (dt == null)
+            {
+                BindingSource bs = src as BindingSource;
+                if (bs != null)
+                {
+                    dv = bs.DataSource as DataView;
+                    if (dv != null) dt = dv.Table;
+                    if (dt == null) dt = bs.DataSource as DataTable;
+                }
+            }
+            if (dt == null) return;
+
+            DataColumn dc = dt.Columns.Contains(col) ? dt.Columns[col] : null;
+            if (dc == null || dc.DataType != typeof(string) || dc.ReadOnly) return;
+
+            bool changed = false;
+            try
+            {
+                foreach (DataRow row in dt.Rows)
+                {
+                    if (row.RowState == DataRowState.Deleted || row.RowState == DataRowState.Detached) continue;
+                    string raw = row[dc] as string;
+                    if (string.IsNullOrEmpty(raw) || ContainsChinese(raw)) continue;
+                    string tr = TranslateDBComboItem(raw);
+                    if (string.IsNullOrEmpty(tr) || tr == raw) continue;
+                    row[dc] = tr;
+                    changed = true;
+                }
+            }
+            catch { }
+            if (changed) cb.Invalidate();
         }
 
         private static string TranslateDBListEntry(string t)
@@ -2290,6 +2372,13 @@ namespace CMOLocalizer
                 string fText = ctrl.Text;
                 if (!string.IsNullOrEmpty(fText))
                 {
+                    // 数据库查看器标题由数据库版本号后缀动态拼成，词典无法整体命中
+                    if (fText.StartsWith("Database Viewer"))
+                    {
+                        int parenIdx = fText.IndexOf('(');
+                        ctrl.Text = "数据库查看器 " + (parenIdx >= 0 ? fText.Substring(parenIdx) : "").Trim();
+                        return;
+                    }
                     if (fText.StartsWith("Air Ops - "))
                     {
                         ctrl.Text = "航空作业 - " + fText.Substring("Air Ops - ".Length);
@@ -2320,9 +2409,19 @@ namespace CMOLocalizer
                 }
             }
 
+            if (ctrl is TextBoxBase || ctrl.GetType().Name.IndexOf("TextBox", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                TranslateWatermark(ctrl);
+            }
+
             if (ctrl is TextBoxBase)
             {
                 TextBoxBase tb = (TextBoxBase)ctrl;
+                if (!string.IsNullOrEmpty(tb.Text) && tb.Text.StartsWith("Enter Database ID for this "))
+                {
+                    tb.Text = "输入该型装备的数据库 ID...";
+                    return;
+                }
                 if (tb.ReadOnly && !string.IsNullOrEmpty(tb.Text))
                 {
                     string trTb = TranslateLoadoutDetailText(tb.Text);
@@ -2330,10 +2429,6 @@ namespace CMOLocalizer
                     {
                         tb.Text = trTb;
                     }
-                }
-                else if (!string.IsNullOrEmpty(tb.Text) && tb.Text.StartsWith("Enter Database ID for this "))
-                {
-                    tb.Text = "输入该型装备的数据库 ID...";
                 }
                 return;
             }
@@ -3541,6 +3636,59 @@ namespace CMOLocalizer
                     catch (Exception ex) { Log("DB_NAVIGATE_ID error: " + ex.Message); }
                 });
                 return "{\"status\":\"ok\",\"action\":\"DB_NAVIGATE_ID\",\"type\":\"" + objType + "\",\"id\":\"" + objIdStr + "\"}";
+            }
+
+            if (cmd == "DB_COMBO_DIAG" || cmd == "DB_HTML_DUMP")
+            {
+                Form dbForm = null;
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            dbForm = f; break;
+                        }
+                    }
+                }
+                if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
+
+                if (cmd == "DB_HTML_DUMP")
+                {
+                    FieldInfo fHtmlDump = dbForm.GetType().GetField("RenderedHTMLString", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    string h = fHtmlDump != null ? fHtmlDump.GetValue(dbForm) as string : "";
+                    string outPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CMOLocalizer_DBHTML.html");
+                    try { File.WriteAllText(outPath, h ?? "", Encoding.UTF8); } catch { }
+                    return "{\"status\":\"ok\",\"action\":\"DB_HTML_DUMP\",\"len\":" + (h != null ? h.Length : 0) + "}";
+                }
+
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{\"status\":\"ok\",\"combos\":[");
+                List<ComboBox> combos = new List<ComboBox>();
+                foreach (FieldInfo fi in dbForm.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                {
+                    if (!typeof(ComboBox).IsAssignableFrom(fi.FieldType)) continue;
+                    ComboBox cbf = fi.GetValue(dbForm) as ComboBox;
+                    if (cbf != null && !combos.Contains(cbf)) combos.Add(cbf);
+                }
+                bool first = true;
+                foreach (ComboBox c in combos)
+                {
+                    if (!first) sb.Append(",");
+                    first = false;
+                    sb.Append("{\"name\":\"" + JsonEsc(c.Name) + "\",\"type\":\"" + JsonEsc(c.GetType().FullName) + "\",\"dropDownStyle\":\"" + c.DropDownStyle + "\",\"drawMode\":\"" + c.DrawMode + "\",\"bound\":" + (c.DataSource != null ? "true" : "false") + ",\"displayMember\":\"" + JsonEsc(c.DisplayMember) + "\",\"valueMember\":\"" + JsonEsc(c.ValueMember) + "\",\"hooked\":" + (hookedDBCombos.Contains(c.GetHashCode()) ? "true" : "false") + ",\"text\":\"" + JsonEsc(c.Text) + "\",\"translatedText\":\"" + JsonEsc(TranslateDBComboItem(c.Text)) + "\",\"selectedIndex\":" + c.SelectedIndex + ",\"itemCount\":" + c.Items.Count + ",\"items\":[");
+                    int n = Math.Min(c.Items.Count, 8);
+                    for (int i = 0; i < n; i++)
+                    {
+                        if (i > 0) sb.Append(",");
+                        object it = c.Items[i];
+                        sb.Append("{\"idx\":" + i + ",\"cls\":\"" + JsonEsc(it != null ? it.GetType().FullName : "null") + "\",\"toString\":\"" + JsonEsc(it != null ? it.ToString() : "") + "\",\"itemText\":\"" + JsonEsc(c.GetItemText(it)) + "\",\"translated\":\"" + JsonEsc(TranslateDBComboItem(c.GetItemText(it))) + "\"}");
+                    }
+                    sb.Append("]}");
+                }
+                sb.Append("]}");
+                return sb.ToString();
             }
 
             if (cmd == "SCEN_EXPAND_ALL" || cmd == "SCEN_SELECT" || cmd == "SCEN_LOAD")

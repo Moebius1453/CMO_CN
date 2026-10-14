@@ -15,6 +15,7 @@ WPF="/c/Windows/Microsoft.NET/Framework64/v4.0.30319/WPF"
 "$CSC" -nologo -target:library -platform:anycpu -optimize+ \
   -out:"$(W "$OUT/CMOLocalizer.dll")" \
   -reference:System.dll -reference:System.Core.dll \
+  -reference:System.Data.dll \
   -reference:System.Windows.Forms.dll -reference:System.Drawing.dll \
   -reference:System.Xml.dll -reference:System.Xml.Linq.dll \
   -reference:"$(W "$WPF/WindowsBase.dll")" \
