@@ -186,6 +186,8 @@ def build() -> dict:
         "scenario_titles.json", "scenario_settings.json"
     }
 
+    labels_only: set[str] = set()
+
     for name, mapping in iter_source_maps():
         for en, zh in mapping.items():
             if not en or not zh or en in blacklist:
@@ -193,6 +195,8 @@ def build() -> dict:
             zh = normalize_ellipsis(en, zh)
             exact[en] = zh
             curated.add(en)
+            if name in ("db_viewer_html_terms.json", "db_descriptions.json"):
+                labels_only.add(en)
             if name in offset_safe_sources:
                 off = text_to_offset.get(en)
                 if off is not None and bucket_of.get(off) == "display" \
@@ -201,7 +205,6 @@ def build() -> dict:
 
     # --- labels-only batch (never injected at offset level) --------------
     labfile = SRC / "labels.json"
-    labels_only: set[str] = set()
     if labfile.is_file():
         for en, zh in load(labfile).items():
             if en and zh and en not in blacklist and not en.startswith("_"):

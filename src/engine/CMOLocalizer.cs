@@ -1718,6 +1718,12 @@ namespace CMOLocalizer
             try
             {
                 if (!IsInDatabaseViewer(cb)) return;
+                // DO NOT touch CB_ObjectType! InternalDBViewer uses CB_ObjectType.Text /
+                // SelectedItem.ToString() ("Aircraft", "Ship", "Weapon", etc.) in string
+                // comparisons in DisplayInfoInDetailsPanel. Modifying its items breaks
+                // the detail pane rendering completely!
+                if (cb.Name == "CB_ObjectType") return;
+
                 if (!hookedDBCombos.Contains(cb.GetHashCode()))
                 {
                     hookedDBCombos.Add(cb.GetHashCode());
@@ -3626,6 +3632,8 @@ namespace CMOLocalizer
                 FieldInfo fId = dbForm.GetType().GetField("SelectedObjectID", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 FieldInfo fName = dbForm.GetType().GetField("SelectedObjectName", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 FieldInfo fList = dbForm.GetType().GetField("dXkHcikCGK6", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                PropertyInfo piSOT = dbForm.GetType().GetProperty("SelectedObjectType", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                string sotVal = piSOT != null ? piSOT.GetValue(dbForm, null) as string : "(null)";
                 MethodInfo mDisplay = dbForm.GetType().GetMethod("DisplaySelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
                 if (cmd == "DB_SELECT_ROW")
@@ -3653,17 +3661,22 @@ namespace CMOLocalizer
                                     }
                                 }
                             }
-                            if (mDisplay != null) mDisplay.Invoke(dbForm, null);
+                            if (mDisplay != null)
+                            {
+                                var pars = mDisplay.GetParameters();
+                                if (pars.Length == 0) mDisplay.Invoke(dbForm, null);
+                                else if (pars.Length == 2) mDisplay.Invoke(dbForm, new object[] { false, false });
+                            }
                         }
                         catch (Exception ex) { Log("DB_SELECT_ROW error: " + ex.Message); }
                     });
-                    return "{\"status\":\"ok\",\"action\":\"DB_SELECT_ROW\",\"row\":" + row + "}";
+                    return "{\"status\":\"ok\",\"action\":\"DB_SELECT_ROW\",\"row\":" + row + ",\"sot\":\"" + JsonEsc(sotVal) + "\"}";
                 }
 
                 string html = fHtml != null ? fHtml.GetValue(dbForm) as string : "";
                 int objId = fId != null ? (int)fId.GetValue(dbForm) : -1;
                 string objName = fName != null ? fName.GetValue(dbForm) as string : "";
-                return "{\"status\":\"ok\",\"id\":" + objId + ",\"name\":\"" + JsonEsc(objName) + "\",\"html_len\":" + (html != null ? html.Length : 0) + ",\"html_sample\":\"" + JsonEsc(html != null ? html.Substring(0, Math.Min(350, html.Length)) : "") + "\"}";
+                return "{\"status\":\"ok\",\"id\":" + objId + ",\"name\":\"" + JsonEsc(objName) + "\",\"sot\":\"" + JsonEsc(sotVal) + "\",\"html_len\":" + (html != null ? html.Length : 0) + ",\"html_sample\":\"" + JsonEsc(html != null ? html.Substring(0, Math.Min(350, html.Length)) : "") + "\"}";
             }
 
             if (cmd == "DB_NAVIGATE_ID")
@@ -3764,7 +3777,7 @@ namespace CMOLocalizer
                     if (!first) sb.Append(",");
                     first = false;
                     sb.Append("{\"name\":\"" + JsonEsc(c.Name) + "\",\"type\":\"" + JsonEsc(c.GetType().FullName) + "\",\"dropDownStyle\":\"" + c.DropDownStyle + "\",\"drawMode\":\"" + c.DrawMode + "\",\"bound\":" + (c.DataSource != null ? "true" : "false") + ",\"displayMember\":\"" + JsonEsc(c.DisplayMember) + "\",\"valueMember\":\"" + JsonEsc(c.ValueMember) + "\",\"hooked\":" + (hookedDBCombos.Contains(c.GetHashCode()) ? "true" : "false") + ",\"text\":\"" + JsonEsc(c.Text) + "\",\"translatedText\":\"" + JsonEsc(TranslateDBComboItem(c.Text)) + "\",\"selectedIndex\":" + c.SelectedIndex + ",\"itemCount\":" + c.Items.Count + ",\"items\":[");
-                    int n = Math.Min(c.Items.Count, 8);
+                    int n = Math.Min(c.Items.Count, 120);
                     for (int i = 0; i < n; i++)
                     {
                         if (i > 0) sb.Append(",");
@@ -3879,6 +3892,56 @@ namespace CMOLocalizer
                 CollectControlTree(dbForm, 0, sb, ref firstNode);
                 sb.Append("]}");
                 return sb.ToString();
+            }
+
+            if (cmd == "DB_SET_FILTER")
+            {
+                Form dbForm = null;
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            dbForm = f; break;
+                        }
+                    }
+                }
+                if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
+                string[] parts = arg.Split(' ');
+                string cName = parts[0];
+                string val = parts.Length > 1 ? parts[1] : "";
+                dbForm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        Action<Control> searchAndSet = null;
+                        searchAndSet = (root) =>
+                        {
+                            foreach (Control c in root.Controls)
+                            {
+                                ComboBox cb = c as ComboBox;
+                                if (cb != null && cb.Name.IndexOf(cName, StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    for (int i = 0; i < cb.Items.Count; i++)
+                                    {
+                                        string itText = cb.GetItemText(cb.Items[i]);
+                                        if (itText.IndexOf(val, StringComparison.OrdinalIgnoreCase) >= 0)
+                                        {
+                                            cb.SelectedIndex = i;
+                                            return;
+                                        }
+                                    }
+                                }
+                                if (c.HasChildren) searchAndSet(c);
+                            }
+                        };
+                        searchAndSet(dbForm);
+                    }
+                    catch (Exception ex) { Log("DB_SET_FILTER error: " + ex.Message); }
+                });
+                return "{\"status\":\"ok\",\"action\":\"DB_SET_FILTER\",\"target\":\"" + cName + "\",\"val\":\"" + val + "\"}";
             }
 
             // XLATE <text> — exercise the real translation chain for one arbitrary string.
