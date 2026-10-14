@@ -13,6 +13,25 @@ PACK="$OUT/pack"
 PY="${PY:-C:/Users/admin/Desktop/ga-admin-portable-windows-amd64-v0.2.29/python/python.exe}"
 
 echo "==> version $VER"
+
+# Bundle the localized Scenarios HTML (plus the pristine .orig backups) so a
+# fresh install reproduces the on-disk translation without runtime injection.
+GAME_SCEN="G:/soft/steam/steamapps/common/Command - Modern Operations/Scenarios"
+if [ -d "$GAME_SCEN" ]; then
+  "$PY" - "$GAME_SCEN" "$OUT/Scenarios_HTML.zip" <<'PYEOF'
+import pathlib, sys, zipfile
+src, dest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+game = src.parent
+files = sorted(list(src.rglob("*.html")) + list(src.rglob("*.html.orig")))
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+    for f in files:
+        z.write(f, f.relative_to(game).as_posix())
+print(f"wrote {dest} ({len(files)} files, {dest.stat().st_size} bytes)")
+PYEOF
+else
+  echo "==> warning: game Scenarios directory not found; skipping HTML bundle"
+fi
+
 bash "$ROOT/scripts/build.sh"
 
 echo "==> assembling green pack"
@@ -21,6 +40,24 @@ mkdir -p "$PACK/DB/Templates"
 cp "$OUT/CMOLocalizer.dll" "$PACK/"
 cp "$ROOT/dict/CMOLocalizer.json" "$PACK/"
 cp "$ROOT/assets/db_templates/"*.html "$PACK/DB/Templates/"
+
+# Green pack parity: ship the localized Scenarios HTML so unpacking over the game
+# root gives the same result as the installer.
+if [ -d "$GAME_SCEN" ]; then
+  mkdir -p "$PACK/Scenarios"
+  "$PY" - "$GAME_SCEN" "$PACK" <<'PYEOF'
+import pathlib, shutil, sys
+src, pack = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+game = src.parent
+n = 0
+for f in sorted(list(src.rglob("*.html")) + list(src.rglob("*.html.orig"))):
+    dst = pack / f.relative_to(game)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(f, dst)
+    n += 1
+print(f"pack: {n} Scenarios HTML files")
+PYEOF
+fi
 cp "$ROOT/README.md" "$PACK/汉化说明.md"
 
 # Command.exe.config patch that wires the AppDomainManager, without clobbering

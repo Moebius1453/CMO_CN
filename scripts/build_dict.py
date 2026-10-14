@@ -342,7 +342,19 @@ def build() -> dict:
             # lives in the briefing batches and must not be overwritten here.
             if len(en) > 40 or chr(10) in en:
                 continue
+            # 拼接片段依赖首尾空格，覆盖时保留原有空白形态
+            prev = exact[en]
+            if prev[:1] == " " and zh[:1] != " ":
+                zh = " " + zh
+            if prev[-1:] == " " and zh[-1:] != " ":
+                zh = zh + " "
             exact[en] = zh
+
+    # 词条被上层词典改写后，字符串池偏移必须同步，否则同一英文会出现两种中文
+    for off in list(offsets):
+        en_sync = pool.get(str(off))
+        if en_sync is not None and en_sync in exact:
+            offsets[off] = exact[en_sync]
 
     # --- naming standard: one Chinese spelling per equipment/term ---------
     name_rules, _banned = load_term_replacements()

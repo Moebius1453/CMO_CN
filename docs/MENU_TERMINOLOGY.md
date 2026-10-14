@@ -163,7 +163,7 @@
 | Lay chaff (single burst) | 投放箔条（单发） |
 | Left Arrow / Num 6 | 方向键左 / 小键盘 6 |
 | License Tweaker | 许可证调整 |
-| Load | 挂载 |
+| Load | 加载 |
 | Load From File | 从文件加载 |
 | Load other DB file... | 加载其他数据库文件... |
 | Load recent: | 最近打开： |
@@ -330,7 +330,7 @@
 | WEAPONS FREE | 自由开火 |
 | WEAPONS HOLD | 禁止开火 |
 | WEAPONS TIGHT | 限制开火 |
-| Weather | 天气 |
+| Weather | 气象水文 |
 | X / Mouse Scroll | X / 鼠标滚轮 |
 | XML to .scen | XML 转 .scen |
 | Z / Mouse Scroll | Z / 鼠标滚轮 |

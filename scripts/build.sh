@@ -35,6 +35,13 @@ RES+=(-resource:"$(W "$ROOT/assets/donate/alipay.jpg")",QR_Alipay)
 for t in "$ROOT"/assets/db_templates/*.html; do
   RES+=(-resource:"$(W "$t")","TPL_$(basename "$t")")
 done
+# Fully localized Scenarios HTML briefing/tutorial bundle (produced by
+# scripts/localize_html_files.py and zipped by scripts/package.sh).
+if [ -f "$OUT/Scenarios_HTML.zip" ]; then
+  RES+=(-resource:"$(W "$OUT/Scenarios_HTML.zip")",SCEN_HTML_ZIP)
+else
+  echo "==> warning: build/Scenarios_HTML.zip missing; installer will fall back to runtime injection"
+fi
 "$CSC" -nologo -target:winexe -platform:anycpu -optimize+ \
   -out:"$(W "$OUT/$SETUP_EXE")" \
   -reference:System.dll -reference:System.Core.dll \

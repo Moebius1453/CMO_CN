@@ -1,5 +1,32 @@
 # 变更记录
 
+## v4.1.3 — 术语/命名统一、下拉框与消息日志全量汉化、频闪根因根治
+
+- **装备与术语名称规范库**：新增 `dict/src/term_replacements.json`（7 条规范 + 5 条禁用语）
+  与 `scripts/verify_terminology.py` 门禁。Rafael Python 系列全库统一为「怪蛇」N，
+  清除 263 条「值内嵌自身英文键 + 电报式伪句」机翻（152 条改写、111 条回退英文），
+  修正 `exact['Command']`/`exact['Load']` 被简报批处理覆盖的优先级缺陷。
+- **下拉框全量汉化（含展开态）**：`IsInTargetLocalizableForm` 由 4 窗体白名单改为
+  全窗体 + 黑名单；新增通用 `TranslateComboItemText` 与控件名定向枚举汉化。
+  实机 `DUMP_COMBOS` 枚举 63 个下拉框，**items 含英文者 0**；条令/交战规则页
+  40 余项取值（悲观/严格/持续制导至命中/返航油量 Bingo/最大出动强度 Surge 等）与
+  想定排序下拉（名称/日期/难度/复杂程度）全部中文。
+- **消息日志与动态面板频闪根治**：0ms 同步钩子扩展到 ComboBox/ListBox/只读
+  TextBoxBase；WPF TextBlock/ContentControl/Run 改 `SetCurrentValue` 保留数据绑定；
+  `TranslateString` 只缓存成功结果；新增 `TranslateFormsByHwnd` 覆盖非
+  `Application.OpenForms` 窗体。实测 30 帧 / 60 秒连续采样，界面状态跳变 **0 次**。
+- **消息日志正文汉化**：新增 FlowDocument/Run 递归翻译、标题汉化、条目图标前缀识别，
+  拼接段按标点重切后逐段查表，交互视图由 100% 英文变为以中文为主。
+- **教程与简报 HTML 磁盘级全量汉化**：新增 `scripts/localize_html_files.py`，
+  经引擎 `XLATE_BATCH` 逐文本节点翻译后落盘（保留 `.orig` 备份）。
+  Scenarios 下 323 个 HTML 中含中文文件 51 → **304**（其余 19 个为纯图片页），
+  教程 HTML 残余英文 149 段 → **0 段**。
+- **窗口标题汉化**：主窗口「<想定名> - 现代行动：指挥 v1.10 - 内部版本 1900.20」、
+  消息日志/拟真度/条令窗口标题；混排标题尾部英文（`用于推演方: Israel` → 以色列）。
+- **分发**：安装器新增内嵌 `Scenarios_HTML.zip` 部署（带 `.orig` 还原），绿色包同步
+  携带 Scenarios HTML，保证全新安装即为中文。
+
+
 ## v4.1.2 — 数据库全量百科正文汉化与筛选下拉框彻底加固
 
 - **数据库查看器全量百科汉化**：全库 6,268 篇装备与设施百科文本（`DB/Descriptions`）

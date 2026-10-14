@@ -5,6 +5,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -26,7 +27,7 @@ namespace CMOLocalizerInstaller
 
         public InstallerForm(string initialPath)
         {
-            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.2";
+            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.3";
             this.Size = new Size(680, 525);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -598,7 +599,10 @@ namespace CMOLocalizerInstaller
                     }
                 }
 
-                // 自动扫描并汉化 Scenarios 下的 HTML 战役简报 (带 .orig 备份)
+                // 部署已全量汉化的 Scenarios HTML 简报/教程正文（内嵌 zip，带 .orig 备份）
+                DeployScenarioHtml(gamePath);
+
+                // 兜底：对 zip 未覆盖的 HTML 做标题级替换 (带 .orig 备份)
                 LocalizeScenarioBriefings(Path.Combine(gamePath, "Scenarios"));
 
                 // 自动汉化 World Wind 标注图层瓦片 (WW/Cache/Stamen Terrain - Labels)
@@ -613,6 +617,51 @@ namespace CMOLocalizerInstaller
             }
         }
 
+
+
+        /// <summary>
+        /// 部署随包分发的已汉化 Scenarios HTML（内嵌 SCEN_HTML_ZIP）。
+        /// 覆盖前先写 .orig 原始英文备份；已存在的 .orig 永不覆盖，保证卸载可 100% 还原。
+        /// </summary>
+        private static void DeployScenarioHtml(string gamePath)
+        {
+            try
+            {
+                string scenDir = Path.Combine(gamePath, "Scenarios");
+                if (!Directory.Exists(scenDir)) return;
+                Assembly asm = Assembly.GetExecutingAssembly();
+                using (Stream s = asm.GetManifestResourceStream("SCEN_HTML_ZIP"))
+                {
+                    if (s == null) return;
+                    using (ZipArchive zip = new ZipArchive(s, ZipArchiveMode.Read))
+                    {
+                        foreach (ZipArchiveEntry e in zip.Entries)
+                        {
+                            if (e.Length == 0) continue;
+                            string rel = e.FullName.Replace('/', Path.DirectorySeparatorChar);
+                            string dest = Path.Combine(gamePath, rel);
+                            string dir = Path.GetDirectoryName(dest);
+                            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                            if (dest.EndsWith(".orig", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (File.Exists(dest)) continue;
+                            }
+                            else
+                            {
+                                string orig = dest + ".orig";
+                                if (!File.Exists(orig) && File.Exists(dest)) File.Copy(dest, orig, true);
+                            }
+                            using (Stream es = e.Open())
+                            using (FileStream fs = File.Create(dest))
+                            {
+                                es.CopyTo(fs);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
 
         private static void LocalizeScenarioBriefings(string scenDir)
         {
