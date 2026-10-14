@@ -1,65 +1,84 @@
 #!/usr/bin/env python3
-"""Count the distinct Database Viewer prose blocks that still need translation."""
+"""Audit translation coverage of Database Viewer prose under DB/Descriptions."""
 from __future__ import annotations
 
 import json
 import re
 import sys
-from collections import Counter
 from pathlib import Path
 
-ROOT = Path("G:/soft/steam/steamapps/common/Command - Modern Operations/DB/Descriptions")
-DICT = Path(__file__).resolve().parent.parent / "dict/CMOLocalizer.json"
+ROOT = Path(__file__).resolve().parent.parent
+GAME = Path("G:/soft/steam/steamapps/common/Command - Modern Operations")
+DESC = GAME / "DB/Descriptions"
+DICT = ROOT / "dict/CMOLocalizer.json"
 
-HEAD = re.compile(r"^(OVERVIEW|DETAIL|DETAILS|SPECIFICATION|SPECIFICATIONS|NOTE|NOTES|SOURCE|SOURCES)\s*:\s*", re.I)
-LABEL_LINE = re.compile(r"^[A-Z][A-Za-z /()\-]{1,28}:")
-
-
-def has_cjk(s: str) -> bool:
-    return any("\u4e00" <= ch <= "\u9fa5" for ch in s)
+BLANK = re.compile(r"\r?\n\s*\r?\n")
+MARKER = re.compile(
+    r"^(OVERVIEW|DETAIL|DETAILS|SPECIFICATION|SPECIFICATIONS|NOTE|NOTES|SOURCE|SOURCES)\s*:\s*",
+    re.I)
+HAN = re.compile(r"[\u4e00-\u9fff]")
+NO_LETTERS = re.compile(r"^[^A-Za-z]*$")
 
 
 def main() -> int:
-    known = set()
     d = json.loads(DICT.read_text(encoding="utf-8"))
-    for section in ("exact", "partial"):
-        for k, v in (d.get(section) or {}).items():
-            if has_cjk(str(v)):
-                known.add(re.sub(r"\s+", " ", k.strip()))
-    print(f"dict entries with CJK: {len(known)}")
+    exact = d.get("exact") or {}
 
-    blocks: Counter[str] = Counter()
-    for sub in sorted(p for p in ROOT.iterdir() if p.is_dir()):
+    total_files = 0
+    total_lines = 0
+    hit_lines = 0
+    total_chars = 0
+    hit_chars = 0
+    by_category: dict[str, list[int]] = {}
+
+    for sub in sorted(p for p in DESC.iterdir() if p.is_dir()):
         for f in sub.glob("*.txt"):
-            text = f.read_bytes().decode("utf-8", "replace")
-            for block in text.split("\n\n"):
-                s = block.strip()
-                if not s or has_cjk(s):
-                    continue
-                m = HEAD.match(s)
-                if not m:
-                    continue
-                body = s[m.end():].strip()
-                if len(body) < 30:
-                    continue
-                # A head-block whose body is only label: lines is spec data, not prose.
-                lines = [ln for ln in body.split("\n") if ln.strip()]
-                if lines and all(LABEL_LINE.match(ln.strip()) for ln in lines):
-                    continue
-                blocks[re.sub(r"\s+", " ", body)] += 1
+            total_files += 1
+            kind = re.match(r"([A-Za-z]+)_", f.name)
+            cat = kind.group(1).capitalize() if kind else sub.name
+            if cat not in by_category:
+                by_category[cat] = [0, 0, 0, 0]  # total_l, hit_l, total_c, hit_c
 
-    total = sum(len(k) for k in blocks)
-    missing = [k for k in blocks if k not in known]
-    print(f"distinct prose blocks: {len(blocks)}  chars: {total}")
-    print(f"already in dict : {len(blocks) - len(missing)}")
-    print(f"still missing   : {len(missing)}  chars: {sum(len(k) for k in missing)}")
-    sizes = sorted(len(k) for k in missing)
-    if sizes:
-        print(f"char size: min={sizes[0]} p50={sizes[len(sizes)//2]} p90={sizes[int(len(sizes)*0.9)]} max={sizes[-1]}")
-    out = Path(__file__).resolve().parent.parent / "build/db_prose_missing.json"
-    out.write_text(json.dumps({k: v for k, v in blocks.items() if k in set(missing)},
-                              ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"wrote {out}")
+            text = f.read_bytes().decode("utf-8", "replace")
+            for block in BLANK.split(text):
+                lines = [ln.rstrip() for ln in block.splitlines()]
+                for idx, raw in enumerate(lines):
+                    line = raw.strip()
+                    if not line or HAN.search(line) or NO_LETTERS.search(line) or len(line) < 4:
+                        continue
+                    if idx == 0:
+                        m = MARKER.match(line)
+                        if m:
+                            line = line[m.end():].strip()
+                    if len(line) < 4:
+                        continue
+                    key = re.sub(r"\s+", " ", line)
+                    total_lines += 1
+                    total_chars += len(key)
+                    by_category[cat][0] += 1
+                    by_category[cat][2] += len(key)
+                    if key in exact:
+                        hit_lines += 1
+                        hit_chars += len(key)
+                        by_category[cat][1] += 1
+                        by_category[cat][3] += len(key)
+
+    print("=" * 70)
+    print("CMO Database Descriptions Translation Audit Report")
+    print("=" * 70)
+    print(f"Total description files scanned: {total_files}")
+    print(f"Total translatable text lines:  {total_lines:,}")
+    print(f"Translated lines in dictionary: {hit_lines:,} ({hit_lines * 100.0 / total_lines:.2f}%)")
+    print(f"Translated text volume (chars): {hit_chars:,} / {total_chars:,} ({hit_chars * 100.0 / total_chars:.2f}%)")
+    print("-" * 70)
+    print(f"{'Category':<15}{'Total Lines':>14}{'Hit Lines':>14}{'Coverage %':>15}{'Chars Cov %':>12}")
+    print("-" * 70)
+    for cat in sorted(by_category, key=lambda c: -by_category[c][0]):
+        stats = by_category[cat]
+        line_pct = stats[1] * 100.0 / stats[0] if stats[0] else 0.0
+        char_pct = stats[3] * 100.0 / stats[2] if stats[2] else 0.0
+        print(f"{cat:<15}{stats[0]:>14,}{stats[1]:>14,}{line_pct:>14.2f}%{char_pct:>11.2f}%")
+    print("=" * 70)
     return 0
 
 
