@@ -3479,6 +3479,55 @@ namespace CMOLocalizer
                 return normExactMap[normRaw];
             }
 
+            // 2.12 多行消息（消息日志/教程弹窗按行组织）：逐行查表后重新拼装。
+            //      整段查表必然落空，按标点切分的字符占比阈值又会被长行拖低。
+            if (raw.IndexOf('\n') >= 0 && !ContainsChinese(raw))
+            {
+                string[] lines = raw.Replace("\r\n", "\n").Split('\n');
+                StringBuilder rebuilt = new StringBuilder();
+                int nonEmpty = 0, hit = 0;
+                for (int li = 0; li < lines.Length; li++)
+                {
+                    string line = lines[li];
+                    string trimmedLine = line.Trim();
+                    if (li > 0) rebuilt.Append('\n');
+                    if (trimmedLine.Length == 0) continue;
+                    nonEmpty++;
+                    string trLine = TranslateString(trimmedLine);
+                    if (trLine == trimmedLine)
+                    {
+                        string aLine = trimmedLine.Replace('\u2019', '\'').Replace('\u2018', '\'');
+                        string nLine = Regex.Replace(aLine, @"\s+", " ");
+                        if (exactMap.ContainsKey(aLine)) trLine = exactMap[aLine];
+                        else if (normExactMap.ContainsKey(nLine)) trLine = normExactMap[nLine];
+                    }
+                    if (trLine != trimmedLine) hit++;
+                    int lead = line.Length - line.TrimStart().Length;
+                    if (lead > 0) rebuilt.Append(line.Substring(0, lead));
+                    rebuilt.Append(trLine);
+                }
+                if (nonEmpty > 0 && hit * 100 / nonEmpty >= 40)
+                {
+                    return rebuilt.ToString();
+                }
+            }
+
+            // 2.15 撇号形态差异：词条用 ’ 而渲染文本用 '（或相反）时整句查不中
+            string aposAscii = raw.Replace('\u2019', '\'').Replace('\u2018', '\'');
+            if (aposAscii != raw)
+            {
+                if (exactMap.ContainsKey(aposAscii)) return exactMap[aposAscii];
+                string nAscii = Regex.Replace(aposAscii.Trim(), @"\s+", " ");
+                if (normExactMap.ContainsKey(nAscii)) return normExactMap[nAscii];
+            }
+            if (raw.IndexOf('\'') >= 0)
+            {
+                string aposCurly = raw.Replace("'", "\u2019");
+                if (exactMap.ContainsKey(aposCurly)) return exactMap[aposCurly];
+                string nCurly = Regex.Replace(aposCurly.Trim(), @"\s+", " ");
+                if (normExactMap.ContainsKey(nCurly)) return normExactMap[nCurly];
+            }
+
             // 2.2 消息日志/简报正文由多个段落直接拼接，段间分隔空格被吞掉
             //     ("hit us.We expect ...armed with:AA-7")。按标点边界重新切分后
             //     逐段查表，整体命中率达到阈值才返回，避免返回半成品英文。
