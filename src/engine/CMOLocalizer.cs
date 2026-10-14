@@ -3078,7 +3078,23 @@ namespace CMOLocalizer
         private static string TranslateTitleText(string fText)
         {
             if (string.IsNullOrEmpty(fText)) return fText;
-            if (ContainsChinese(fText)) return fText;
+            if (ContainsChinese(fText))
+            {
+                // 混排标题（"条令 & 交战规则(RoE) 用于推演方: Israel"）里尾部仍
+                // 可能是英文阵营/想定名，单独翻译该尾串。
+                int ci = fText.LastIndexOf(':');
+                if (ci < 0) ci = fText.LastIndexOf('：');
+                if (ci > 0 && ci < fText.Length - 1)
+                {
+                    string tail = fText.Substring(ci + 1).Trim();
+                    if (tail.Length > 0 && !ContainsChinese(tail))
+                    {
+                        string trTail = TranslateString(tail);
+                        if (trTail != tail) return fText.Substring(0, ci + 1) + " " + trTail;
+                    }
+                }
+                return fText;
+            }
 
             int cut = fText.IndexOf("- Command: Modern Operations", StringComparison.OrdinalIgnoreCase);
             if (cut > 0)
