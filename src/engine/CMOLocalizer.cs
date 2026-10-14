@@ -888,6 +888,46 @@ namespace CMOLocalizer
         /// Self-drawn dark text boxes keep their placeholder in WatermarkText, not in
         /// Text, so the generic control-text pass never reaches it.
         /// </summary>
+        private static void CollectControlTree(Control ctrl, int depth, StringBuilder sb, ref bool first)
+        {
+            if (ctrl == null || depth > 12) return;
+            if (!first) sb.Append(",");
+            first = false;
+            string docInfo = "";
+            try
+            {
+                PropertyInfo piDoc = ctrl.GetType().GetProperty("Document");
+                if (piDoc != null)
+                {
+                    object doc = piDoc.GetValue(ctrl, null);
+                    if (doc != null)
+                    {
+                        PropertyInfo piBody = doc.GetType().GetProperty("Body");
+                        object body = piBody != null ? piBody.GetValue(doc, null) : null;
+                        if (body != null)
+                        {
+                            PropertyInfo piText = body.GetType().GetProperty("InnerText");
+                            string t = piText != null ? piText.GetValue(body, null) as string : null;
+                            docInfo = ",\"docBodyLen\":" + (t != null ? t.Length : -1);
+                        }
+                        else docInfo = ",\"docBodyLen\":-2";
+                    }
+                    else docInfo = ",\"docBodyLen\":-3";
+                }
+            }
+            catch { }
+            sb.Append("{\"d\":" + depth
+                + ",\"type\":\"" + JsonEsc(ctrl.GetType().FullName) + "\""
+                + ",\"name\":\"" + JsonEsc(ctrl.Name) + "\""
+                + ",\"vis\":" + (ctrl.Visible ? "true" : "false")
+                + ",\"bounds\":\"" + JsonEsc(ctrl.Bounds.ToString()) + "\""
+                + ",\"text\":\"" + JsonEsc(ctrl.Text) + "\"" + docInfo + "}");
+            foreach (Control child in ctrl.Controls)
+            {
+                CollectControlTree(child, depth + 1, sb, ref first);
+            }
+        }
+
         private static void TranslateWatermark(Control ctrl)
         {
             try
@@ -1242,6 +1282,24 @@ namespace CMOLocalizer
             catch { }
         }
 
+        /// <summary>数据库描述段落标记的中文标签，与 TranslateDatabaseDescriptionText 保持一致。</summary>
+        private static string TranslateDatabaseMarker(string marker)
+        {
+            switch (marker.ToUpperInvariant())
+            {
+                case "OVERVIEW": return "概况说明：";
+                case "DETAIL":
+                case "DETAILS": return "技术细节：";
+                case "SPECIFICATION":
+                case "SPECIFICATIONS": return "战术技术指标：";
+                case "NOTE":
+                case "NOTES": return "注意事项：";
+                case "SOURCE":
+                case "SOURCES": return "参考资料来源：";
+                default: return marker + "：";
+            }
+        }
+
         private static string TranslateDatabaseDescriptionText(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
@@ -1303,7 +1361,35 @@ namespace CMOLocalizer
         {
             if (string.IsNullOrEmpty(text)) return text;
 
-            // 0. 数据库百科段落与关键指标标签翻译 (OVERVIEW, DETAILS, SPECIFICATIONS, Operators 等)
+            // 0. 词库整句/整行优先。数据库描述正文（DB/Descriptions 的每一行）
+            //    以纯查表命中，命中即直接采用，避免被下方的启发式规则拆解。
+            string trimmedTop = text.Trim();
+            if (exactMap.ContainsKey(trimmedTop)) return exactMap[trimmedTop];
+            string normTop = Regex.Replace(trimmedTop, @"\s+", " ");
+            if (normExactMap.ContainsKey(normTop)) return normExactMap[normTop];
+
+            // 0.1 带段落标记的整段（"OVERVIEW: <正文>"）：标记由引擎翻译，正文查词条
+            Match mkTop = Regex.Match(trimmedTop, @"^(OVERVIEW|DETAIL|DETAILS|SPECIFICATIONS?|NOTES?|SOURCES?)\s*:\s*", RegexOptions.IgnoreCase);
+            if (mkTop.Success)
+            {
+                string restTop = trimmedTop.Substring(mkTop.Length).Trim();
+                if (restTop.Length > 0)
+                {
+                    string trRestTop = null;
+                    if (exactMap.ContainsKey(restTop)) trRestTop = exactMap[restTop];
+                    else
+                    {
+                        string normRest = Regex.Replace(restTop, @"\s+", " ");
+                        if (normExactMap.ContainsKey(normRest)) trRestTop = normExactMap[normRest];
+                    }
+                    if (!string.IsNullOrEmpty(trRestTop))
+                    {
+                        return TranslateDatabaseMarker(mkTop.Groups[1].Value) + " " + trRestTop;
+                    }
+                }
+            }
+
+            // 0.2 数据库百科段落与关键指标标签翻译 (OVERVIEW, DETAILS, SPECIFICATIONS, Operators 等)
             if (text.StartsWith("OVERVIEW:") || text.StartsWith("DETAILS:") || text.StartsWith("SPECIFICATIONS:") ||
                 text.StartsWith("NOTES:") || text.StartsWith("SOURCES:") || text.StartsWith("Fact:") ||
                 text.StartsWith("Diameter:") || text.StartsWith("Platforms:") || text.StartsWith("Range:") ||
@@ -3689,6 +3775,121 @@ namespace CMOLocalizer
                 }
                 sb.Append("]}");
                 return sb.ToString();
+            }
+
+            if (cmd == "DB_DOM_DUMP")
+            {
+                Form dbForm = null;
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            dbForm = f; break;
+                        }
+                    }
+                }
+                if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
+
+                Control wv = null;
+                foreach (FieldInfo fi in dbForm.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                {
+                    if (fi.FieldType.Name.IndexOf("WebView2", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    wv = fi.GetValue(dbForm) as Control;
+                    if (wv != null) break;
+                }
+                if (wv == null) return "{\"status\":\"error\",\"message\":\"WebView2 not found\"}";
+
+                string outFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CMOLocalizer_DBDOM.json");
+                Control wvTarget = wv;
+                dbForm.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        PropertyInfo pc = wvTarget.GetType().GetProperty("CoreWebView2");
+                        object core = pc != null ? pc.GetValue(wvTarget, null) : null;
+                        if (core == null) { File.WriteAllText(outFile, "CoreWebView2 null", Encoding.UTF8); return; }
+                        MethodInfo exec = core.GetType().GetMethod("ExecuteScriptAsync", new Type[] { typeof(string) });
+                        if (exec == null) { File.WriteAllText(outFile, "ExecuteScriptAsync not found", Encoding.UTF8); return; }
+
+                        string jsDump = @"(function(){
+                            try {
+                                var r = {rs: document.readyState, hasBody: !!document.body, htmlLen: -1, textLen: -1, nodes: 0, sample: ''};
+                                if (document.body) {
+                                    r.htmlLen = document.body.innerHTML.length;
+                                    try { r.textLen = document.body.innerText ? document.body.innerText.length : -1; } catch(e2) { r.textLen = -9; }
+                                    var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+                                    var n, c = 0, s = [];
+                                    while ((n = w.nextNode())) {
+                                        var p = n.parentNode ? n.parentNode.tagName : '';
+                                        if (p === 'SCRIPT' || p === 'STYLE') continue;
+                                        var v = n.nodeValue;
+                                        if (v && v.trim().length > 0) { c++; if (s.length < 60) s.push(v.substring(0, 160)); }
+                                    }
+                                    r.nodes = c;
+                                    r.sample = s.join(' @@ ');
+                                }
+                                return JSON.stringify(r);
+                            } catch(e) { return 'ERR:' + e; }
+                        })()";;
+
+                        System.Threading.Tasks.Task<string> task = exec.Invoke(core, new object[] { jsDump }) as System.Threading.Tasks.Task<string>;
+                        if (task == null) { File.WriteAllText(outFile, "no task", Encoding.UTF8); return; }
+                        task.ContinueWith((t) =>
+                        {
+                            try
+                            {
+                                string raw = t.IsFaulted || t.IsCanceled
+                                    ? ("TASKFAIL:" + (t.Exception != null ? t.Exception.Message : ""))
+                                    : t.Result;
+                                if (!string.IsNullOrEmpty(raw)) raw = raw.Trim('"');
+                                File.WriteAllText(outFile, raw ?? "", Encoding.UTF8);
+                            }
+                            catch { }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        try { File.WriteAllText(outFile, "EX:" + ex.ToString(), Encoding.UTF8); } catch { }
+                    }
+                });
+                return "{\"status\":\"ok\",\"action\":\"DB_DOM_DUMP\",\"file\":\"CMOLocalizer_DBDOM.json\"}";
+            }
+
+            if (cmd == "DB_CTRL_TREE")
+            {
+                Form dbForm = null;
+                FormCollection forms = Application.OpenForms;
+                if (forms != null)
+                {
+                    foreach (Form f in forms)
+                    {
+                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            dbForm = f; break;
+                        }
+                    }
+                }
+                if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{\"status\":\"ok\",\"tree\":[");
+                bool firstNode = true;
+                CollectControlTree(dbForm, 0, sb, ref firstNode);
+                sb.Append("]}");
+                return sb.ToString();
+            }
+
+            // XLATE <text> — exercise the real translation chain for one arbitrary string.
+            if (cmd == "XLATE")
+            {
+                string s = arg;
+                string viaString = TranslateString(s);
+                string viaBriefing = TranslateBriefingText(s);
+                return "{\"status\":\"ok\",\"len\":" + s.Length
+                    + ",\"string\":\"" + JsonEsc(viaString) + "\""
+                    + ",\"briefing\":\"" + JsonEsc(viaBriefing) + "\"}";
             }
 
             if (cmd == "SCEN_EXPAND_ALL" || cmd == "SCEN_SELECT" || cmd == "SCEN_LOAD")

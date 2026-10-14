@@ -34,3 +34,8 @@ dict/CMOLocalizer.json.bak
 # maestro runtime lock/state (live process 6648)
 .workflow/search-daemon.json
 .workflow/wiki-index-publisher.lock
+
+# 数据库描述正文翻译流水线的中间产物（可由 scripts/db_desc_work.py 重现）
+dict/db_desc_work.json
+dict/db_desc_chunks/
+dict/db_desc_out/

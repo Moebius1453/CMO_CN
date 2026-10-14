@@ -1,0 +1,19 @@
+{
+ "The AIM-120C-7 AMRAAM is a beyond-visual-range, fire-and-forget, active radar-guided air-to-air missile, featuring major enhancements in guidance, range, and electronic counter-countermeasures (ECCM).": "AIM-120C-7 AMRAAM 是一种超视距、发射后不管、主动雷达制导的空空导弹，在制导、射程与电子反对抗（ECCM）方面有重大提升。",
+ "the AIM-120C-7 marked a significant step forward in the AMRAAM family under the Phase 3 Increment 3 (P3I.3) effort. Key upgrades included enhanced guidance algorithms, a more advanced active radar seeker, and improved datalink functionality for more accurate mid-course updates. These changes allowed the missile to operate more effectively in high-electronic-warfare (EW) environments and extended its no-escape and engagement envelopes. With an 18–20 kg blast-fragmentation warhead, the C-7 maintained the clipped-fin design of the C-series, ensuring compatibility with internal bays of stealth fighters like the F-22 Raptor.": "作为 AMRAAM 家族第三阶段增量 3（P3I.3）计划的成果，AIM-120C-7 是该系列一次重要跨越。主要升级包括改进的制导算法、更先进的主 动雷达导引头，以及为更精确中段修正而改进的数据链功能。这些改进使导弹在高强度电子战（EW）环境中作战更为有效，并扩展了其不可逃逸区与交战包线。C-7 保留了 C 系列的切尖弹翼设计，配 18–20 公斤爆破杀伤战斗部，可兼容 F-22“猛禽”等隐身战斗机的内部弹舱。",
+ "Guidance: Inertial + mid-course datalink; active radar terminal homing": "制导方式：惯性 + 中段数据链；主动雷达末制导",
+ "Warhead: 18–20 kg WDU-41/B blast-fragmentation with FZU-49/B proximity/impact fuze": "战斗部：18–20 公斤 WDU-41/B 爆破杀伤战斗部，配 FZU-49/B 近炸/触发引信",
+ "Length: 3.66 m": "长度：3.66 米",
+ "Diameter: 178 mm": "弹径：178 毫米",
+ "Wingspan: ~0.45 m": "翼展：约 0.45 米",
+ "Weight: ~162 kg": "发射全重：约 162 公斤",
+ "Platforms: F-15, F-16, F/A-18, F-22, F-35 (external carriage), Eurofighter Typhoon, Gripen, Rafale (via NATO standard integration), and others": "搭载平台：F-15、F-16、F/A-18、F-22、F-35（外挂）、欧洲战斗机“台风”、JAS 39“鹰狮”、“阵风”（经北约标准集成）等",
+ "Range: ~65nm (120 km) (estimated; highly dependent on launch parameters)": "有效射程：约 65 海里（120 公里）（为估算值；很大程度上取决于发射参数）",
+ "Speed: ~Mach 4": "最大速度：约 4 马赫",
+ "Maneuverability: ~40 G": "机动过载能力：约 40 G",
+ "IOC: 2008": "服役起始年份：2008 年",
+ "Operators: United States, Australia, Belgium, Canada, Chile, Denmark, Finland, Germany, Greece, Indonesia, Israel, Japan, Jordan, Kuwait, Morocco, Netherlands, Norway, Oman, Poland, Portugal, Qatar, Romania, Saudi Arabia, Singapore, Slovakia, South Korea, Spain, Sweden, Taiwan, Thailand, Turkey, United Arab Emirates, United Kingdom": "使用国与地区：美国、澳大利亚、比利时、加拿大、智利、丹麦、芬兰、德国、希腊、印度尼西亚、以色列、日本、约旦、科威特、摩洛哥、荷兰、挪威、阿曼、波兰、葡萄牙、卡塔尔、罗马尼亚、沙特阿拉伯、新加坡、斯洛伐克、韩国、西班牙、瑞典、台湾、泰国、土耳其、阿拉伯联合酋长国、英国",
+ "Fact: The C-7 version was developed in part to address challenges posed by advanced enemy electronic warfare systems and agile air targets emerging in the early 21st century.": "技术评述：C-7 型的研制部分是为了应对 21 世纪初出现的敌方先进电子战系统与高机动空中目标所带来的挑战。",
+ "This version was widely exported and became the backbone of many allied air forces’ BVR capabilities, thanks to its performance, reliability, and integration with a broad range of Western and NATO-standard platforms.": "该型号出口范围广泛，凭借其性能、可靠性以及与大量西方及北约标准平台的兼容性，成为许多盟国空军超视距作战能力的骨干装备。",
+ "UNCLASSIFIED Selected Acquisition Report (SAR) 2014; U.S. Department of Defense (DoD) budget documents and fact sheets; Raytheon – AMRAAM Datasheet (Archived); Official United States Air Force Website; SIPRI Arms Transfers Database; Federation of American Scientists (FAS); Jane’s Air-Launched Weapons; RAND Corporation; Congressional Research Service (CRS); Army Recognition Group Magazine; deagel.com; en.missilery.info": "非密版《选定采办报告》（SAR）2014 年；美国国防部（DoD）预算文件与情况说明书；雷神公司 AMRAAM 数据表（存档）；美国空军官方网站；SIPRI 武器转让数据库；美国科学家联合会（FAS）；《简氏机载武器》；兰德公司；美国国会研究服务处（CRS）；陆军识别集团杂志；deagel.com；en.missilery.info"
+}
