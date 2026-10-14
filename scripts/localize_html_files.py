@@ -115,8 +115,21 @@ def main() -> int:
             tr = table.get(seg)
             if not tr:
                 continue
-            out = out.replace(">" + seg + "<", ">" + tr + "<")
-            hits += 1
+            # The text node is padded ("<p>Text </p>") and long paragraphs wrap
+            # onto several source lines, so the segment is bounded by whitespace
+            # or a tag edge rather than by '>' and '<' alone.
+            pattern = re.compile(r"(?<=[\s>])" + re.escape(seg) + r"(?=[\s<])")
+            new_out, n = pattern.subn(lambda m: tr, out)
+            # Some files escape only &lt;/&gt;, some leave '&' raw: try both forms.
+            for esc in (seg.replace("<", "&lt;").replace(">", "&gt;"),
+                        html.escape(seg, quote=False)):
+                if n or esc == seg:
+                    break
+                pattern = re.compile(r"(?<=[\s>])" + re.escape(esc) + r"(?=[\s<])")
+                new_out, n = pattern.subn(lambda m: tr, out)
+            if n:
+                out = new_out
+                hits += 1
         if hits:
             if not dry:
                 orig = Path(str(p) + ".orig")
