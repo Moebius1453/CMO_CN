@@ -26,7 +26,7 @@ namespace CMOLocalizerInstaller
 
         public InstallerForm(string initialPath)
         {
-            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.1";
+            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.2";
             this.Size = new Size(680, 525);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
