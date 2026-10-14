@@ -83,5 +83,6 @@
  "Littoral": "近岸水域 (Littoral)",
  "Direct": "直接 (Direct)",
  "Cautious": "谨慎 (Cautious)",
- "Aggressive": "积极 (Aggressive)"
+ "Aggressive": "积极 (Aggressive)",
+ "Radar:         Radar can only be operated at periscope depth and shallower. It is rare to use radar as a submarine, as it is very likely to give away your presence and position. Radar is an active sensor and needs to be switched on in order to function (F9)": "雷达：雷达只能在潜望深度及更浅的深度使用。潜艇很少使用雷达，因为它极易暴露自身的存在与位置。雷达属于主动传感器，必须开机才能工作（F9）。"
 }
