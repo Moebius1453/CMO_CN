@@ -153,6 +153,11 @@
 4. **发布后自检清单**：`verify_all.py` 需 10/10；`grep -a <资源名> build/CMO_Chinese_Setup_v<ver>.exe`
    核对内嵌；解包绿色包核对条目数（v4.1.4 = 690 条目）；Release 四个资产（安装包/绿色包 + 两个 sha256）
    用 HTTP 206 分片下载验证。
+5. **v4.1.5 发布实测（2026-10-15）**：安装包/绿色包均已发布并验证——
+   `CMO_Chinese_Setup_v4.1.5.exe`（14 601 216 B，sha256 6a97ebc4…）/ `CMO_Chinese_Pack_4.1.5.zip`（7 074 629 B，
+   sha256 a10f4592…），绿色包 690 条目（DB 模板 8 / 地名集 2 / 符号图 28 / 启动器 1）。
+   发布后`/releases/latest` = v4.1.5，更新助手可发现；本地已用安装器实装一次，
+   数据库查看器点击条目 `RenderedHTMLString` = 34 874 B（修复生效），`verify_all.py` 10/10。
 
 ## 数据库查看器汉化禁区（2026-10-15 实机事故：详情面板空白）
 
