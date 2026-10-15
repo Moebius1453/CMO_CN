@@ -114,3 +114,14 @@
   `Symbols\Menu` 28、`Launcher\Localization` 1、`汉化说明.md`（绿色包共 690 条目）。
 - 另一类同类问题：**位图管按钮文字、词典管悬停提示**——替换了按钮位图不等于提示语也汉化了，
   提示语缺失只能补词条（例：`Auto Engage Target→自动交战目标`）。
+
+## 待办：凭据泄露收尾（2026-10-15 发现）
+
+- 已止血（commit 90668f8）：`scripts/translate_worker.py` 密钥改环境变量并入 .gitignore；
+  删除 `.workflow/recovery/`（含 GitHub 凭证的压缩检查点）；.gitignore 加三条硬规则。
+- **未完成 ①**：用户自行吊销/轮换两处凭据——网关 `newapi.liubaitech.cn` 的 `sk-` 令牌、
+  GitHub OAuth/会话恢复令牌（用户 2026-10-15 表示稍后处理）。
+- **未完成 ②**：历史重写 + 强推（`git filter-repo --replace-text` + `--invert-paths` 删
+  `.workflow/recovery` 与 `scripts/translate_worker.py`），需先做 mirror 备份；
+  旧提交 `998c563` 起仍含明文密钥，重写后建议联系 GitHub 支持清理缓存视图。
+- 预防建议：加提交前密钥扫描（`sk-`/`ghp_`/`gho_`/`AKIA` 等）并接入发布门禁。
