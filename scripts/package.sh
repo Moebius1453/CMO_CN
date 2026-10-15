@@ -37,6 +37,11 @@ fi
 
 bash "$ROOT/scripts/build.sh"
 
+# ── 发版回归硬门禁（台账 docs/BUG_REGISTRY.md 的 static 子集）：不通过则中止打包 ──
+echo "==> 回归门禁（static）"
+"$PY" "$ROOT/scripts/verify_regressions.py" --static \
+  || { echo "==> 回归用例未通过，中止打包（详见 docs/RELEASE_TEST_SOP.md）"; exit 1; }
+
 echo "==> assembling green pack"
 rm -rf "$PACK"
 mkdir -p "$PACK/DB/Templates"
