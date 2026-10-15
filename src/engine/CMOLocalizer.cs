@@ -3570,7 +3570,11 @@ namespace CMOLocalizer
             }
 
             // 如果文本中已经含有中文，说明已经被翻译过或者是中文字符串，坚决避免重复翻译与递归替换！
-            if (ContainsChinese(raw)) return raw;
+            if (ContainsChinese(raw))
+            {
+                string bracketOnly = TranslateBracketSegments(raw);
+                return bracketOnly;
+            }
 
             // Check cache first
             lock (cacheLock)
@@ -3647,6 +3651,32 @@ namespace CMOLocalizer
             }
             catch { }
             return raw;
+        }
+
+        /// <summary>
+        /// 中文串里的英文括号片段（任务编辑器「可用」列表、单位名称拼装等）：
+        /// 「苏法/风暴 #1 (Air Superiority BVR) (拉马特戴维)」这类整串查表必然落空，
+        /// 按标点切分又因含中文被跳过，于是英文载荷名会一直显示。
+        /// 这里按 () / [] 拆出纯英文片段单独翻译后原样拼回。
+        /// </summary>
+        private static string TranslateBracketSegments(string raw)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(raw)) return raw;
+                if (!ContainsChinese(raw)) return raw;
+                if (raw.IndexOf('(') < 0 && raw.IndexOf('[') < 0) return raw;
+                return Regex.Replace(raw, @"([\(\[])([^\)\]\[]{2,120})([\)\]])",
+                    delegate(Match m)
+                    {
+                        string inner = m.Groups[2].Value;
+                        if (ContainsChinese(inner)) return m.Value;
+                        string trInner = TranslateInnerSegment(inner);
+                        if (trInner == inner) return m.Value;
+                        return m.Groups[1].Value + trInner + m.Groups[3].Value;
+                    });
+            }
+            catch { return raw; }
         }
 
         /// <summary>翻译括号内的英文片段：整段 → 前缀(冒号)→ 逗号分片；无命中则原样返回。</summary>
@@ -3773,23 +3803,8 @@ namespace CMOLocalizer
                 if (normExactMap.ContainsKey(nCurly)) return normExactMap[nCurly];
             }
 
-            // 2.3 中文串里的英文括号片段（任务编辑器「可用」列表、单位名称拼装等）：
-            //     「苏法/风暴 #1 (Air Superiority BVR) (拉马特戴维)」这类整串查表必然落空，
-            //     2.2 又因含中文被跳过，于是载荷名永远显示英文。
-            //     按 () / [] 拆出纯英文片段单独翻译，原样拼回。
-            if (ContainsChinese(raw) && (raw.IndexOf('(') >= 0 || raw.IndexOf('[') >= 0))
-            {
-                string withSeg = Regex.Replace(raw, @"([\(\[])([^\)\]\[]{2,120})([\)\]])",
-                    delegate(Match m)
-                    {
-                        string inner = m.Groups[2].Value;
-                        if (ContainsChinese(inner)) return m.Value;
-                        string trInner = TranslateInnerSegment(inner);
-                        if (trInner == inner) return m.Value;
-                        return m.Groups[1].Value + trInner + m.Groups[3].Value;
-                    });
-                if (withSeg != raw) return withSeg;
-            }
+            string bracketRes = TranslateBracketSegments(raw);
+            if (bracketRes != raw) return bracketRes;
 
             // 2.2 消息日志/简报正文由多个段落直接拼接，段间分隔空格被吞掉
             //     ("hit us.We expect ...armed with:AA-7")。按标点边界重新切分后
