@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "generatedAt": 1792066534470,
+  "generatedAt": 1792076810556,
   "entries": [
     {
       "id": "knowhow-dcs-20261012-2009",
@@ -348,6 +348,50 @@
       "createdBy": null,
       "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,src/engine/CMOLocalizer.cs:1416,src/engine/CMOLocalizer.cs:2523",
       "parent": "knowhow-tip-20261015-b3e6c7fed2efa60d",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "spec:project:learnings",
+      "type": "spec",
+      "title": "Learnings",
+      "summary": "Add entries with: `/maestro-spec learning <description>`",
+      "tags": [
+        "bug",
+        "lesson",
+        "gotcha",
+        "learning"
+      ],
+      "status": "active",
+      "created": "2026-10-15T15:06:32.134Z",
+      "updated": "2026-10-15T15:06:32.134Z",
+      "scope": "project",
+      "category": "learning",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "spec:project:learnings-001",
+      "type": "spec",
+      "title": "发版铁律：缺陷必须登记台账，发版前必须重跑回归 SOP",
+      "summary": "### 发版铁律：缺陷必须登记台账，发版前必须重跑回归 SOP # 发版铁律：缺陷必须登记台账，发版前必须重跑回归 SOP ## 规则（用户 2026-10-15 明确要求） 1. **每个用户可感知的缺陷都要登记**在 `docs/BUG_REGISTRY.md`（编号 R<n>，只增不改）： 现象 / 根因 / 改动位置 / 用户可见验收 / 回归测试点。 2. **每个缺陷都必须落一条可执行回归用例**到 `scripts/verify_regressions",
+      "tags": [
+        "session-knowledge",
+        "manual"
+      ],
+      "status": "active",
+      "created": "2026-10-15T15:06:32.134Z",
+      "updated": "2026-10-15T15:06:32.134Z",
+      "scope": "project",
+      "category": "learning",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "session:ksyn-2107ce852f0cfe00:KDC-7191e208310ad5f7",
+      "parent": "spec:project:learnings",
       "related": [],
       "repoId": null
     },
