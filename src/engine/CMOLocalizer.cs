@@ -3451,6 +3451,53 @@ namespace CMOLocalizer
             return raw;
         }
 
+        /// <summary>翻译括号内的英文片段：整段 → 前缀(冒号)→ 逗号分片；无命中则原样返回。</summary>
+        private static string TranslateInnerSegment(string inner)
+        {
+            string hit = LookupPiece(inner);
+            if (hit != null) return hit;
+
+            int colon = inner.IndexOf(':');
+            if (colon > 0 && colon <= 6)
+            {
+                string prefix = inner.Substring(0, colon + 1);
+                string rest = inner.Substring(colon + 1).Trim();
+                string pfx = LookupPiece(prefix);
+                string restTr = TranslateCommaPieces(rest);
+                if (pfx != null || restTr != rest)
+                {
+                    return (pfx ?? prefix) + " " + restTr;
+                }
+            }
+            return TranslateCommaPieces(inner);
+        }
+
+        private static string TranslateCommaPieces(string s)
+        {
+            if (s.IndexOf(',') < 0) return s;
+            string[] parts = s.Split(',');
+            bool any = false;
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string piece = parts[i].Trim();
+                string tr = LookupPiece(piece);
+                if (tr != null) { piece = tr; any = true; }
+                if (i > 0) sb.Append(", ");
+                sb.Append(piece);
+            }
+            return any ? sb.ToString() : s;
+        }
+
+        private static string LookupPiece(string piece)
+        {
+            if (string.IsNullOrEmpty(piece)) return null;
+            if (exactMap.ContainsKey(piece)) return exactMap[piece];
+            string norm = Regex.Replace(piece.Trim(), @"\s+", " ");
+            if (normExactMap.ContainsKey(norm)) return normExactMap[norm];
+            return null;
+        }
+
         private static string DoTranslate(string raw)
         {
             if (IsForbiddenCodeOrEnum(raw)) return raw;
@@ -3526,6 +3573,24 @@ namespace CMOLocalizer
                 if (exactMap.ContainsKey(aposCurly)) return exactMap[aposCurly];
                 string nCurly = Regex.Replace(aposCurly.Trim(), @"\s+", " ");
                 if (normExactMap.ContainsKey(nCurly)) return normExactMap[nCurly];
+            }
+
+            // 2.3 中文串里的英文括号片段（任务编辑器「可用」列表、单位名称拼装等）：
+            //     「苏法/风暴 #1 (Air Superiority BVR) (拉马特戴维)」这类整串查表必然落空，
+            //     2.2 又因含中文被跳过，于是载荷名永远显示英文。
+            //     按 () / [] 拆出纯英文片段单独翻译，原样拼回。
+            if (ContainsChinese(raw) && (raw.IndexOf('(') >= 0 || raw.IndexOf('[') >= 0))
+            {
+                string withSeg = Regex.Replace(raw, @"([\(\[])([^\)\]\[]{2,120})([\)\]])",
+                    delegate(Match m)
+                    {
+                        string inner = m.Groups[2].Value;
+                        if (ContainsChinese(inner)) return m.Value;
+                        string trInner = TranslateInnerSegment(inner);
+                        if (trInner == inner) return m.Value;
+                        return m.Groups[1].Value + trInner + m.Groups[3].Value;
+                    });
+                if (withSeg != raw) return withSeg;
             }
 
             // 2.2 消息日志/简报正文由多个段落直接拼接，段间分隔空格被吞掉
