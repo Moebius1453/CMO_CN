@@ -738,6 +738,9 @@ namespace CMOLocalizerInstaller
                 // 部署已全量汉化的 Scenarios HTML 简报/教程正文（内嵌 zip，带 .orig 备份）
                 DeployScenarioHtml(gamePath);
 
+                // 部署汉化地名集（地图矢量地名层的数据源，必须先于标签瓦片重绘）
+                DeployPlacenames(gamePath);
+
                 // 部署自动升级组件并写入设置（开机自启 / 每 6 小时检查）
                 DeployUpdater(gamePath);
                 WriteRegistrySettings(gamePath);
@@ -758,6 +761,52 @@ namespace CMOLocalizerInstaller
         }
 
 
+
+        /// <summary>
+        /// 部署汉化后的 World Wind 地名集（WW\PlacenameSets\*\0000_0000.wwp）。
+        /// 地图上的国名/城市名以及 Stamen 标签瓦片重绘都以它为数据源；
+        /// 不部署它则用户装完包地图仍是英文。覆盖前写 .orig 备份，卸载可还原。
+        /// </summary>
+        private static void DeployPlacenames(string gamePath)
+        {
+            string[][] sets = new string[][] {
+                new string[] { "PLACE_SYNOPTIC", @"WW\PlacenameSets\Synoptic" },
+                new string[] { "PLACE_CITIES",   @"WW\PlacenameSets\Cities" }
+            };
+            foreach (string[] s in sets)
+            {
+                try
+                {
+                    string dir = Path.Combine(gamePath, s[1]);
+                    if (!Directory.Exists(dir)) continue;
+                    string target = Path.Combine(dir, "0000_0000.wwp");
+                    string backup = target + ".orig";
+                    if (File.Exists(target) && !File.Exists(backup)) File.Copy(target, backup, true);
+                    ExtractEmbeddedResource(s[0], target);
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>卸载：还原原始英文地名集。</summary>
+        private static void RestorePlacenames(string gamePath)
+        {
+            string[] dirs = new string[] { @"WW\PlacenameSets\Synoptic", @"WW\PlacenameSets\Cities" };
+            foreach (string d in dirs)
+            {
+                try
+                {
+                    string target = Path.Combine(gamePath, d, "0000_0000.wwp");
+                    string backup = target + ".orig";
+                    if (File.Exists(backup))
+                    {
+                        File.Copy(backup, target, true);
+                        File.Delete(backup);
+                    }
+                }
+                catch { }
+            }
+        }
 
         /// <summary>
         /// 部署随包分发的已汉化 Scenarios HTML（内嵌 SCEN_HTML_ZIP）。
@@ -1360,6 +1409,9 @@ namespace CMOLocalizerInstaller
 
                 // 还原 World Wind 标注图层瓦片
                 RestoreMapLabelTiles(gamePath);
+
+                // 还原原始英文地名集
+                RestorePlacenames(gamePath);
 
                 // 清理自动升级：结束助手进程、删除开机启动项、注册表设置与助手本体
                 CleanupUpdater(gamePath);

@@ -40,6 +40,11 @@ mkdir -p "$PACK/DB/Templates"
 cp "$OUT/CMOLocalizer.dll" "$PACK/"
 cp "$ROOT/dict/CMOLocalizer.json" "$PACK/"
 cp "$OUT/CMO_Updater.exe" "$PACK/"
+
+# 地图地名集：地图矢量地名层与 Stamen 标签瓦片重绘的数据源
+mkdir -p "$PACK/WW/PlacenameSets/Synoptic" "$PACK/WW/PlacenameSets/Cities"
+cp "$ROOT/assets/placenames/Synoptic.wwp" "$PACK/WW/PlacenameSets/Synoptic/0000_0000.wwp"
+cp "$ROOT/assets/placenames/Cities.wwp" "$PACK/WW/PlacenameSets/Cities/0000_0000.wwp"
 cp "$ROOT/assets/db_templates/"*.html "$PACK/DB/Templates/"
 
 # Green pack parity: ship the localized Scenarios HTML so unpacking over the game

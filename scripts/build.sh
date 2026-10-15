@@ -38,6 +38,8 @@ RES=()
 RES+=(-resource:"$(W "$OUT/CMOLocalizer.dll")",CMOLocalizer.dll)
 RES+=(-resource:"$(W "$ROOT/dict/CMOLocalizer.json")",CMOLocalizer.json)
 RES+=(-resource:"$(W "$OUT/CMO_Updater.exe")",UPDATER_EXE)
+RES+=(-resource:"$(W "$ROOT/assets/placenames/Synoptic.wwp")",PLACE_SYNOPTIC)
+RES+=(-resource:"$(W "$ROOT/assets/placenames/Cities.wwp")",PLACE_CITIES)
 RES+=(-resource:"$(W "$ROOT/assets/donate/wechat_pay.png")",QR_WeChat)
 RES+=(-resource:"$(W "$ROOT/assets/donate/alipay.jpg")",QR_Alipay)
 for t in "$ROOT"/assets/db_templates/*.html; do
