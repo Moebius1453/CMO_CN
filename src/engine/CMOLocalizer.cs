@@ -677,6 +677,7 @@ namespace CMOLocalizer
 
         private static void TranslateWpfWindows()
         {
+            InstallWpfRenderHook();
             try
             {
                 if (currentPid == 0)
@@ -745,6 +746,198 @@ namespace CMOLocalizer
         private static readonly HashSet<int> hookedWpfElements = new HashSet<int>();
         [ThreadStatic]
         private static bool _inWpfTextChanged;
+
+        private static readonly List<System.Windows.DependencyObject> liveWpfTargets = new List<System.Windows.DependencyObject>();
+        private static bool _renderHookInstalled;
+        private static int _renderFrame;
+        [ThreadStatic] private static bool _inRenderPass;
+        private static readonly object _wpfLogLock = new object();
+        private static readonly List<string> _wpfLog = new List<string>();
+
+        private static string Trunc(string s, int n)
+        {
+            if (s == null) return "";
+            s = s.Replace("\r", " ").Replace("\n", " ");
+            return s.Length <= n ? s : s.Substring(0, n) + "…";
+        }
+
+        private static void LogWpfWrite(string kind, string oldText, string newText)
+        {
+            try
+            {
+                lock (_wpfLogLock)
+                {
+                    if (_wpfLog.Count >= 400) _wpfLog.RemoveAt(0);
+                    _wpfLog.Add(DateTime.Now.ToString("HH:mm:ss.fff") + "|" + kind + "|" +
+                                Trunc(oldText, 70) + " ==> " + Trunc(newText, 70));
+                }
+            }
+            catch { }
+        }
+
+        private static string DumpWpfLog()
+        {
+            StringBuilder sb = new StringBuilder();
+            string[] arr;
+            lock (_wpfLogLock)
+            {
+                arr = _wpfLog.ToArray();
+            }
+            sb.Append("{\"status\":\"ok\",\"count\":").Append(arr.Length).Append(",\"log\":[");
+            for (int i = 0; i < arr.Length; i++)
+            {
+                if (i > 0) sb.Append(",");
+                sb.Append("\"").Append(JsonEsc(arr[i])).Append("\"");
+            }
+            sb.Append("]}");
+            return sb.ToString();
+        }
+
+        private static string ReadWpfText(System.Windows.DependencyObject dep)
+        {
+            try
+            {
+                System.Windows.Controls.TextBlock tb = dep as System.Windows.Controls.TextBlock;
+                if (tb != null) return tb.Text;
+                System.Windows.Documents.Run run = dep as System.Windows.Documents.Run;
+                if (run != null) return run.Text;
+                System.Windows.Controls.ContentControl cc = dep as System.Windows.Controls.ContentControl;
+                if (cc != null) return cc.Content as string;
+            }
+            catch { }
+            return "";
+        }
+
+        /// <summary>
+        /// 记住“确实需要翻译”的少量 WPF 元素（单位状态面板、状态栏、消息日志等实时文本）。
+        /// 游戏每帧/每秒把绑定源刷成英文时，这些元素就是频闪的来源。
+        /// </summary>
+        private static void TrackLiveWpfTarget(System.Windows.DependencyObject dep)
+        {
+            if (dep == null) return;
+            try
+            {
+                lock (liveWpfTargets)
+                {
+                    if (liveWpfTargets.Count >= 400) return;
+                    for (int i = 0; i < liveWpfTargets.Count; i++)
+                    {
+                        if (object.ReferenceEquals(liveWpfTargets[i], dep)) return;
+                    }
+                    liveWpfTargets.Add(dep);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 每帧渲染前把被游戏刷回英文的实时文本改回中文。
+        /// 不挂钩依赖属性（那会在属性系统回调里重入并导致游戏崩溃），
+        /// 而是在 CompositionTarget.Rendering（绘制前触发）里重译少量已知元素，
+        /// 因此英文不会有机会被画到屏幕上——彻底消除「一会中文一会英文」。
+        /// </summary>
+        private static void InstallWpfRenderHook()
+        {
+            if (_renderHookInstalled) return;
+            _renderHookInstalled = true;
+            try
+            {
+                System.Windows.Media.CompositionTarget.Rendering += new EventHandler(OnWpfRenderTick);
+                Log("WPF render hook installed (per-frame retranslate of live text)");
+            }
+            catch (Exception ex)
+            {
+                Log("WPF render hook failed: " + ex.Message);
+            }
+        }
+
+        private static void OnWpfRenderTick(object sender, EventArgs e)
+        {
+            if (_inRenderPass) return;
+            _inRenderPass = true;
+            try
+            {
+                // 每 8 帧（约 130ms）做一次全量补扫：换单位/换面板时会新建 WPF 元素，
+                // 新元素尚未进入 liveWpfTargets，全量扫描保证它首帧后立刻变中文。
+                _renderFrame++;
+                if ((_renderFrame & 7) == 0)
+                {
+                    try { TranslateWpfWindows(); } catch { }
+                }
+
+                System.Windows.DependencyObject[] snapshot;
+                lock (liveWpfTargets)
+                {
+                    if (liveWpfTargets.Count == 0) return;
+                    snapshot = liveWpfTargets.ToArray();
+                }
+                for (int i = 0; i < snapshot.Length; i++)
+                {
+                    try
+                    {
+                        System.Windows.DependencyObject dep = snapshot[i];
+                        if (dep == null) continue;
+                        string cur = ReadWpfText(dep);
+                        if (string.IsNullOrEmpty(cur) || ContainsChinese(cur)) continue;
+                        TranslateWpfElement(dep);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            finally { _inRenderPass = false; }
+        }
+
+        /// <summary>把控件树（类型/名称/可见/尺寸/文本）导出为 JSON，用于定位自绘或数据绑定控件。</summary>
+        private static void DumpControlTree(Control c, StringBuilder sb, ref bool first, int depth)
+        {
+            if (c == null || depth > 6) return;
+            try
+            {
+                string txt = "";
+                try { txt = c.Text ?? ""; } catch { }
+                if (txt.Length > 120) txt = txt.Substring(0, 120);
+                if (!first) sb.Append(",");
+                first = false;
+                sb.Append("{\"d\":").Append(depth)
+                  .Append(",\"t\":\"").Append(JsonEsc(c.GetType().Name))
+                  .Append("\",\"n\":\"").Append(JsonEsc(c.Name))
+                  .Append("\",\"v\":").Append(c.Visible ? "true" : "false")
+                  .Append(",\"b\":\"").Append(c.Bounds.Width).Append('x').Append(c.Bounds.Height)
+                  .Append("\",\"text\":\"").Append(JsonEsc(txt)).Append("\"}");
+                foreach (Control child in c.Controls)
+                {
+                    DumpControlTree(child, sb, ref first, depth + 1);
+                }
+            }
+            catch { }
+        }
+
+        private static string HandleCtrlTree(string cmd)
+        {
+            string filter = cmd.Length > "CTRL_TREE".Length ? cmd.Substring("CTRL_TREE".Length).Trim() : "";
+            StringBuilder sb = new StringBuilder();
+            sb.Append("{\"status\":\"ok\",\"filter\":\"").Append(JsonEsc(filter)).Append("\",\"nodes\":[");
+            bool first = true;
+            FormCollection forms = Application.OpenForms;
+            if (forms != null)
+            {
+                foreach (Form f in forms)
+                {
+                    if (f == null || f.IsDisposed) continue;
+                    if (filter.Length > 0)
+                    {
+                        string ft = f.Text ?? "";
+                        string fn = f.Name ?? "";
+                        if (ft.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
+                            fn.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    }
+                    DumpControlTree(f, sb, ref first, 0);
+                }
+            }
+            sb.Append("]}");
+            return sb.ToString();
+        }
 
         private static void TranslateWpfElement(System.Windows.DependencyObject dep)
         {
@@ -887,6 +1080,8 @@ namespace CMOLocalizer
                         {
                             string old = tb.Text;
                             SetTextKeepBinding(tb, trans);
+                            TrackLiveWpfTarget(tb);
+                            LogWpfWrite("TextBlock", old, trans);
                             wpfTranslatedCount++;
                             if (wpfTranslatedCount <= 20) Log("WPF TextBlock Translated: " + old + " -> " + trans);
                         }
@@ -938,6 +1133,8 @@ namespace CMOLocalizer
                             string trans = TranslateString(s);
                             if (trans != s)
                             {
+                                LogWpfWrite("ContentControl", s, trans);
+                                TrackLiveWpfTarget(cc);
                                 SetContentKeepBinding(cc, trans);
                                 wpfTranslatedCount++;
                                 if (wpfTranslatedCount <= 20) Log("WPF ContentControl Translated: " + s + " -> " + trans);
@@ -1082,6 +1279,7 @@ namespace CMOLocalizer
                     if (!string.IsNullOrEmpty(tr) && tr != txt)
                     {
                         SetRunTextKeepBinding(run, tr);
+                                    TrackLiveWpfTarget(run);
                         flowTranslatedCount++;
                         if (flowTranslatedCount <= 10) Log("WPF Run Translated: " + txt + " -> " + tr);
                     }
@@ -4367,6 +4565,16 @@ namespace CMOLocalizer
                 }
                 sb.Append("]}");
                 return sb.ToString();
+            }
+
+            if (cmd == "WPF_TEXTLOG")
+            {
+                return DumpWpfLog();
+            }
+
+            if (cmd.StartsWith("CTRL_TREE"))
+            {
+                return HandleCtrlTree(cmd);
             }
 
             if (cmd == "CLOSE_FORM")
