@@ -39,3 +39,8 @@ dict/CMOLocalizer.json.bak
 dict/db_desc_work.json
 dict/db_desc_chunks/
 dict/db_desc_out/
+
+# 会话/恢复归档绝不入库（含凭证风险）
+.workflow/recovery/
+.workflow/**/session-*.md
+scripts/translate_worker.py
