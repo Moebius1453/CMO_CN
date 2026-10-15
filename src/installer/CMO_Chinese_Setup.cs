@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -24,11 +25,18 @@ namespace CMOLocalizerInstaller
         private Button btnDonate;
         private TextBox txtLog;
         private Label lblStatus;
+        private Label lblUpdateState;
+        private Label lblUpdateNext;
+        private CheckBox chkAutoStart;
+        private Button btnUpgrade;
+        private Button btnCheckUpdate;
+        private Button btnNeverRemind;
+        private bool suppressAutoStartEvent;
 
         public InstallerForm(string initialPath)
         {
-            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.3";
-            this.Size = new Size(680, 525);
+            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.4";
+            this.Size = new Size(700, 655);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -107,18 +115,69 @@ namespace CMOLocalizerInstaller
             btnDonate.Click += new EventHandler(OnDonateClick);
             this.Controls.Add(btnDonate);
 
+            // ── 版本更新（自动升级）分组 ─────────────────────────────
+            GroupBox grpUpdate = new GroupBox();
+            grpUpdate.Text = "版本更新";
+            grpUpdate.Location = new Point(22, 290);
+            grpUpdate.Size = new Size(645, 140);
+            this.Controls.Add(grpUpdate);
+
+            lblUpdateState = new Label();
+            lblUpdateState.AutoSize = true;
+            lblUpdateState.Location = new Point(14, 26);
+            grpUpdate.Controls.Add(lblUpdateState);
+
+            lblUpdateNext = new Label();
+            lblUpdateNext.AutoSize = true;
+            lblUpdateNext.ForeColor = Color.DimGray;
+            lblUpdateNext.Location = new Point(14, 50);
+            grpUpdate.Controls.Add(lblUpdateNext);
+
+            chkAutoStart = new CheckBox();
+            chkAutoStart.Text = "随 Windows 启动自动检查更新（每 6 小时）";
+            chkAutoStart.AutoSize = true;
+            chkAutoStart.Location = new Point(14, 76);
+            chkAutoStart.CheckedChanged += new EventHandler(OnAutoStartChanged);
+            grpUpdate.Controls.Add(chkAutoStart);
+
+            btnUpgrade = new Button();
+            btnUpgrade.Text = "立即升级";
+            btnUpgrade.Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold);
+            btnUpgrade.BackColor = Color.FromArgb(30, 110, 200);
+            btnUpgrade.ForeColor = Color.White;
+            btnUpgrade.FlatStyle = FlatStyle.Flat;
+            btnUpgrade.Location = new Point(14, 102);
+            btnUpgrade.Size = new Size(200, 30);
+            btnUpgrade.Click += new EventHandler(OnUpgradeClick);
+            grpUpdate.Controls.Add(btnUpgrade);
+
+            btnCheckUpdate = new Button();
+            btnCheckUpdate.Text = "检查升级";
+            btnCheckUpdate.Location = new Point(224, 102);
+            btnCheckUpdate.Size = new Size(110, 30);
+            btnCheckUpdate.Click += new EventHandler(OnCheckUpdateClick);
+            grpUpdate.Controls.Add(btnCheckUpdate);
+
+            btnNeverRemind = new Button();
+            btnNeverRemind.Text = "不再提醒";
+            btnNeverRemind.Location = new Point(342, 102);
+            btnNeverRemind.Size = new Size(110, 30);
+            btnNeverRemind.Click += new EventHandler(OnNeverRemindClick);
+            grpUpdate.Controls.Add(btnNeverRemind);
+
             txtLog = new TextBox();
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.BackColor = Color.FromArgb(245, 247, 250);
-            txtLog.Location = new Point(22, 290);
-            txtLog.Size = new Size(625, 175);
+            txtLog.Location = new Point(22, 444);
+            txtLog.Size = new Size(645, 150);
             this.Controls.Add(txtLog);
 
             Log("欢迎使用 Command: Modern Operations (CMO) 完整中文汉化安装程序。");
             Log("本汉化涵盖：主界面、菜单、作战条令(RoE)、任务编辑、航空作业、全部45个教程及全球4608处地名。");
             RefreshStatus();
+            RefreshUpdateState();
         }
 
         private void OnDonateClick(object sender, EventArgs e)
@@ -170,6 +229,83 @@ namespace CMOLocalizerInstaller
             }
         }
 
+        private void RefreshUpdateState()
+        {
+            string ver = InstallerCore.InstalledVersion();
+            bool auto = InstallerCore.GetAutoCheck();
+            suppressAutoStartEvent = true;
+            chkAutoStart.Checked = InstallerCore.GetAutoStart();
+            suppressAutoStartEvent = false;
+            btnNeverRemind.Text = auto ? "不再提醒" : "开启提醒";
+            lblUpdateState.Text = auto
+                ? "自动检查已开启：开机后自动检查一次，之后每 6 小时检查一次"
+                : "已关闭自动检查（点击「开启提醒」可随时恢复）";
+            lblUpdateNext.Text = ver.Length > 0
+                ? ("当前已安装版本 v" + ver + "　·　上次检查：" + InstallerCore.LastCheckText() + "　·　下次：" + InstallerCore.NextCheckText())
+                : "尚未安装汉化补丁 —— 安装后即可使用开机自检与自动升级";
+        }
+
+        private void OnAutoStartChanged(object sender, EventArgs e)
+        {
+            if (suppressAutoStartEvent) return;
+            InstallerCore.SetAutoStart(chkAutoStart.Checked);
+            Log(chkAutoStart.Checked
+                ? "已开启开机自动检查：随 Windows 启动并在后台每 6 小时检查一次更新。"
+                : "已关闭开机自动检查（仍可从更新助手/安装器手动检查）。");
+            RefreshUpdateState();
+        }
+
+        private void OnCheckUpdateClick(object sender, EventArgs e)
+        {
+            RunUpdater("检查升级");
+        }
+
+        private void OnUpgradeClick(object sender, EventArgs e)
+        {
+            RunUpdater("立即升级");
+        }
+
+        private void RunUpdater(string what)
+        {
+            try
+            {
+                string gp = txtPath.Text.Trim();
+                if (Directory.Exists(gp)) InstallerCore.RememberGamePath(gp);
+                string err;
+                string exe = InstallerCore.LaunchUpdater(gp, out err);
+                if (exe == null)
+                {
+                    Log("[" + what + "] 启动更新助手失败: " + err);
+                    MessageBox.Show("无法启动更新助手:\n" + err, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                Log("[" + what + "] 已启动更新助手，请在弹出的窗口中确认升级。");
+                RefreshUpdateState();
+            }
+            catch (Exception ex)
+            {
+                Log("[" + what + "] 异常: " + ex.Message);
+            }
+        }
+
+        private void OnNeverRemindClick(object sender, EventArgs e)
+        {
+            bool nowAuto = InstallerCore.ToggleNeverRemind();
+            btnNeverRemind.Text = nowAuto ? "不再提醒" : "开启提醒";
+            if (nowAuto)
+            {
+                Log("已重新开启自动更新检查（每 6 小时）。");
+                MessageBox.Show("已重新开启自动更新检查。", "自动升级", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                Log("已选择不再提醒：自动检查已关闭，并记住了当前版本；手动「检查升级」仍可使用。");
+                MessageBox.Show("已关闭自动更新提醒。\n\n以后需要升级时，随时点击「检查升级」即可。", "自动升级",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            RefreshUpdateState();
+        }
+
         private void OnInstallClick(object sender, EventArgs e)
         {
             string gp = txtPath.Text.Trim();
@@ -179,7 +315,7 @@ namespace CMOLocalizerInstaller
                 Log("Successfully Installed! 已成功复制 CMOLocalizer.dll 与 CMOLocalizer.json。");
                 Log("已自动备份原版配置为 Command.exe.config.cmo_bak 并启用本地化引擎。");
                 RefreshStatus();
-                MessageBox.Show("CMO 完整中文汉化补丁安装成功！\n现在直接从 Steam 或运行 Command.exe 启动游戏即可显示中文。", "安装成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("CMO 完整中文汉化补丁安装成功！\n现在直接从 Steam 或运行 Command.exe 启动游戏即可显示中文。\n\n已同时启用自动升级：开机后自动检查一次，之后每 6 小时检查一次。", "安装成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
             {
@@ -602,6 +738,10 @@ namespace CMOLocalizerInstaller
                 // 部署已全量汉化的 Scenarios HTML 简报/教程正文（内嵌 zip，带 .orig 备份）
                 DeployScenarioHtml(gamePath);
 
+                // 部署自动升级组件并写入设置（开机自启 / 每 6 小时检查）
+                DeployUpdater(gamePath);
+                WriteRegistrySettings(gamePath);
+
                 // 兜底：对 zip 未覆盖的 HTML 做标题级替换 (带 .orig 备份)
                 LocalizeScenarioBriefings(Path.Combine(gamePath, "Scenarios"));
 
@@ -663,6 +803,9 @@ namespace CMOLocalizerInstaller
             catch { }
         }
 
+        private static readonly System.Text.RegularExpressions.Regex HanRegex =
+            new System.Text.RegularExpressions.Regex("[\u4e00-\u9fff]");
+
         private static void LocalizeScenarioBriefings(string scenDir)
         {
             if (!Directory.Exists(scenDir)) return;
@@ -672,6 +815,8 @@ namespace CMOLocalizerInstaller
                 foreach (string h in htmls)
                 {
                     if (h.EndsWith(".orig", StringComparison.OrdinalIgnoreCase)) continue;
+                    // 已由 zip 全量汉化的文件不得再用标题级替换覆盖（否则会降级成中英混排）
+                    if (HanRegex.IsMatch(File.ReadAllText(h, Encoding.UTF8))) continue;
                     string orig = h + ".orig";
                     if (!File.Exists(orig))
                     {
@@ -925,6 +1070,237 @@ namespace CMOLocalizerInstaller
             }
         }
 
+        // ──────────────────────────────────────────────────────────────
+        //  自动升级（更新助手 CMO_Updater.exe）集成
+        // ──────────────────────────────────────────────────────────────
+        public const string CurrentVersion = "4.1.4";
+        private const string RegPath = @"Software\CMOChinese";
+        private const string RunKeyName = "CMOChineseUpdater";
+
+        private static object RegGet(string name)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RegPath))
+                {
+                    return k == null ? null : k.GetValue(name);
+                }
+            }
+            catch { return null; }
+        }
+
+        private static void RegSet(string name, object value, RegistryValueKind kind)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(RegPath))
+                {
+                    if (k != null) k.SetValue(name, value, kind);
+                }
+            }
+            catch { }
+        }
+
+        public static string InstalledVersion()
+        {
+            object v = RegGet("Version");
+            return v == null ? "" : v.ToString();
+        }
+
+        public static void RememberGamePath(string gamePath)
+        {
+            if (!string.IsNullOrEmpty(gamePath)) RegSet("GamePath", gamePath, RegistryValueKind.String);
+        }
+
+        public static bool GetAutoCheck()
+        {
+            object v = RegGet("AutoCheck");
+            return v == null || Convert.ToInt64(v) != 0;
+        }
+
+        public static void SetAutoCheck(bool on)
+        {
+            RegSet("AutoCheck", on ? 1 : 0, RegistryValueKind.DWord);
+        }
+
+        /// <summary>「不再提醒」开关：关闭自动检查 + 记住当前版本；返回新的自动检查状态。</summary>
+        public static bool ToggleNeverRemind()
+        {
+            bool nowAuto = !GetAutoCheck();
+            SetAutoCheck(nowAuto);
+            if (!nowAuto)
+            {
+                string ver = InstalledVersion();
+                RegSet("SkippedVersion", ver.Length > 0 ? ver : CurrentVersion, RegistryValueKind.String);
+            }
+            else
+            {
+                RegSet("SkippedVersion", "", RegistryValueKind.String);
+            }
+            return nowAuto;
+        }
+
+        public static bool GetAutoStart()
+        {
+            object v = RegGet("AutoStart");
+            return v == null || Convert.ToInt64(v) != 0;
+        }
+
+        public static string GetGamePath()
+        {
+            object v = RegGet("GamePath");
+            if (v != null && Directory.Exists(v.ToString())) return v.ToString();
+            return DetectGamePath();
+        }
+
+        public static void SetAutoStart(bool on)
+        {
+            RegSet("AutoStart", on ? 1 : 0, RegistryValueKind.DWord);
+            try
+            {
+                using (RegistryKey run = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    if (run == null) return;
+                    string exe = Path.Combine(GetGamePath(), "CMO_Updater.exe");
+                    if (on && File.Exists(exe))
+                        run.SetValue(RunKeyName, "\"" + exe + "\" --boot", RegistryValueKind.String);
+                    else if (!on)
+                        run.DeleteValue(RunKeyName, false);
+                }
+            }
+            catch { }
+        }
+
+        public static string LastCheckText()
+        {
+            object v = RegGet("LastCheckUtc");
+            if (v == null) return "尚未检查";
+            DateTime d;
+            if (!DateTime.TryParse(v.ToString(), System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d))
+                return "尚未检查";
+            return d.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        }
+
+        public static string NextCheckText()
+        {
+            if (!GetAutoCheck()) return "已关闭";
+            object v = RegGet("LastCheckUtc");
+            DateTime d;
+            if (v == null || !DateTime.TryParse(v.ToString(), System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d))
+                return "开机后自动检查";
+            object iv = RegGet("CheckIntervalHours");
+            int hours = iv == null ? 6 : (int)Convert.ToInt64(iv);
+            if (hours < 1) hours = 6;
+            DateTime next = d.ToLocalTime().AddHours(hours);
+            if (next <= DateTime.Now) return "即将检查";
+            if (next.Date == DateTime.Today) return "今天 " + next.ToString("HH:mm");
+            return next.ToString("yyyy-MM-dd HH:mm");
+        }
+
+        /// <summary>部署更新助手到游戏目录（内嵌资源 UPDATER_EXE）。</summary>
+        public static bool DeployUpdater(string gamePath)
+        {
+            if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath)) return false;
+            return ExtractEmbeddedResource("UPDATER_EXE", Path.Combine(gamePath, "CMO_Updater.exe"));
+        }
+
+        /// <summary>写入/补齐设置项；不改动用户已有的选择。</summary>
+        public static void WriteRegistrySettings(string gamePath)
+        {
+            RegSet("GamePath", gamePath, RegistryValueKind.String);
+            RegSet("Version", CurrentVersion, RegistryValueKind.String);
+            if (RegGet("AutoCheck") == null) RegSet("AutoCheck", 1, RegistryValueKind.DWord);
+            if (RegGet("CheckIntervalHours") == null) RegSet("CheckIntervalHours", 6, RegistryValueKind.DWord);
+            if (RegGet("AutoStart") == null) RegSet("AutoStart", 1, RegistryValueKind.DWord);
+            if (RegGet("NotifyMode") == null) RegSet("NotifyMode", 1, RegistryValueKind.DWord);
+            if (RegGet("AutoInstall") == null) RegSet("AutoInstall", 1, RegistryValueKind.DWord);
+            if (RegGet("Mirror") == null) RegSet("Mirror", "https://ghproxy.net/", RegistryValueKind.String);
+            SetAutoStart(GetAutoStart());
+        }
+
+        /// <summary>静默安装之后把更新助手重新拉起（供 --restart-updater 使用）。</summary>
+        public static void StartUpdater(string gamePath)
+        {
+            try
+            {
+                string exe = Path.Combine(gamePath, "CMO_Updater.exe");
+                if (!File.Exists(exe) || !GetAutoStart()) return;
+                ProcessStartInfo psi = new ProcessStartInfo(exe, "--restarted");
+                psi.UseShellExecute = false;
+                Process.Start(psi);
+            }
+            catch { }
+        }
+
+        /// <summary>启动更新助手做一次检查（游戏目录没有时用临时释放的内嵌副本）。</summary>
+        public static string LaunchUpdater(string gamePath, out string error)
+        {
+            error = "";
+            try
+            {
+                string exe = string.IsNullOrEmpty(gamePath) ? "" : Path.Combine(gamePath, "CMO_Updater.exe");
+                if (exe.Length == 0 || !File.Exists(exe))
+                {
+                    exe = Path.Combine(Path.GetTempPath(), "CMO_Updater.exe");
+                    if (!ExtractEmbeddedResource("UPDATER_EXE", exe))
+                    {
+                        error = "当前安装包未内嵌更新助手（UPDATER_EXE 资源缺失），请使用 v4.1.4 及以上版本安装包。";
+                        return null;
+                    }
+                }
+                ProcessStartInfo psi = new ProcessStartInfo(exe, "--check");
+                psi.UseShellExecute = false;
+                psi.WorkingDirectory = Path.GetDirectoryName(exe);
+                Process.Start(psi);
+                return exe;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return null;
+            }
+        }
+
+        /// <summary>卸载：结束更新助手、清理开机启动、注册表设置与程序本体。</summary>
+        public static void CleanupUpdater(string gamePath)
+        {
+            try
+            {
+                foreach (Process p in Process.GetProcessesByName("CMO_Updater"))
+                {
+                    try { p.Kill(); } catch { }
+                }
+                System.Threading.Thread.Sleep(700);
+            }
+            catch { }
+            try
+            {
+                using (RegistryKey run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (run != null) run.DeleteValue(RunKeyName, false);
+                }
+            }
+            catch { }
+            try { Registry.CurrentUser.DeleteSubKeyTree(RegPath, false); } catch { }
+            try
+            {
+                if (!string.IsNullOrEmpty(gamePath))
+                {
+                    string exe = Path.Combine(gamePath, "CMO_Updater.exe");
+                    if (File.Exists(exe)) File.Delete(exe);
+                }
+            }
+            catch { }
+            try
+            {
+                string tmp = Path.Combine(Path.GetTempPath(), "CMO_Updater.exe");
+                if (File.Exists(tmp)) File.Delete(tmp);
+            }
+            catch { }
+        }
+
         public static bool Uninstall(string gamePath, out string errorMsg)
         {
             errorMsg = "";
@@ -985,6 +1361,9 @@ namespace CMOLocalizerInstaller
                 // 还原 World Wind 标注图层瓦片
                 RestoreMapLabelTiles(gamePath);
 
+                // 清理自动升级：结束助手进程、删除开机启动项、注册表设置与助手本体
+                CleanupUpdater(gamePath);
+
                 return true;
             }
             catch (Exception ex)
@@ -1001,19 +1380,52 @@ namespace CMOLocalizerInstaller
 
             if (args != null && args.Length > 0)
             {
-                string cmd = args[0].ToLowerInvariant();
-                if (args.Length > 1 && Directory.Exists(args[1]))
+                string cmd = null;
+                string gpArg = null;
+                int waitPid = 0;
+                bool restartUpdater = false;
+
+                for (int i = 0; i < args.Length; i++)
                 {
-                    gp = args[1];
+                    string a = args[i];
+                    if (a == "--install" || a == "/install") cmd = "install";
+                    else if (a == "--uninstall" || a == "/uninstall") cmd = "uninstall";
+                    else if (a == "--silent" || a == "/silent") { }
+                    else if (a == "--restart-updater") restartUpdater = true;
+                    else if (a == "--wait-pid" && i + 1 < args.Length)
+                    {
+                        int.TryParse(args[++i], out waitPid);
+                    }
+                    else if (Directory.Exists(a)) gpArg = a;
                 }
+
+                if (gpArg != null) gp = gpArg;
+
+                // 自更新：等待旧更新助手退出后再写文件，避免文件占用导致覆盖失败
+                if (waitPid > 0)
+                {
+                    try
+                    {
+                        Process old = Process.GetProcessById(waitPid);
+                        if (!old.WaitForExit(120000))
+                        {
+                            try { old.Kill(); } catch { }
+                            System.Threading.Thread.Sleep(1500);
+                        }
+                    }
+                    catch { }
+                    System.Threading.Thread.Sleep(1200);
+                }
+
                 string err;
-                if (cmd == "--install" || cmd == "/install")
+                if (cmd == "install")
                 {
                     bool ok = Install(gp, out err);
                     Console.WriteLine(ok ? "[SUCCESS] Installed to " + gp : "[ERROR] " + err);
+                    if (ok && restartUpdater) StartUpdater(gp);
                     return ok ? 0 : 1;
                 }
-                else if (cmd == "--uninstall" || cmd == "/uninstall")
+                else if (cmd == "uninstall")
                 {
                     bool ok = Uninstall(gp, out err);
                     Console.WriteLine(ok ? "[SUCCESS] Uninstalled from " + gp : "[ERROR] " + err);

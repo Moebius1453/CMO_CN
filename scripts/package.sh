@@ -39,6 +39,7 @@ rm -rf "$PACK"
 mkdir -p "$PACK/DB/Templates"
 cp "$OUT/CMOLocalizer.dll" "$PACK/"
 cp "$ROOT/dict/CMOLocalizer.json" "$PACK/"
+cp "$OUT/CMO_Updater.exe" "$PACK/"
 cp "$ROOT/assets/db_templates/"*.html "$PACK/DB/Templates/"
 
 # Green pack parity: ship the localized Scenarios HTML so unpacking over the game
@@ -88,5 +89,19 @@ print(f"wrote {dest} ({dest.stat().st_size} bytes)")
 PYEOF
 echo "==> $ZIP"
 
-ls -la "$OUT"/*.dll "$OUT"/*.exe "$OUT"/*.zip
+# 发布资产摘要（自动升级用它做完整性校验；无摘要时更新助手会回退到长度/PE 头检查）
+for f in "$OUT/CMO_Chinese_Setup_v${VER}.exe" "$ZIP"; do
+  if [ -f "$f" ]; then
+    "$PY" - "$f" <<'PYEOF'
+import hashlib, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+h = hashlib.sha256(p.read_bytes()).hexdigest()
+out = p.with_name(p.name + ".sha256")
+out.write_text(h + "  " + p.name + "\n", encoding="ascii")
+print(f"sha256 {p.name}: {h}")
+PYEOF
+  fi
+done
+
+ls -la "$OUT"/*.dll "$OUT"/*.exe "$OUT"/*.zip "$OUT"/*.sha256
 echo "==> package ok"

@@ -128,6 +128,14 @@ def main():
         BUILD_DIR / f"CMO_Chinese_Pack_{version}.zip"
     ]
 
+    # SHA256 摘要资产：自动升级（CMO_Updater.exe）下载后据此校验安装包完整性
+    for base in list(files_to_upload):
+        digest = base.with_name(base.name + ".sha256")
+        if digest.is_file():
+            files_to_upload.append(digest)
+        else:
+            print(f"WARN: 缺少摘要文件 {digest.name}，更新助手将跳过摘要校验")
+
     for file_path in files_to_upload:
         if not file_path.is_file():
             print(f"ERROR: Asset file missing: {file_path}")

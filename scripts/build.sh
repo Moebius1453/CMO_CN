@@ -26,10 +26,18 @@ WPF="/c/Windows/Microsoft.NET/Framework64/v4.0.30319/WPF"
   -reference:"$(W "/c/Windows/Microsoft.NET/Framework64/v4.0.30319/System.Xaml.dll")" \
   "$(W "$ROOT/src/engine/CMOLocalizer.cs")"
 
+echo "==> building CMO_Updater.exe"
+"$CSC" -nologo -target:winexe -platform:anycpu -optimize+ \
+  -out:"$(W "$OUT/CMO_Updater.exe")" \
+  -reference:System.dll -reference:System.Core.dll \
+  -reference:System.Windows.Forms.dll -reference:System.Drawing.dll \
+  "$(W "$ROOT/src/updater/CMO_Updater.cs")"
+
 echo "==> building $SETUP_EXE"
 RES=()
 RES+=(-resource:"$(W "$OUT/CMOLocalizer.dll")",CMOLocalizer.dll)
 RES+=(-resource:"$(W "$ROOT/dict/CMOLocalizer.json")",CMOLocalizer.json)
+RES+=(-resource:"$(W "$OUT/CMO_Updater.exe")",UPDATER_EXE)
 RES+=(-resource:"$(W "$ROOT/assets/donate/wechat_pay.png")",QR_WeChat)
 RES+=(-resource:"$(W "$ROOT/assets/donate/alipay.jpg")",QR_Alipay)
 for t in "$ROOT"/assets/db_templates/*.html; do
