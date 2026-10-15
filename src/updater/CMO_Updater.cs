@@ -128,16 +128,22 @@ namespace CMOUpdater
 
         public static bool IsAutoStartOn()
         {
+            string stored = "";
             try
             {
-                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(@"Software\\Microsoft\\Windows\\CurrentVersion\\Run"))
                 {
-                    if (k == null) return false;
-                    object v = k.GetValue(RunKeyName);
-                    return v != null && v.ToString().IndexOf(ExePath, StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (k != null)
+                    {
+                        object v = k.GetValue(RunKeyName);
+                        // 安装器按用户选择的目录写入，可能带正斜杠；比较前统一分隔符
+                        if (v != null) stored = v.ToString().Replace('/', '\\');
+                    }
                 }
             }
-            catch { return false; }
+            catch { }
+            string self = ExePath.Replace('/', '\\');
+            return stored.IndexOf(self, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static void ApplyAutoStart(bool on)
@@ -1132,15 +1138,27 @@ namespace CMOUpdater
 
             Label l2 = new Label(); l2.Text = "提醒方式:"; l2.AutoSize = true; l2.Location = new Point(20, 86);
             this.Controls.Add(l2);
-            rDialog = new RadioButton(); rDialog.Text = "弹窗提醒（发现新版本时弹出提示窗）"; rDialog.AutoSize = true; rDialog.Location = new Point(24, 110); this.Controls.Add(rDialog);
-            rBalloon = new RadioButton(); rBalloon.Text = "仅托盘气泡提醒（不打断当前操作）"; rBalloon.AutoSize = true; rBalloon.Location = new Point(24, 133); this.Controls.Add(rBalloon);
-            rSilent = new RadioButton(); rSilent.Text = "不提醒（仅在更新助手窗口内显示）"; rSilent.AutoSize = true; rSilent.Location = new Point(24, 156); this.Controls.Add(rSilent);
-            if (Cfg.NotifyMode == 0) rDialog.Checked = true; else if (Cfg.NotifyMode == 1) rBalloon.Checked = true; else rSilent.Checked = true;
+            // WinForms 的单选按钮按「父容器」分组：提醒方式与升级方式必须各自放进独立容器，
+            // 否则五颗单选钮同属一个组，最后一次 Checked 赋值会把前面的选择清空。
+            Panel pNotify = new Panel();
+            pNotify.Location = new Point(18, 104);
+            pNotify.Size = new Size(510, 74);
+            this.Controls.Add(pNotify);
+            Panel pUpgrade = new Panel();
+            pUpgrade.Location = new Point(18, 206);
+            pUpgrade.Size = new Size(510, 52);
+            this.Controls.Add(pUpgrade);
+            rDialog = new RadioButton(); rDialog.Text = "弹窗提醒（发现新版本时弹出提示窗）"; rDialog.AutoSize = true; rDialog.Location = new Point(6, 6); pNotify.Controls.Add(rDialog);
+            rBalloon = new RadioButton(); rBalloon.Text = "仅托盘气泡提醒（不打断当前操作）"; rBalloon.AutoSize = true; rBalloon.Location = new Point(6, 29); pNotify.Controls.Add(rBalloon);
+            rSilent = new RadioButton(); rSilent.Text = "不提醒（仅在更新助手窗口内显示）"; rSilent.AutoSize = true; rSilent.Location = new Point(6, 52); pNotify.Controls.Add(rSilent);
+            rDialog.Checked = Cfg.NotifyMode == 0;
+            rBalloon.Checked = Cfg.NotifyMode == 1;
+            rSilent.Checked = Cfg.NotifyMode == 2;
 
             Label l3 = new Label(); l3.Text = "升级方式:"; l3.AutoSize = true; l3.Location = new Point(20, 188);
             this.Controls.Add(l3);
-            rAuto = new RadioButton(); rAuto.Text = "自动下载并静默安装（需先退出游戏）"; rAuto.AutoSize = true; rAuto.Location = new Point(24, 212); this.Controls.Add(rAuto);
-            rManual = new RadioButton(); rManual.Text = "只提示新版本，由我手动下载安装"; rManual.AutoSize = true; rManual.Location = new Point(24, 235); this.Controls.Add(rManual);
+            rAuto = new RadioButton(); rAuto.Text = "自动下载并静默安装（需先退出游戏）"; rAuto.AutoSize = true; rAuto.Location = new Point(6, 6); pUpgrade.Controls.Add(rAuto);
+            rManual = new RadioButton(); rManual.Text = "只提示新版本，由我手动下载安装"; rManual.AutoSize = true; rManual.Location = new Point(6, 29); pUpgrade.Controls.Add(rManual);
             if (Cfg.AutoInstall) rAuto.Checked = true; else rManual.Checked = true;
 
             Label l4 = new Label(); l4.Text = "下载镜像（直连 GitHub 失败时使用）:"; l4.AutoSize = true; l4.Location = new Point(20, 268);
