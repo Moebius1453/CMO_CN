@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "generatedAt": 1791994223144,
+  "generatedAt": 1792066534470,
   "entries": [
     {
       "id": "knowhow-dcs-20261012-2009",
@@ -113,6 +113,104 @@
       "repoId": null
     },
     {
+      "id": "knowhow-dcs-20261015-1351",
+      "type": "knowhow",
+      "title": "打包铁律：安装包与绿色包必须包含全部汉化资产",
+      "summary": "用户明确要求（2026-10-15）：「打包的时候必须打包齐全」「请确保打包的时候把所有的汉化都带上」。",
+      "tags": [],
+      "status": "active",
+      "created": "2026-10-15T05:51:33.616Z",
+      "updated": "2026-10-15T05:51:33.617Z",
+      "scope": null,
+      "category": "decision",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DCS-20261015-1351-001",
+      "type": "knowhow",
+      "title": "事故背景（真实踩坑）",
+      "summary": "CMO 汉化项目 v4.1.3 及更早的安装包与绿色包，**从未包含**下列三组资产： - `WW\\PlacenameSets\\{Synoptic,Cities}\\0000_0000.wwp`（地图地名集 → 地图国名/城市名） - `Symbols\\Menu\\*.png`（13 张中文按钮图 → 主工具栏按钮文字，文字是画在位图里的） - `Launcher\\Localization\\stringsChinese.resx`（启动器中文文案） 后果：用户装包后**工具栏按",
+      "tags": [
+        "decision"
+      ],
+      "status": "active",
+      "created": "2026-10-15T05:51:33.616Z",
+      "updated": "2026-10-15T05:51:33.617Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-dcs-20261015-1351",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DCS-20261015-1351-002",
+      "type": "knowhow",
+      "title": "强制要求",
+      "summary": "1. `scripts/package.sh` 末尾的「汉化资产覆盖率断言」必须保持通过；缺失即构建失败，不得绕过。 2. 新增任何汉化资产时五处同步：① 收录 `assets/`；② `build.sh` 内嵌资源； ③ 安装器 `Deploy*` 部署 + 卸载 `Restore*` 还原（覆盖前写 `.orig` 备份）；④ 绿色包携带； ⑤ 覆盖率断言清单加入该资产。 3. 发布前实测核对：`grep -a <资源名> build/CMO_Chinese_",
+      "tags": [
+        "decision"
+      ],
+      "status": "active",
+      "created": "2026-10-15T05:51:33.616Z",
+      "updated": "2026-10-15T05:51:33.617Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-dcs-20261015-1351",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DCS-20261015-1351-003",
+      "type": "knowhow",
+      "title": "另一类同类陷阱",
+      "summary": "**位图管按钮文字、词典管悬停提示**：替换按钮位图 ≠ 提示语已汉化。 例：工具栏「自动交战/手动交战」按钮位图已是中文，但悬停提示 `Auto Engage Target` / `Manually Engage Target` 仍英文——因为词典完全没有这两条整串词条（引擎按整串精确匹配）。",
+      "tags": [
+        "decision"
+      ],
+      "status": "active",
+      "created": "2026-10-15T05:51:33.616Z",
+      "updated": "2026-10-15T05:51:33.617Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-dcs-20261015-1351",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-DCS-20261015-1351-004",
+      "type": "knowhow",
+      "title": "当前资产清单（v4.1.4，绿色包 690 条目）",
+      "summary": "CMOLocalizer.dll / CMOLocalizer.json / CMO_Updater.exe / Command.exe.config 补丁 / DB\\Templates 8 个 / Scenarios\\**\\*.html 323(+323 备份) / WW\\PlacenameSets 2 / Symbols\\Menu 28 / Launcher\\Localization 1 / 汉化说明.md",
+      "tags": [
+        "decision"
+      ],
+      "status": "active",
+      "created": "2026-10-15T05:51:33.616Z",
+      "updated": "2026-10-15T05:51:33.617Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": null,
+      "parent": "knowhow-dcs-20261015-1351",
+      "related": [],
+      "repoId": null
+    },
+    {
       "id": "knowhow-doc-20261012-release",
       "type": "knowhow",
       "title": "禁止擅自执行Release打包与发布",
@@ -159,6 +257,97 @@
       "createdBy": null,
       "sourceRef": null,
       "parent": "knowhow-doc-20261012-release",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-tip-20261015-b3e6c7fed2efa60d",
+      "type": "knowhow",
+      "title": "数据库查看器详情面板空白：游戏按控件文本分派时不得汉化其选项",
+      "summary": "",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted"
+      ],
+      "status": "active",
+      "created": "2026-10-15T12:13:17.042Z",
+      "updated": "2026-10-15T12:13:17.042Z",
+      "scope": null,
+      "category": "tip",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,src/engine/CMOLocalizer.cs:1416,src/engine/CMOLocalizer.cs:2523",
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-TIP-20261015-b3e6c7fed2efa60d-001",
+      "type": "knowhow",
+      "title": "现象",
+      "summary": "CO【数据库查看器】打开后可以筛选、列表有数据，但点击任何装备条目，下方详情面板（WebView2）一片死灰； 点击时中文还会闪一下变回英文（用户原话：「数据库不显示数据了」「点一下装备中文就闪下变成英文」）。",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted",
+        "tip"
+      ],
+      "status": "active",
+      "created": "2026-10-15T12:13:17.042Z",
+      "updated": "2026-10-15T12:13:17.042Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,src/engine/CMOLocalizer.cs:1416,src/engine/CMOLocalizer.cs:2523",
+      "parent": "knowhow-tip-20261015-b3e6c7fed2efa60d",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-TIP-20261015-b3e6c7fed2efa60d-002",
+      "type": "knowhow",
+      "title": "根因（可复用的失效模式）",
+      "summary": "游戏用 `InternalDBViewer.CB_ObjectType.Text` 做**表分派**：异常栈实证 `DarkListView.OnMouseDown → DarkListView.SelectItem → InternalDBViewer.DisplaySelection → DisplayInfoInDetailsPanel(_SelectedObjectID, _SelectedObjectType)`。 本工程的引擎把汉化铺到通用下拉框路径 （`Tran",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted",
+        "tip"
+      ],
+      "status": "active",
+      "created": "2026-10-15T12:13:17.042Z",
+      "updated": "2026-10-15T12:13:17.042Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,src/engine/CMOLocalizer.cs:1416,src/engine/CMOLocalizer.cs:2523",
+      "parent": "knowhow-tip-20261015-b3e6c7fed2efa60d",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-TIP-20261015-b3e6c7fed2efa60d-003",
+      "type": "knowhow",
+      "title": "教训与预防",
+      "summary": "1. **只要游戏按控件文本分派，就不能改写其选项文本**（宁可在界面上显示英文 token）； 专用白名单必须覆盖通用路径，否则等于没有。 2. 诊断口径：`RenderedHTMLString` 长度（引擎 `DB_INSPECT` 命令）——正常 3.4~5.9 万字节，空白即 0。 WebView2 子窗口标题为 about:blank、body.innerHTML 仅 41 字节，也是同一故障的可观测特征。 3. 该查看器窗体在辅助 UI 线程创建，`A",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted",
+        "tip"
+      ],
+      "status": "active",
+      "created": "2026-10-15T12:13:17.042Z",
+      "updated": "2026-10-15T12:13:17.042Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,src/engine/CMOLocalizer.cs:1416,src/engine/CMOLocalizer.cs:2523",
+      "parent": "knowhow-tip-20261015-b3e6c7fed2efa60d",
       "related": [],
       "repoId": null
     },
