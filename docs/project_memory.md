@@ -92,3 +92,25 @@
 3. **想定简报与地图探明**：
    - 探明地图全大写国名烘焙在 Stamen 瓦片 PNG 中，矢量地名来自 `WW\Data\Earth\Placenames\*.wwp` 并受限于 WorldWind 的 GDI 字体绑定；
    - 加载想定界面支持动态注入翻译。
+
+## 打包完整性铁律（2026-10-15 用户明确要求）
+
+**打包（`scripts/package.sh`）时必须把全部汉化资产打进去，缺一不可。**
+
+- 用户原话：「打包的时候必须打包齐全」「请确保打包的时候把所有的汉化都带上」。
+- 事故背景：v4.1.3 及更早的安装包与绿色包**从未包含** `WW\PlacenameSets\*.wwp`（地图地名集）、
+  `Symbols\Menu\*.png`（13 张中文按钮图）、`Launcher\Localization\stringsChinese.resx`，
+  于是用户装包后**工具栏按钮与地图仍是英文**；而开发者本机因手工部署过这些文件而显示中文，
+  造成「本地全好、用户全英文」的假象。
+- 强制要求：
+  1. `scripts/package.sh` 末尾的「汉化资产覆盖率断言」必须保持通过，缺失即构建失败，不得绕过。
+  2. 新增任何汉化资产时必须五处同步：① 收录到 `assets/`；② `build.sh` 内嵌资源；
+     ③ 安装器 `Deploy*` 部署 + 卸载 `Restore*` 还原（覆盖前写 `.orig` 备份）；
+     ④ 绿色包携带；⑤ 覆盖率断言清单加入该资产。
+  3. 发布前必须实测核对：`grep -a <资源名> build/CMO_Chinese_Setup_v<ver>.exe` 确认内嵌；
+     解包 `CMO_Chinese_Pack_<ver>.zip` 核对条目数与各资产数量。
+- 当前资产清单：`CMOLocalizer.dll`、`CMOLocalizer.json`、`CMO_Updater.exe`、`Command.exe.config` 补丁、
+  `DB\Templates` 8 个、`Scenarios\**\*.html` 323(+323 备份)、`WW\PlacenameSets` 2、
+  `Symbols\Menu` 28、`Launcher\Localization` 1、`汉化说明.md`（绿色包共 690 条目）。
+- 另一类同类问题：**位图管按钮文字、词典管悬停提示**——替换了按钮位图不等于提示语也汉化了，
+  提示语缺失只能补词条（例：`Auto Engage Target→自动交战目标`）。
