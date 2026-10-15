@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# 提交前拦截明文凭据：git config core.hooksPath scripts/hooks 后生效
+PY_BIN="${PY:-python}"
+"$PY_BIN" "$(git rev-parse --show-toplevel)/scripts/verify_no_secrets.py" || {
+  echo "✗ 提交被密钥门禁阻断：请改用 scripts/credentials.py 的三种方式提供凭据"; exit 1; }

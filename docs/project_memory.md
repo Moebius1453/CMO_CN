@@ -125,3 +125,17 @@
   `.workflow/recovery` 与 `scripts/translate_worker.py`），需先做 mirror 备份；
   旧提交 `998c563` 起仍含明文密钥，重写后建议联系 GitHub 支持清理缓存视图。
 - 预防建议：加提交前密钥扫描（`sk-`/`ghp_`/`gho_`/`AKIA` 等）并接入发布门禁。
+
+## 密钥使用规范（2026-10-15 事故后确立）
+
+**任何密钥/令牌一律不入库。** 统一用 `scripts/credentials.py` 解析，顺序：
+① 环境变量（`CMO_LLM_API_KEY` 等，临时/CI 首选）→ ② `%USERPROFILE%\.cmo-cn\secrets.json`（本机长期）
+→ ③ 仓库内 `.secrets.local.json`（已在 .gitignore）。格式见 `docs/credentials.example.json`（仅占位符）。
+
+- 代码里**只允许** `get_credential("llm_api_key", env="CMO_LLM_API_KEY")` 这种写法，不得出现明文。
+- `.gitignore` 已覆盖：`.env*`、`.secrets.local.json`、`secrets/`、`*.secrets.json`、`*.pem`、`*.key`、
+  `.workflow/recovery/`、`.workflow/**/session-*.md`、`scripts/translate_worker.py`。
+- 三重拦截：`verify_all.py` 第 10 项 `secrets`（含 `--history` 全历史）、`package.sh` 打包前硬门禁、
+  可选提交钩子（`git config core.hooksPath scripts/hooks`）。
+- 万一再次泄露：**先吊销/轮换**（公开仓库分钟级被抓），再清理 tip、重写历史强推（配方见本文件「凭据泄露收尾」节）。
+- 更优做法：能在 pi/teammate 运行时用现成凭据完成的工作，就不要在仓库里放密钥。

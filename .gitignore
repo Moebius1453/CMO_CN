@@ -44,3 +44,12 @@ dict/db_desc_out/
 .workflow/recovery/
 .workflow/**/session-*.md
 scripts/translate_worker.py
+
+# 凭据与私有配置（绝不入库）
+.env
+.env.*
+.secrets.local.json
+secrets/
+*.secrets.json
+*.pem
+*.key
