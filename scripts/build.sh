@@ -11,6 +11,7 @@ mkdir -p "$OUT"
 
 # csc.exe is a native Windows binary: hand it backslash paths.
 W() { cygpath -w "$1"; }
+PY="C:/Users/admin/Desktop/ga-admin-portable-windows-amd64-v0.2.29/python/python.exe"
 
 echo "==> building CMOLocalizer.dll"
 WPF="/c/Windows/Microsoft.NET/Framework64/v4.0.30319/WPF"
@@ -33,6 +34,20 @@ echo "==> building CMO_Updater.exe"
   -reference:System.Windows.Forms.dll -reference:System.Drawing.dll \
   "$(W "$ROOT/src/updater/CMO_Updater.cs")"
 
+# Symbols/Menu 的中文按钮图（引擎启动时预加载，必须随包分发）
+SYM_ZIP="$OUT/Symbols_Menu.zip"
+if [ -d "$ROOT/assets/symbols_menu" ]; then
+  "$PY" - "$ROOT/assets/symbols_menu" "$SYM_ZIP" <<'PYEOF'
+import pathlib, sys, zipfile
+src, dest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+    for f in sorted(src.rglob("*")):
+        if f.is_file():
+            z.write(f, f.relative_to(src))
+print(f"symbols menu zip: {dest.stat().st_size} bytes")
+PYEOF
+fi
+
 echo "==> building $SETUP_EXE"
 RES=()
 RES+=(-resource:"$(W "$OUT/CMOLocalizer.dll")",CMOLocalizer.dll)
@@ -40,6 +55,10 @@ RES+=(-resource:"$(W "$ROOT/dict/CMOLocalizer.json")",CMOLocalizer.json)
 RES+=(-resource:"$(W "$OUT/CMO_Updater.exe")",UPDATER_EXE)
 RES+=(-resource:"$(W "$ROOT/assets/placenames/Synoptic.wwp")",PLACE_SYNOPTIC)
 RES+=(-resource:"$(W "$ROOT/assets/placenames/Cities.wwp")",PLACE_CITIES)
+RES+=(-resource:"$(W "$ROOT/assets/launcher/stringsChinese.resx")",LAUNCHER_ZH)
+if [ -f "$SYM_ZIP" ]; then
+  RES+=(-resource:"$(W "$SYM_ZIP")",SYMBOLS_MENU_ZIP)
+fi
 RES+=(-resource:"$(W "$ROOT/assets/donate/wechat_pay.png")",QR_WeChat)
 RES+=(-resource:"$(W "$ROOT/assets/donate/alipay.jpg")",QR_Alipay)
 for t in "$ROOT"/assets/db_templates/*.html; do

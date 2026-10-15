@@ -45,6 +45,11 @@ cp "$OUT/CMO_Updater.exe" "$PACK/"
 mkdir -p "$PACK/WW/PlacenameSets/Synoptic" "$PACK/WW/PlacenameSets/Cities"
 cp "$ROOT/assets/placenames/Synoptic.wwp" "$PACK/WW/PlacenameSets/Synoptic/0000_0000.wwp"
 cp "$ROOT/assets/placenames/Cities.wwp" "$PACK/WW/PlacenameSets/Cities/0000_0000.wwp"
+
+# Symbols/Menu 中文按钮图 + 启动器中文资源（与安装器同源，保证绿色包同样完整）
+mkdir -p "$PACK/Symbols/Menu" "$PACK/Launcher/Localization"
+cp -f "$ROOT/assets/symbols_menu/"* "$PACK/Symbols/Menu/" 2>/dev/null || true
+cp -f "$ROOT/assets/launcher/stringsChinese.resx" "$PACK/Launcher/Localization/"
 cp "$ROOT/assets/db_templates/"*.html "$PACK/DB/Templates/"
 
 # Green pack parity: ship the localized Scenarios HTML so unpacking over the game
@@ -107,6 +112,31 @@ print(f"sha256 {p.name}: {h}")
 PYEOF
   fi
 done
+
+# ── 汉化资产覆盖率断言：任何一组汉化漏进包都直接失败 ──────────────────────
+"$PY" - "$PACK" <<'PYEOF'
+import pathlib, sys
+pack = pathlib.Path(sys.argv[1])
+required = [
+    "CMOLocalizer.dll", "CMOLocalizer.json", "CMO_Updater.exe",
+    "Command.exe.config.patch", "汉化说明.md",
+    "DB/Templates/Ship.html",
+    "WW/PlacenameSets/Synoptic/0000_0000.wwp",
+    "WW/PlacenameSets/Cities/0000_0000.wwp",
+    "Launcher/Localization/stringsChinese.resx",
+]
+missing = [r for r in required if not (pack / r).is_file()]
+sym = list((pack / "Symbols" / "Menu").glob("*.png")) if (pack / "Symbols" / "Menu").is_dir() else []
+scen = list((pack / "Scenarios").rglob("*.html")) if (pack / "Scenarios").is_dir() else []
+if len(sym) < 20:
+    missing.append(f"Symbols/Menu/*.png (仅 {len(sym)} 个)")
+if len(scen) < 300:
+    missing.append(f"Scenarios/**/*.html (仅 {len(scen)} 个)")
+if missing:
+    print("归档失败：以下汉化资产缺失 -> " + ", ".join(missing))
+    sys.exit(1)
+print(f"汉化资产覆盖检查通过：Symbols/Menu {len(sym)} 张，Scenarios HTML {len(scen)} 个")
+PYEOF
 
 ls -la "$OUT"/*.dll "$OUT"/*.exe "$OUT"/*.zip "$OUT"/*.sha256
 echo "==> package ok"

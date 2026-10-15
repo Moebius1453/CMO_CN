@@ -741,6 +741,9 @@ namespace CMOLocalizerInstaller
                 // 部署汉化地名集（地图矢量地名层的数据源，必须先于标签瓦片重绘）
                 DeployPlacenames(gamePath);
 
+                // 部署 Symbols\Menu 中文按钮图与启动器中文资源
+                DeploySymbolsAndLauncher(gamePath);
+
                 // 部署自动升级组件并写入设置（开机自启 / 每 6 小时检查）
                 DeployUpdater(gamePath);
                 WriteRegistrySettings(gamePath);
@@ -767,6 +770,87 @@ namespace CMOLocalizerInstaller
         /// 地图上的国名/城市名以及 Stamen 标签瓦片重绘都以它为数据源；
         /// 不部署它则用户装完包地图仍是英文。覆盖前写 .orig 备份，卸载可还原。
         /// </summary>
+        /// <summary>
+        /// 部署 Symbols\Menu 中文按钮图（引擎启动时预加载，遗漏会导致按钮图仍是英文）
+        /// 与启动器中文资源（Launcher\Localization\stringsChinese.resx）。
+        /// 覆盖前写 .orig 备份，卸载可还原。
+        /// </summary>
+        private static void DeploySymbolsAndLauncher(string gamePath)
+        {
+            try
+            {
+                string menuDir = Path.Combine(gamePath, @"Symbols\Menu");
+                Assembly asm = Assembly.GetExecutingAssembly();
+                using (Stream s = asm.GetManifestResourceStream("SYMBOLS_MENU_ZIP"))
+                {
+                    if (s != null && Directory.Exists(menuDir))
+                    {
+                        using (ZipArchive zip = new ZipArchive(s, ZipArchiveMode.Read))
+                        {
+                            foreach (ZipArchiveEntry e in zip.Entries)
+                            {
+                                if (e.Name.Length == 0) continue;
+                                string dest = Path.Combine(menuDir, e.FullName.Replace('/', '\\'));
+                                string dir = Path.GetDirectoryName(dest);
+                                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                                string bak = dest + ".orig";
+                                if (File.Exists(dest) && !File.Exists(bak)) File.Copy(dest, bak, true);
+                                using (Stream es = e.Open())
+                                using (FileStream fs = new FileStream(dest, FileMode.Create, FileAccess.Write))
+                                {
+                                    es.CopyTo(fs);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                string locDir = Path.Combine(gamePath, @"Launcher\Localization");
+                if (Directory.Exists(locDir))
+                {
+                    string dest = Path.Combine(locDir, "stringsChinese.resx");
+                    string bak = dest + ".orig";
+                    if (File.Exists(dest) && !File.Exists(bak)) File.Copy(dest, bak, true);
+                    ExtractEmbeddedResource("LAUNCHER_ZH", dest);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>卸载：还原 Symbols\Menu 与启动器中文资源。</summary>
+        private static void RestoreSymbolsAndLauncher(string gamePath)
+        {
+            try
+            {
+                string menuDir = Path.Combine(gamePath, @"Symbols\Menu");
+                if (Directory.Exists(menuDir))
+                {
+                    foreach (string f in Directory.GetFiles(menuDir, "*.orig", SearchOption.AllDirectories))
+                    {
+                        string target = f.Substring(0, f.Length - ".orig".Length);
+                        File.Copy(f, target, true);
+                        File.Delete(f);
+                    }
+                }
+            }
+            catch { }
+            try
+            {
+                string orig = Path.Combine(gamePath, @"Launcher\Localization\stringsChinese.resx.orig");
+                string res = Path.Combine(gamePath, @"Launcher\Localization\stringsChinese.resx");
+                if (File.Exists(orig))
+                {
+                    File.Copy(orig, res, true);
+                    File.Delete(orig);
+                }
+            }
+            catch { }
+        }
+
         private static void DeployPlacenames(string gamePath)
         {
             string[][] sets = new string[][] {
@@ -1412,6 +1496,9 @@ namespace CMOLocalizerInstaller
 
                 // 还原原始英文地名集
                 RestorePlacenames(gamePath);
+
+                // 还原 Symbols\Menu 与启动器资源
+                RestoreSymbolsAndLauncher(gamePath);
 
                 // 清理自动升级：结束助手进程、删除开机启动项、注册表设置与助手本体
                 CleanupUpdater(gamePath);

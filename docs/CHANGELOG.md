@@ -42,6 +42,15 @@
   （注：曾尝试挂 WPF 依赖属性变更回调，实测会导致游戏无法启动，已弃用该方案。）
 - 新增引擎诊断命令 `CTRL_TREE`（控件树导出）与 `WPF_TEXTLOG`（WPF 翻译写入日志），
   用于定位自绘/绑定界面的文本来源与频闪。
+- **打包完整性审计（用户要求：打包时必须带上所有汉化）**：逐项核对游戏目录里被汉化的资产，
+  发现两组从未随包分发——`Symbols\Menu` 的 28 张中文菜单按钮图（引擎启动时预加载）与
+  `Launcher\Localization\stringsChinese.resx`（启动器中文文案）。现已：
+  ① 收录到 `assets/symbols_menu/`（与 `Menu_Backup` 逐字节比对，只收真正改过的 28 张）与 `assets/launcher/`；
+  ② 安装器新增 `DeploySymbolsAndLauncher` / `RestoreSymbolsAndLauncher`（覆盖前写 `.orig` 备份、卸载还原）；
+  ③ 绿色包同步携带 `Symbols/Menu` 与 `Launcher/Localization`；
+  ④ `package.sh` 增加**汉化资产覆盖率断言**：任一组资产（词典/引擎/助手/config 补丁/说明/
+  DB 模板/Scenarios HTML/地名集/符号图/启动器资源）缺失即构建失败。
+  当前绿色包 690 个条目、含 Scenarios HTML 323 + 备份 323、DB 模板 8、地名集 2、符号图 28、启动器资源 1。
 - 安装器与绿色包同步包含更新助手；绿色包解压后同样具备自动升级能力。
 
 ## v4.1.3 — 术语/命名统一、下拉框与消息日志全量汉化、频闪根因根治
