@@ -153,3 +153,28 @@
 4. **发布后自检清单**：`verify_all.py` 需 10/10；`grep -a <资源名> build/CMO_Chinese_Setup_v<ver>.exe`
    核对内嵌；解包绿色包核对条目数（v4.1.4 = 690 条目）；Release 四个资产（安装包/绿色包 + 两个 sha256）
    用 HTTP 206 分片下载验证。
+
+## 数据库查看器汉化禁区（2026-10-15 实机事故：详情面板空白）
+
+**铁律：凡是「游戏按文本分派」的控件，绝不允许改写其选项文本；宁可显示英文 token。**
+
+- **事故**：用户打开【数据库查看器】后，点击任何装备条目，下方详情面板一片死灰，
+  且点击时中文会闪一下变回英文。
+- **根因**：v4.1.3「下拉框全量汉化」把汉化铺到通用路径，`InternalDBViewer.CB_ObjectType`
+  的选项从 `Aircraft` 变成「飞机 / 航空器 (Aircraft)」。游戏用该控件 `Text` 做表分派
+  （`DisplaySelection → DisplayInfoInDetailsPanel(_SelectedObjectID, _SelectedObjectType)`，
+  异常栈里可直接看到），文本一变，所有分支落空 → 不生成详情 HTML（`RenderedHTMLString` = 0）。
+  专用路径 `LocalizeDBViewerComboBox` 早有该保护，但通用路径先执行，保护形同虚设。
+- **修复**：`IsProtectedDBViewerCombo()` 统一在通用 + 专用路径生效；该控件固定显示游戏原生 token。
+- **必须遵守**：
+  1. 新增任何下拉框/列表汉化逻辑（含通用路径）时，先确认游戏是否按文本分派；
+     数据库查看器对象类型框不得汉化。
+  2. 验证口径：打开数据库查看器 → 点击条目 → `RenderedHTMLString` 长度必须 > 0
+     （`DB_INSPECT` 查询，修复后 3.4~5.9 万字节）。
+  3. 该窗口在辅助 UI 线程创建，`Application.OpenForms` 查不到；必须用 `FindDBViewerForm()`
+     （`EnumWindows` + `Control.FromHandle` 回退），否则 `DB_*` 诊断命令会全部报「not open」。
+  4. 程序化 `DB_SET_FILTER` 只改 `SelectedIndex`，不触发游戏的用户事件处理器；
+     验证筛选联动必须真实点击下拉框并提交，否则会误判「筛选失效」。
+  5. 不要连续多次 `CLICK_MENU 数据库查看器`：会堆叠多个查看器实例并让引擎命令通道卡死。
+- **证据**：`evidence/live/dbviewer/99_live_repro.png`（故障）vs `103_pane_rendered.png` /
+  `140_final_state.png`（修复后 #4515 CH-4B Rainbow 详情页全中文）。

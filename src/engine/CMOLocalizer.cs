@@ -1416,6 +1416,7 @@ namespace CMOLocalizer
         private static void LocalizeComboBoxSafe(ComboBox cb)
         {
             if (cb == null || cb.IsDisposed) return;
+            if (IsProtectedDBViewerCombo(cb)) return;
             try
             {
                 if (cb.DataSource != null)
@@ -2520,6 +2521,65 @@ namespace CMOLocalizer
             return false;
         }
 
+        /// <summary>
+        /// The database viewer dispatches on the text of its object-type picker
+        /// (`switch (CB_ObjectType.Text)`).  Replacing the item strings with the
+        /// Chinese labels makes every branch miss, so no detail HTML is ever
+        /// generated and the WebView2 pane stays empty.  This control keeps the
+        /// game's own tokens; every other combo in the window is localized.
+        /// </summary>
+        private static bool IsProtectedDBViewerCombo(ComboBox cb)
+        {
+            if (cb == null || cb.Name != "CB_ObjectType") return false;
+            string formName;
+            if (!IsInTargetLocalizableForm(cb, out formName)) return false;
+            return formName.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// Resolve the InternalDBViewer window.  It is created on a helper UI
+        /// thread, so Application.OpenForms never lists it; fall back to the
+        /// top-level window set and map the HWND back to its Control.
+        /// </summary>
+        private static Form FindDBViewerForm()
+        {
+            FormCollection forms = Application.OpenForms;
+            if (forms != null)
+            {
+                foreach (Form f in forms)
+                {
+                    if (f != null && !f.IsDisposed && IsDBViewerForm(f)) return f;
+                }
+            }
+
+            Form found = null;
+            try
+            {
+                EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+                {
+                    if (found != null) return false;
+                    try
+                    {
+                        Form f = Control.FromHandle(hWnd) as Form;
+                        if (f != null && !f.IsDisposed && IsDBViewerForm(f))
+                        {
+                            found = f;
+                            return false;
+                        }
+                    }
+                    catch { }
+                    return true;
+                }, IntPtr.Zero);
+            }
+            catch { }
+            return found;
+        }
+
+        private static bool IsDBViewerForm(Form f)
+        {
+            return f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static void LocalizeDBViewerComboBox(ComboBox cb)
         {
             if (cb == null) return;
@@ -2528,10 +2588,7 @@ namespace CMOLocalizer
                 string formName;
                 if (!IsInTargetLocalizableForm(cb, out formName)) return;
                 // DO NOT touch CB_ObjectType in InternalDBViewer!
-                if (formName.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0 && cb.Name == "CB_ObjectType")
-                {
-                    return;
-                }
+                if (IsProtectedDBViewerCombo(cb)) return;
 
                 if (!hookedDBCombos.Contains(cb.GetHashCode()))
                 {
@@ -4708,18 +4765,7 @@ namespace CMOLocalizer
 
             if (cmd == "DB_INSPECT" || cmd == "DB_SELECT_ROW")
             {
-                Form dbForm = null;
-                FormCollection forms = Application.OpenForms;
-                if (forms != null)
-                {
-                    foreach (Form f in forms)
-                    {
-                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            dbForm = f; break;
-                        }
-                    }
-                }
+                Form dbForm = FindDBViewerForm();
                 if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
 
                 FieldInfo fHtml = dbForm.GetType().GetField("RenderedHTMLString", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
@@ -4775,18 +4821,7 @@ namespace CMOLocalizer
 
             if (cmd == "DB_NAVIGATE_ID")
             {
-                Form dbForm = null;
-                FormCollection forms = Application.OpenForms;
-                if (forms != null)
-                {
-                    foreach (Form f in forms)
-                    {
-                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            dbForm = f; break;
-                        }
-                    }
-                }
+                Form dbForm = FindDBViewerForm();
                 if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
 
                 string[] parts = arg.Split(' ');
@@ -4833,18 +4868,7 @@ namespace CMOLocalizer
 
             if (cmd == "DB_COMBO_DIAG" || cmd == "DB_HTML_DUMP")
             {
-                Form dbForm = null;
-                FormCollection forms = Application.OpenForms;
-                if (forms != null)
-                {
-                    foreach (Form f in forms)
-                    {
-                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            dbForm = f; break;
-                        }
-                    }
-                }
+                Form dbForm = FindDBViewerForm();
                 if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
 
                 if (cmd == "DB_HTML_DUMP")
@@ -4886,18 +4910,7 @@ namespace CMOLocalizer
 
             if (cmd == "DB_DOM_DUMP")
             {
-                Form dbForm = null;
-                FormCollection forms = Application.OpenForms;
-                if (forms != null)
-                {
-                    foreach (Form f in forms)
-                    {
-                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            dbForm = f; break;
-                        }
-                    }
-                }
+                Form dbForm = FindDBViewerForm();
                 if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
 
                 Control wv = null;
@@ -4967,18 +4980,7 @@ namespace CMOLocalizer
 
             if (cmd == "DB_CTRL_TREE")
             {
-                Form dbForm = null;
-                FormCollection forms = Application.OpenForms;
-                if (forms != null)
-                {
-                    foreach (Form f in forms)
-                    {
-                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            dbForm = f; break;
-                        }
-                    }
-                }
+                Form dbForm = FindDBViewerForm();
                 if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
                 StringBuilder sb = new StringBuilder();
                 sb.Append("{\"status\":\"ok\",\"tree\":[");
@@ -4990,18 +4992,7 @@ namespace CMOLocalizer
 
             if (cmd == "DB_SET_FILTER")
             {
-                Form dbForm = null;
-                FormCollection forms = Application.OpenForms;
-                if (forms != null)
-                {
-                    foreach (Form f in forms)
-                    {
-                        if (f != null && !f.IsDisposed && f.GetType().Name.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            dbForm = f; break;
-                        }
-                    }
-                }
+                Form dbForm = FindDBViewerForm();
                 if (dbForm == null) return "{\"status\":\"error\",\"message\":\"InternalDBViewer not open\"}";
                 string[] parts = arg.Split(' ');
                 string cName = parts[0];
