@@ -80,7 +80,7 @@ def main() -> int:
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
     result = []
     if what in ("all", "check"):
-        result.append(run_check("check_uptodate", "4.1.4"))
+        result.append(run_check("check_uptodate", "4.1.5"))
         result.append(run_check("check_newver", "4.1.2"))
         result.append(run_check("check_newver2", "4.1.3"))
     if what in ("all", "tray"):

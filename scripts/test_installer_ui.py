@@ -37,7 +37,7 @@ def client_origin(hwnd: int):
     return (p.x, p.y, r.right, r.bottom)
 
 
-SETUP = ROOT / "build" / "CMO_Chinese_Setup_v4.1.4.exe"
+SETUP = ROOT / "build" / "CMO_Chinese_Setup_v4.1.5.exe"
 BASE = ROOT / "evidence" / "design" / "v414_updater"
 FORM_W, FORM_H = 700, 655          # InstallerForm 的 ClientSize（见 CMO_Chinese_Setup.cs）
 REG = r"Software\CMOChinese"
@@ -78,10 +78,10 @@ def dismiss_all(pid: int, tries: int = 6, wait: float = 1.2) -> bool:
 
 def main() -> int:
     result = {"steps": []}
-    for p in subprocess.run(["tasklist", "/FI", "IMAGENAME eq CMO_Chinese_Setup_v4.1.4.exe"],
+    for p in subprocess.run(["tasklist", "/FI", "IMAGENAME eq CMO_Chinese_Setup_v4.1.5.exe"],
                             capture_output=True, text=True).stdout.splitlines():
         if "CMO_Chinese_Setup" in p:
-            subprocess.run(["taskkill", "/IM", "CMO_Chinese_Setup_v4.1.4.exe", "/F"], capture_output=True)
+            subprocess.run(["taskkill", "/IM", "CMO_Chinese_Setup_v4.1.5.exe", "/F"], capture_output=True)
 
     proc = subprocess.Popen([str(SETUP)])
     time.sleep(5)
@@ -148,7 +148,7 @@ def main() -> int:
 
     shot2 = H.shot("live/installer_ui_final", hwnd=win["hwnd"], out_dir=BASE)
     result["final_shot"] = str(shot2)
-    subprocess.run(["taskkill", "/IM", "CMO_Chinese_Setup_v4.1.4.exe", "/F"], capture_output=True)
+    subprocess.run(["taskkill", "/IM", "CMO_Chinese_Setup_v4.1.5.exe", "/F"], capture_output=True)
     (ROOT / "build" / "installer_ui_v414.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     print("saved build/installer_ui_v414.json")
     return 0

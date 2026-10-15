@@ -1,5 +1,23 @@
 # 变更记录
 
+## v4.1.5 — 修复数据库查看器不显示数据
+
+- **修复数据库查看器不显示数据**（用户反馈「数据库不显示数据了」+「点一下装备中文就闪一下变英文」）：
+  根因是 v4.1.3 的「下拉框全量汉化」把汉化扩到了通用路径（`TranslateControlTree` → `LocalizeComboBoxSafe`
+  → `TranslateComboItems` → `TranslateDBComboItem`），而 `InternalDBViewer` 的对象类型下拉框
+  `CB_ObjectType` 是**游戏内部按文本分派**的控件：游戏用 `switch (CB_ObjectType.Text)` 决定调用哪张表
+  （异常栈实证 `DarkListView.OnMouseDown → DisplaySelection → DisplayInfoInDetailsPanel(…, _SelectedObjectType)`）。
+  选项被改写成「飞机 / 航空器 (Aircraft)」后所有分支全部落空 → 详情面板（WebView2）永远不生成 HTML
+  （`RenderedHTMLString` 长度 0，面板一片死灰），且每次巡检重译还会造成中英闪烁。
+  原来只在专用路径 `LocalizeDBViewerComboBox` 上有的保护，现在抽成 `IsProtectedDBViewerCombo()`
+  在通用路径同样生效，该控件固定保留游戏原生 token（Aircraft/Ship/Submarine/…）——
+  **即【数据库查看器】左上角「类型」框显示英文 `Aircraft`/`Ship` 属正常现象**，换得详情面板与筛选全部可用。
+  同时为 `DB_INSPECT` / `DB_HTML_DUMP` / `DB_DOM_DUMP` / `DB_CTRL_TREE` / `DB_SET_FILTER` / `DB_SELECT_ROW`
+  补 `EnumWindows` + `Control.FromHandle` 回退解析（该窗口在辅助 UI 线程创建，`Application.OpenForms` 看不到），
+  诊断命令恢复可用。
+  实机验证：8 类装备详情页全部渲染（`RenderedHTMLString` 34 874 / 59 030 字节，含「常规数据/装备大类/固定翼飞机」等中文），
+  类型/子类型/国家阵营/假想四类筛选联动正常，间隔 2.5s 两帧截图 md5 一致（无频闪），异常日志零新增。
+
 ## v4.1.4 — 自动升级（开机自检 + 每 6 小时检查 + 托盘常驻）
 
 - **新增更新助手 `CMO_Updater.exe`**（约 36 KB，与安装器同工具链、无需额外依赖）：
@@ -52,20 +70,6 @@
   DB 模板/Scenarios HTML/地名集/符号图/启动器资源）缺失即构建失败。
   当前绿色包 690 个条目、含 Scenarios HTML 323 + 备份 323、DB 模板 8、地名集 2、符号图 28、启动器资源 1。
 - 安装器与绿色包同步包含更新助手；绿色包解压后同样具备自动升级能力。
-- **修复数据库查看器不显示数据**（用户反馈「数据库不显示数据了」+「点一下装备中文就闪一下变英文」）：
-  根因是 v4.1.3 的「下拉框全量汉化」把汉化扩到了通用路径（`TranslateControlTree` → `LocalizeComboBoxSafe`
-  → `TranslateComboItems` → `TranslateDBComboItem`），而 `InternalDBViewer` 的对象类型下拉框
-  `CB_ObjectType` 是**游戏内部按文本分派**的控件：游戏用 `switch (CB_ObjectType.Text)` 决定调用哪张表
-  （异常栈实证 `DarkListView.OnMouseDown → DisplaySelection → DisplayInfoInDetailsPanel(…, _SelectedObjectType)`）。
-  选项被改写成「飞机 / 航空器 (Aircraft)」后所有分支全部落空 → 详情面板（WebView2）永远不生成 HTML
-  （`RenderedHTMLString` 长度 0，面板一片死灰），且每次巡检重译还会造成中英闪烁。
-  原来只在专用路径 `LocalizeDBViewerComboBox` 上有的保护，现在抽成 `IsProtectedDBViewerCombo()`
-  在通用路径同样生效，该控件固定保留游戏原生 token（Aircraft/Ship/Submarine/…）。
-  同时为 `DB_INSPECT` / `DB_HTML_DUMP` / `DB_DOM_DUMP` / `DB_CTRL_TREE` / `DB_SET_FILTER` / `DB_SELECT_ROW`
-  补 `EnumWindows` + `Control.FromHandle` 回退解析（该窗口在辅助 UI 线程创建，`Application.OpenForms` 看不到），
-  诊断命令恢复可用。
-  实机验证：8 类装备详情页全部渲染（`RenderedHTMLString` 34 874 / 59 030 字节，含「常规数据/装备大类/固定翼飞机」等中文），
-  类型/子类型/国家阵营/假想四类筛选联动正常，间隔 2.5s 两帧截图 md5 一致（无频闪），异常日志零新增。
 
 ## v4.1.3 — 术语/命名统一、下拉框与消息日志全量汉化、频闪根因根治
 

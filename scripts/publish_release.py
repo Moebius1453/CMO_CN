@@ -58,10 +58,10 @@ def main():
 
     # Extract changelog
     changelog = CHANGELOG_FILE.read_text(encoding="utf-8")
-    m = re.search(r"## v" + re.escape(version) + r"\s+[^\n]*\n(.*?)(?=\n## v|\Z)", changelog, re.S)
+    m = re.search(r"## v" + re.escape(version) + r"\s+([^\n]*)\n(.*?)(?=\n## v|\Z)", changelog, re.S)
     notes = m.group(0).strip() if m else f"## v{version}\n\n《现代行动：指挥》汉化更新包发布。"
 
-    title = f"v{version} — 数据库全量百科正文深度汉化与筛选下拉框彻底加固"
+    title = f"v{version} — {m.group(1).strip()}" if m else f"v{version}"
     body = f"""{notes}
 
 ### 安装方式

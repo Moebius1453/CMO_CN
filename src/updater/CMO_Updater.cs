@@ -23,7 +23,7 @@ namespace CMOUpdater
     {
         public const string RegPath = @"Software\CMOChinese";
         public const string RunKeyName = "CMOChineseUpdater";
-        public const string UpdaterVersion = "4.1.4";
+        public const string UpdaterVersion = "4.1.5";
         public const string RepoApi = "https://api.github.com/repos/mj8724/CMO_CN/releases/latest";
 
         public static string GamePath = "";
