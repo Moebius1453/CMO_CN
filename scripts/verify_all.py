@@ -15,6 +15,7 @@ Gates
   7. db templates  8 DB HTML templates localized
   8. version       VERSION consistent across VERSION / engine / installer
   9. repository    git worktree clean
+ 10. secrets       no plaintext credentials in worktree or git history
 """
 from __future__ import annotations
 
@@ -163,10 +164,18 @@ def gate_repository() -> None:
            "clean" if not dirty else f"{len(dirty)} uncommitted path(s)")
 
 
+def gate_no_secrets() -> None:
+    """明文凭据硬门禁：工作区 + 全历史（verify_no_secrets.py --history）。"""
+    ok, tail = run("verify_no_secrets.py", ["--history"])
+    record("secrets", ok,
+           "no plaintext credentials" if ok else f"PLAINTEXT CREDENTIALS: {tail}")
+
+
 def main() -> int:
     for g in (gate_dictionary, gate_menu, gate_engine_parse,
               gate_scenario_meta, gate_briefings, gate_placenames,
-              gate_db_templates, gate_version, gate_repository):
+              gate_db_templates, gate_version, gate_no_secrets,
+              gate_repository):
         try:
             g()
         except Exception as exc:  # noqa: BLE001

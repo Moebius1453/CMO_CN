@@ -32,6 +32,9 @@ else
   echo "==> warning: game Scenarios directory not found; skipping HTML bundle"
 fi
 
+# ── 明文凭据硬门禁（工作区 + 全历史）：不通过则中止打包 ────────────────
+"$PY" "$ROOT/scripts/verify_no_secrets.py" --history \n  || { echo "==> 密钥门禁未通过，中止打包"; exit 1; }
+
 bash "$ROOT/scripts/build.sh"
 
 echo "==> assembling green pack"
