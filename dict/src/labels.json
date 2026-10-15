@@ -91,5 +91,15 @@
  "A/G:": "空地：",
  "A/S:": "反舰：",
  "Light 202": "轻载 202",
- "Radar": "雷达"
+ "Radar": "雷达",
+ "Auto Engage Target": "自动交战目标",
+ "Manually Engage Target": "手动交战目标",
+ "Auto Engage Targets": "自动交战目标",
+ "Manually Engage Targets": "手动交战目标",
+ "Engage Target": "交战目标",
+ "Auto Engage": "自动交战",
+ "Manually Engage": "手动交战",
+ "Step": "单步推演",
+ "Undo": "撤销",
+ "Real Time": "实时"
 }
