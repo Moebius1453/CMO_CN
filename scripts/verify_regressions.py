@@ -418,6 +418,9 @@ def main() -> int:
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--installer", action="store_true",
                     help="安装/还原/回退的隔离验证（临时目录，不需要游戏）")
+    ap.add_argument("--no-report", action="store_true",
+                    help="不写 build/regression_report.json（供 package.sh 做中间门禁，"
+                         "避免覆盖发版用的 live 报告）")
     args = ap.parse_args()
     any_flag = args.static or args.live or args.installer
     do_static = args.static or not any_flag
@@ -444,9 +447,10 @@ def main() -> int:
         "results": runner.results,
     }
     REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"\n==> 回归报告: {REPORT.relative_to(ROOT)}  "
-          f"{len(runner.results) - len(failed)}/{len(runner.results)} 通过"
+    if not args.no_report:
+        REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"\n==> 回归报告: {REPORT.relative_to(ROOT)}" + ("（--no-report，未写入）" if args.no_report else "")
+          + f"  {len(runner.results) - len(failed)}/{len(runner.results)} 通过"
           + (f"，失败：{', '.join(failed)}" if failed else ""))
     return 1 if failed else 0
 

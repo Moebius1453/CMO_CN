@@ -78,6 +78,9 @@ python scripts/publish_release.py
 > 与已发布资产不再对应（csc 每次编译 MVID/时间戳不同）。要重新发布必须整批重传，
 > 不要把旧的 `.sha256` 当成新包的摘要。
 
+> 顺序提醒：`package.sh` 内的 static 门禁用 `--no-report` 运行，不会覆盖 `build/regression_report.json`；
+> 但发布前最后一次**必须**是带 `--live` 的运行，发布脚本才看得到 live 全通过。
+
 ## 6. 新问题入库（强制）
 
 发现/修复任何用户可感知问题时，必须同时完成三件事：
