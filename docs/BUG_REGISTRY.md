@@ -276,3 +276,129 @@
   `scripts/publish_release.py`（复用 `release_check.check_regression_report`）+ `docs/RELEASE_TEST_SOP.md`（接入顺序）。
 - **用户可见验收**：发布前一条命令 `python scripts/release_check.py` 即可看到逐项 PASS/FAIL。
 - **回归测试点**：`static` 的 `R21-static-manifest`（清单与脚本存在、互相引用、SOP 引用二者）。
+
+## R22 明文凭据藏在被忽略的字节码缓存里（v4.1.8，未发布）
+
+- **现象（仓库/发布安全，游戏界面无变化）**：工作区里躺着一个含明文 `sk-` 令牌的字节码缓存
+  `scripts/__pycache__/translate_worker.cpython-312.pyc`（它连 `.py` 源文件都不存在）；
+  而当时唯一的密钥门禁只看 `git ls-files`，对它**完全不可见**。该文件未被提交，
+  但任何「打包 / 压缩 / 共享整个工作区」的动作（绿色包、归档、临时镜像）都会把令牌带出去。
+- **根因（有实证）**：
+  1) `__pycache__/` 在 `.gitignore` 里（2026-10-15 凭据处置 commit `90668f8` 的刻意决定），
+     `git ls-files` 永远列不到它 —— 评审 `DG-10`：`verify_no_secrets.py` 的 `tracked_files()` 只看
+     `git ls-files`，使含明文 `sk-` 令牌的 `.pyc` 对门禁完全不可见；属评审 `COR-006` / `RC-4`「门禁不检查自身」。
+  2) 该 `.pyc` 出自评审 `COR-004` 的 `scripts/batch_translate_chunks.py:11`：它 import 的模块源码不存在
+     （只在 `.pyc` 里），删除前后都必然 `ImportError`；评审 `R-04` 已明确否决「把 `translate_worker.py`
+     纳入源码管理或从 `.pyc` 恢复」——那会让明文令牌直接入库。
+- **修复位置**：
+  - 删除 `scripts/__pycache__/translate_worker.cpython-312.pyc`（不改变任何现存链路）；
+  - `scripts/verify_no_secrets.py:9-16,38-42,54-70`：扫描范围由「只看 `git ls-files`」扩为**三层**——
+    已跟踪 + 未跟踪（`--others --exclude-standard`）+ **危险忽略项**（`__pycache__/*.pyc`、`*.pyc/*.pyo`、
+    `.env*`、`*.pem/*.key/*.pfx/*.p12`、`*.log`、`credentials*.json`/`*secret*.json`）；
+    跳过项（>5MB、读取失败）全部打印原因，不再静默 skip；输出增加三层计数与覆盖率；
+  - `scripts/verify_regressions.py:238-257`：新增 static 用例 `R22-static-bytecode-secrets`
+    （所有 `__pycache__/*.pyc` 不得含明文令牌，且不得存在「无 `.py` 源」的孤儿缓存）。
+- **用户可见验收**：门禁输出可见三层文件计数与被跳过的文件及原因；合成用例（未跟踪文件放 `sk-` 假令牌、
+  被忽略的 `build/*.log` 放 `ghp_` 假令牌）必须 FAIL 并报出 `文件:行`；清理后 PASS（实测：已跟踪 332 +
+  危险忽略项 20 = 352 个文件，跳过 2 个 >5MB 词典并已列出）。**⚠ 已泄漏的 `sk-` 令牌必须在服务商侧
+  吊销/轮换，本机无法代劳**（收尾清单见 `docs/project_memory.md`「凭据泄露收尾」）。
+- **回归测试点**：`static` 的 `R22-static-bytecode-secrets`；负向合成用例实测见 commit `fb743a5`；
+  `verify_all.py` 第 10 项与 `package.sh` 打包前硬门禁与该门禁同源。
+
+## R23 门禁自身失效：两条「永远绿」的硬门禁（v4.1.8，未发布）
+
+- **现象**：两条硬门禁「坏了也没人知道」：① 简报门禁在目标为空集时判定是 `0>=0`，永远 PASS；
+  ② 历史密钥扫描对「确实存在过凭据改动」的仓库**零命中**——历史门禁等于不存在。
+- **根因（有实证）** —— 评审 `O-09` / `COR-006` / `RC-4`「门禁不检查自身」：
+  1) `scripts/verify_all.py:114` 的判定 `translated >= len(files) - image_only` 在 `files` 为空时恒成立
+     （`0>=0`），且「全图片型」也能空过；`O-09` 要求的「空集判 FAIL + 显式白名单」此前未落地。
+  2) `scripts/verify_no_secrets.py` 的 `scan_history()` 原用 `git log --all -G<pattern>`，受 git 自有
+     正则方言限制，不认 `\b`/`{20,}` 等写法：实测对**确实存在过凭据改动**的仓库零命中，
+     而 `git log -S"sk-"` 能命中（commit `849e602` 实测记录）——这条门禁从未真正生效过。
+- **修复位置**：
+  - `scripts/verify_all.py:95-124`（`gate_briefings`）：目标为空直接 FAIL 并说明原因；图片型占比 >10%
+    判 FAIL 并在输出里列出需人工确认的文件名；正向结果文案与数字**逐字保持不变**（304/323，19 image-only）。
+  - `scripts/verify_no_secrets.py:110-170`（`scan_history`）：改为**按 blob 去重**扫描——
+    `rev-list --objects --all` → `--batch-check` 按大小预筛（剔除非 blob 与 >5MB）→ 分块 `cat-file --batch`
+    读取 → 对每个 blob 跑与工作区**完全同一套** `PATTERNS`（`scripts/verify_no_secrets.py:24-33`）；
+    输出覆盖率（blob 去重数 / 实际扫描数 / 总字节 / 跳过超大数 / 预算上限告警）；
+    命中时只打印前缀与长度、不打印凭据值。
+- **用户可见验收（负向验证）**：把简报门禁目标指向**空目录必须 FAIL**（旧实现为假绿），真实目录 PASS
+  且数字不变；历史扫描输出覆盖率：**按 blob 去重 1 011 个对象 → 扫描 560 个（79MB）→ 命中 0**
+  （跳过 17 个 >5MB；仓库历史干净，无历史阻塞）。即：这两条门禁现在都能被**证伪**。
+- **回归测试点**：简报门禁的负向实测（空目录必须 FAIL）见 commit `849e602`；历史密钥扫描的覆盖率输出
+  （blob 去重数 / 扫描数 / 总字节 / 跳过数）见同一次提交的 `--history` 运行。
+  注：仓库里那 580 行不可解析的 `scripts/translate_shard2.py` 属另一条同源缺陷，见 **R26**，
+  现已 `git mv` 入 `scripts/archive/`（评审 `O-08` / `COR-003`）。
+
+## R24 词典无法从源重建（v4.1.8，未发布）
+
+- **现象**：任何人直接重跑 `python scripts/build_dict.py`，得到的词典与仓库里已提交的词典**不一致**——
+  一次「无害的重建」就会静默回退已经修好的显示串，并制造 4.9 万行的纯格式 diff。
+- **根因（有实证，四个子缺陷）**：评审 `O-07` 只覆盖原子写；这四条是本轮落地时才实测发现的，
+  属评审 `RC-2`「缺单一所有者 / 单一事实源」：
+  1) **LF → CRLF**：Windows 文本模式把 LF 全写成 CRLF，产出比已提交词典 **+49 427 字节**的纯换行 churn，
+     违反「词典保持 LF、最小 diff、禁止无序格式化」硬约束。
+  2) **非幂等值覆盖正确值**：`dict/src/legacy_fixes.json:43` 的
+     `"Steam Workshop": "创意工坊 (Steam Workshop)"` 是非幂等映射，而它按字母序在 `campaign_ui.json`
+     **之后**加载并覆盖了正确值 → 一次重建就把 **R20 的工坊叠译修复**静默回退。
+  3) **长标签被误判丢弃**：`Select one of the campaigns available…from a save.` 被 `is_script_or_schema`
+     误判为脚本/schema 而丢弃；它属于「只在 UI 层翻译、绝不注入池」的那一类，应放 `dict/src/labels.json`
+     （`allow_sensitive` 通道）。
+  4) **人工核验过的偏移被静默跳过**：offset `7916`（Steam Workshop 页签所在的字符串池条目）被
+     `identifiers` 过滤静默跳过——即使写进 `force_offsets.json` 也被丢弃，重建后工坊页签退回英文。
+- **修复位置**：`scripts/build_dict.py:406-427`（原子写：写 `*.tmp` → `json.loads` 自校验 + 顶层分区断言 →
+  `os.replace`；失败/中断清理 tmp，产物永远「完整或不存在」；序列化参数
+  `indent=1`/`ensure_ascii=False`/单末尾换行刻意不变，写入显式 `newline="\n"` 强制 LF）、
+  `scripts/build_dict.py:314-329`（`force_offsets` 是人工实机核验过的注入白名单，现有权**覆盖
+  `identifiers` 过滤**，仍受 `blacklist` 约束）、`dict/src/legacy_fixes.json:43`（改为幂等的「创意工坊」）、
+  `dict/src/labels.json`（收长标签）、`dict/src/force_offsets.json`（含 `7916`）。
+- **用户可见验收**：重跑 `build_dict.py` 与已提交词典**字节完全一致**
+  （11 007 317 字节 / sha256 `2765a8c4…` / CRLF=0 / offsets 3 523 / exact 46 089）；
+  重建不再回退任何已修显示串、不再造成格式 churn；游戏内工坊页签仍显示「创意工坊」（不叠译）。
+  复测记录：`evidence/team-review-20261016/outputs/review/landed-results.md`。
+- **回归测试点**：`static` 的 `R24-static-dict-reproducible`（`scripts/verify_regressions.py:285-312`）
+  钉住五个前提：词典纯 LF、`legacy_fixes` 工坊值幂等、`force_offsets` 含 7916、长标签在 `labels.json`
+  源批次、写入器强制 LF。
+
+## R25 安装器解压缺包含性校验（越界写游戏目录外）（v4.1.8，未发布）
+
+- **现象（安全边界）**：安装器两处解压——`Symbols\Menu` 菜单图 → `menuDir`、`Scenarios` HTML →
+  `gamePath`——直接 `Path.Combine(root, entry.FullName)` 落盘，一个**构造过的 zip** 可以用 `..\..\`
+  或绝对路径往游戏目录之外写文件。
+- **根因（有实证）**：评审 `O-10` / `SEC-001` / `DG-11`，属根因组 `RC-6`「『可信输入』未编码为断言」。
+  两个放大因素：① `.orig` 备份会为目标路径**再生成第二个越界文件**；
+  ② 两处解压的外层都是空 `catch { }`（`src/installer/CMO_Chinese_Setup.cs:980` 与 `:1112`），失败无日志。
+  安装器是**提权运行**的 ⇒ 恶意条目 = 提权任意写。
+- **修复位置**：`src/shared/CMOShared.cs:45-67` 新增 `CmoPaths.TryResolveInside(root, entryName, out dest)`
+  （拒绝空/绝对路径/盘符与 ADS 前缀，`GetFullPath` 后必须以规范化根目录+分隔符开头以防 `..` 逃逸，
+  异常一律返回 false）；安装器两处改用该函数——`src/installer/CMO_Chinese_Setup.cs:961`（`Symbols\Menu`）
+  与 `:1087`（`Scenarios` HTML），越界条目写 `CmoLog.Warn("跳过越界 zip 条目: …")` 后 `continue`
+  （不再静默，也不再落盘）。
+- **用户可见验收**：构造过的压缩包（`..\..\`、混合 `a/../../`、绝对路径、空条目）的越界条目被拒
+  且日志留痕，游戏目录之外零新文件；正常安装不受影响——真实游戏目录 `--install` rc=0、
+  `Symbols\Menu` 下 **237 个文件**正常落地（证明合法条目没有被误拦）。
+- **回归测试点**：`static` 的 `R18-static-selftest`（`build/CMOSharedTest.exe` 必须 ALL PASS，共 33 项，
+  含新增 6 项包含性断言：`zip-inside-normal` / `zip-inside-nested-ok` / `zip-escape-dotdot` /
+  `zip-escape-mixed` / `zip-escape-absolute` / `zip-escape-empty`，见 `src/shared/CMOSharedTest.cs:279-297`）；
+  `--installer` 子集全绿（`--static --installer` 25/25）；真实安装核对 `Symbols\Menu` 条目数 237。
+
+## R26 仓库里躺着不可解析且从不产出的脚本，门禁从不检查（v4.1.8，未发布）
+
+- **现象**：`scripts/translate_shard2.py`（580 行）在仓库里长期存在，但它在结构上根本无法解析；
+  同时它「读入 → 不产出」，也从未被任何代码 import，却被 `scripts/migrate.sh` 的拷贝清单以
+  `[ -f ]` 守卫方式引用 —— 属于「看起来还在用、其实早就坏了」的隐身代码。
+- **根因（有实证）**：① 语法层面：第 82 行的 `}` 已闭合字典字面量，其后却是裸键值项，末行 580 又是
+  孤立 `}`；`ast.parse` 直接 `SyntaxError: unmatched '}'`（line 580），84 行起另有
+  `illegal target for annotation`。② 流程层面：全文只有 `open(IN)` 读入，**没有任何 `json.dump`/写出**，
+  `OUT = …` 定义后再未被使用。③ 门禁层面：没有任何用例检查「仓库里的脚本能否被解析/能否运行」，
+  所以坏脚本可以无限期留在仓库里（评审 COR-003 / O-08，根因组 RC-4「门禁不检查自身」）。
+- **修复位置**：`scripts/translate_shard2.py` → `scripts/archive/translate_shard2.py`（`git mv`；
+  新增 `scripts/archive/README.md` 说明「只读历史、不参与任何流程」）；`scripts/migrate.sh` 删除该条
+  拷贝项并写明原因（不再留下指向不存在文件的引用）；`scripts/verify_regressions.py` 新增用例
+  `R26-static-scripts-parse`。
+- **用户可见验收**：开发者层面无可见变化（该脚本从未被流程执行）；收益是「不可执行的死代码不再
+  伪装成流水线的一部分」，仓库里所有 `scripts/*.py` 都能被解析。
+- **回归测试点**：`R26-static-scripts-parse`——用 `ast.parse` 只读解析 `scripts/*.py`（非递归，
+  因此排除 `archive/`），断言全部可解析并报出失败文件与行；**刻意不用 `compileall`**：
+  它会写出 `.pyc`，与 R22「不得有无源孤儿缓存」直接冲突。实测解析 51 个脚本全部通过。

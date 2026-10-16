@@ -256,7 +256,7 @@ def run_static(r: Runner) -> None:
              + (f"；无源孤儿: {orphan_pyc[:3]}" if orphan_pyc else "；无无源孤儿缓存"),
              "scripts/__pycache__/")
 
-    # R23：scripts/*.py 必须全部可解析（排除 archive/ 子目录）。
+    # R26：scripts/*.py 必须全部可解析（排除 archive/ 子目录）。
     # 历史：scripts/translate_shard2.py 580 行在字典于第 82 行 "}" 闭合后又跟裸键值项、
     # 末行 580 又是孤立 "}"，ast.parse 直接 SyntaxError（unmatched '}' @580）；它从不写出结果，
     # 却被 migrate.sh 的拷贝清单以 [ -f ] 守卫方式引用。（评审 finding O-08 / COR-003）
@@ -275,7 +275,7 @@ def run_static(r: Runner) -> None:
             parse_bad.append(f"{p.name}:{e.lineno}:{e.msg}")
         except Exception as e:  # 读取/编码异常也不得静默通过
             parse_bad.append(f"{p.name}:{type(e).__name__}:{e}")
-    r.record("R23-static-scripts-parse", "R23 scripts/*.py 全部可解析（排除 archive/）",
+    r.record("R26-static-scripts-parse", "R26 scripts/*.py 全部可解析（排除 archive/）",
              not parse_bad,
              f"ast.parse 解析 {len(parse_targets)} 个脚本"
              + (f"；不可解析 {len(parse_bad)} 个: {parse_bad[:3]}" if parse_bad else "；全部可解析")

@@ -265,3 +265,82 @@
   `publish_release.py` 复用 `release_check.check_regression_report`，不要在别处再写一份报告校验。
 - 打包门禁（`package.sh` → `verify_regressions.py --static --no-report`）**不得**覆盖
   `build/regression_report.json`；发布前最后一次回归必须是带 `--live` 的那次。
+
+## 词典必须能从源重建（2026-10-17，RV-20261016 落地）
+
+**铁律：`dict/CMOLocalizer.json` 是产物，必须能从 `dict/src/**` + `scripts/build_dict.py` 字节级重建。**
+重跑一次构建就悄悄回退已修好的显示串，比构建失败危险得多（旧的「完整」词典会照旧发布）。
+
+1. **写入必须显式 LF**：Windows 文本模式默认把 `\n` 写成 `\r\n`，一次重建就是 **+49 427 字节**的
+   纯换行 churn，违反「词典保持 LF、最小 diff、禁止无序格式化」硬约束。落盘必须 `newline="\n"`
+   （`scripts/build_dict.py:406-427`），并保持 `indent=1` / `ensure_ascii=False` / 单末尾换行不变。
+2. **同一事实只能有一个源**：`legacy_fixes.json` 不得覆盖 `campaign_ui.json` 的正确值
+   （历史事故：`legacy_fixes` 按字母序后加载，把工坊页签盖回非幂等的「创意工坊 (Steam Workshop)」，
+   等于静默撤销 R20 的叠译修复）；长标签放 `dict/src/labels.json`（`allow_sensitive` 通道，
+   绝不被 `is_script_or_schema` 误判丢弃）；人工核验过的偏移注入放 `dict/src/force_offsets.json`，
+   **且它有权覆盖 `identifiers` 过滤**（否则 offset 7916 被静默跳过、工坊页签退回英文）。
+3. **验收口径**：重跑 `build_dict.py` 必须与已提交词典**字节一致**
+   （当前 11 007 317 B / sha256 `2765a8c4…` / CRLF=0 / offsets 3 523 / exact 46 089）。
+4. **门禁 R24 把守**：`verify_regressions.py` 的 `R24-static-dict-reproducible` 钉住上述五个前提；
+   谁改坏了这条链，`--static`（打包硬门禁）就会红。
+
+## 门禁必须能被证伪（2026-10-17，RV-20261016 落地）
+
+- **每条 gate 都要有负向用例**：一个「永远 PASS」的门禁比没有门禁更糟，它会让人以为已经检查过了。
+  实证：简报门禁 `translated >= len(files) - image_only` 在目标为空时是 `0>=0`，永远绿——
+  现在空集直接判 FAIL（`scripts/verify_all.py:114-121`）。新增/修改任何 gate 时，必须同时给出
+  「什么样的输入会让它 FAIL」的实测证据（空集、零命中、故意破坏后跑一次）。
+- **用对外部工具方言不确定的写法时，必须用真实历史验证它真能命中**：历史密钥扫描原用
+  `git log -G<regex>`，git 自己的正则方言不认 `\b`/`{20,}`，对「确实存在过凭据改动」的仓库**零命中**
+  （而 `git log -S"sk-"` 能命中）——这条 gate 等于不存在，却长期挂着「已启用」的名义。
+  已改为按 blob 去重 + `cat-file --batch` 全量扫描并打印覆盖率
+  （1 011 对象 → 扫 560 个 / 79MB / 命中 0）。**规则：验证不了它会命中的扫描，就不算扫描。**
+- 同理，门禁只能**只读**：脚本可解析性用 `ast.parse`，不用 `compileall`（后者会写 `.pyc`，
+  与 R22「不得有无源孤儿缓存」直接冲突）。
+
+## 部署标记必须是元数据标识符，不能用字符串字面量（2026-10-17）
+
+- `R0-static-env` 靠「部署到游戏目录的 `CMOLocalizer.dll` 里含哪些符号」判断它是否包含本轮修复
+  （不能用整文件哈希：csc 每次编译都换 MVID/时间戳，哈希必变）。标记必须取**元数据标识符**
+  ——方法名/类型名（如 `IsProtectedDBViewerCombo` / `IsTextInputControl` / `InstallCrashGuard`），
+  因为它们在 DLL 的元数据表里，ASCII 直接搜得到。
+- **不能用字符串字面量**：`#US`（用户字符串堆）里存的是 UTF-16，用 ASCII 搜二进制必然搜不到。
+  本轮初版拿 `SCEN_CTRL_TREE` 这类字面量当标记，结果被门禁自己抓出**假红**（引擎明明是对的）。
+- 推论：给部署资产加「修复是否在场」的判定时，先在真实二进制上验证 `标记.encode() in blob` 为真，
+  再把它写进 `DEPLOY_MARKERS`（`scripts/verify_regressions.py:57-84`）。
+
+## 测试编排：安装器用例会关掉游戏（2026-10-17）
+
+- **`--static --installer` 与 `--live` 必须分两次运行**：安装器用例会调 `CMOShared.KillProcesses()`
+  （对 `Command`/`CMO_Updater` 先 CloseMainWindow 再 Kill）——这是安装器的**正确行为**，
+  但它与游戏同时跑会让 live 用例在 `L0-game` 假失败（代码没问题，却报「游戏未启动/回归失败」）。
+- 判定：`--static`（源码/资产/词库/单测）与 `--installer`（合成游戏目录，不碰真实目录也不需要游戏）
+  可以一起跑；`--live`（需要游戏运行）必须单独一次。
+  已写入 `docs/RELEASE_TEST_SOP.md:37-38` 与 `docs/RELEASE_MANIFEST.md:47`，
+  `release_check.py` 的回归报告校验按此执行。
+- 另一条同类坑：R0 会比对「游戏目录的引擎/词库与本次构建是否同哈希」，
+  被旧安装包覆盖的环境会得到**假失败**——先跑 `scripts/deploy.sh` 或重装一次再复测。
+
+## 先量再改：perf 类 finding 必须先做微基准（2026-10-17，RV-20261016 落地）
+
+- **评审的性能预期是静态估算，不能当施工图。** 本轮三项「优化」的实测结果：`O-04`
+  （安装包程序集/版本查询记忆化）收益在噪声内 **≈ 0**（这些进程存活很短，14MB 读基本命中系统页缓存，
+  主导成本是启动与解包）；`O-05`（词库解析单次化）**实测否决并已回退**（估算「省 10-15s」；
+  实际解析 10.5MB JSON 只需 读盘 4ms + 解析 51ms，9 次 ≈ 0.5s，**高估约两个数量级**，
+  要拿收益得先把 3 个 `verify_*` 改成可导入模块）；`O-01`（页面替换预过滤）问题真实且严重，
+  但收益是 **≈5×**（0.67s→0.135s / 2.08s→0.39s），**不是评审估的 1-2 个数量级**。
+- **流程规则**：任何 perf 类 finding，先写 10 行以内的微基准量出前后差异，再决定是否动代码；
+  收益在噪声内的改动，要么不做，要么明确写成「消除重复工作、无用户可感知加速」。
+- 实测数据留档：`evidence/team-review-20261016/outputs/review/landed-results.md`。
+
+## 忽略目录不等于安全（2026-10-17）
+
+- **`.gitignore` 只保护版本库，不保护工作区/产物。** 实证：
+  `scripts/__pycache__/translate_worker.cpython-312.pyc` 含明文 `sk-` 令牌，
+  因 `__pycache__/` 被忽略而对「只看 `git ls-files`」的密钥门禁完全不可见——它没被提交，
+  但打包 / 压缩 / 共享工作区的任何一步都会把它带走。
+- **凭据扫描必须覆盖「危险忽略项」**：`__pycache__/*.pyc`、`*.pyc/*.pyo`、`.env*`、
+  `*.pem/*.key/*.pfx/*.p12`、`*.log`、`credentials*.json`/`*secret*.json`
+  （`scripts/verify_no_secrets.py:38-45`）；扫描面为三层（已跟踪 + 未跟踪 + 危险忽略项），
+  跳过项必须打印原因，不得静默 skip。
+- 推论：**「没进 git」≠「没出去」**。清理泄漏时先假设它已经离开本机（先吊销/轮换），再清理 tip 与历史。
