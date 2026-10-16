@@ -34,6 +34,7 @@ Output is byte-stable: two runs over identical sources produce identical files.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -42,6 +43,10 @@ ROOT = Path(__file__).resolve().parent.parent
 DICT = ROOT / "dict"
 SRC = DICT / "src"
 MAIN = DICT / "CMOLocalizer.json"
+# The engine's own scanner (scripts/verify_engine_parse.py) and the offset
+# injection path require exactly these top-level sections.  Any other producer
+# (see the legacy engines) must fail loudly rather than ship a foreign schema.
+TOP_LEVEL_SECTIONS = frozenset({"_meta", "offsets", "exact", "partial", "words"})
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from triage import classify, is_script_or_schema  # noqa: E402
@@ -316,7 +321,10 @@ def build() -> dict:
                     continue
                 off_i = int(k)
                 en_str = pool.get(k)
-                if en_str and en_str not in identifiers and en_str not in blacklist:
+                # force_offsets 是人工实机核验过的注入白名单，它必须能覆盖 identifiers 过滤：
+                # 像 7916（Steam Workshop 页签）这种同时被 identlist 收录的显示串，
+                # 一旦被静默跳过，重建出来的词典就与已发布词典不一致——工坊页签会退回英文。
+                if en_str and en_str not in blacklist:
                     offsets[off_i] = zh
                     exact[en_str] = zh
     known = set(text_to_offset.values())
@@ -388,8 +396,36 @@ def build() -> dict:
 
 
 def write(doc: dict, path: Path) -> None:
+    """Install `doc` at `path` completely, or not at all.
+
+    The payload is written to a sibling `*.tmp`, parsed back as a self-check
+    (valid JSON, expected top-level sections), and only then swapped into place
+    with os.replace, which is atomic on a single filesystem.  An interrupted or
+    invalid build therefore leaves any previous artifact untouched instead of a
+    truncated multi-megabyte JSON file that a later packaging step could ship.
+
+    Serialisation settings are deliberately unchanged (indent=1, ensure_ascii=
+    False, no key reordering, single trailing newline) so the installed bytes are
+    exactly what a direct write produced.
+    """
     text = json.dumps(doc, ensure_ascii=False, indent=1, sort_keys=False)
-    path.write_text(text + "\n", encoding="utf-8")
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        # newline="\n" 是硬要求：仓库里的 dict/CMOLocalizer.json 是 LF，
+        # 若按 Windows 文本模式默认转成 CRLF，一次重建就是 49,000+ 行的纯换行 churn
+        # （项目约束：词典保持 LF、最小 diff、禁止无序格式化）。
+        tmp.write_text(text + "\n", encoding="utf-8", newline="\n")
+        with tmp.open(encoding="utf-8") as fh:
+            probe = json.load(fh)
+        if set(probe) != TOP_LEVEL_SECTIONS:
+            raise ValueError(
+                f"refusing to install {path.name}: top-level sections "
+                f"{sorted(probe)} != {sorted(TOP_LEVEL_SECTIONS)}")
+        os.replace(tmp, path)
+    except BaseException:
+        # Never leave a partial staging file behind, even on Ctrl+C / SIGTERM.
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def main() -> int:

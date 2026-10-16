@@ -1,5 +1,6 @@
 {
  "_note": "仅在 UI 层翻译、绝不注入引擎字符串池的词条（含文件扩展名等敏感 token）。",
+ "Select one of the campaigns available to start a new session, or resume an existing campaign session from a save.": "选择一个战役开始新推演，或从存档继续已有战役。",
  ".scen to XML": ".scen 转 XML",
  "XML to .scen": "XML 转 .scen",
  "Message Log - Interactive view": "消息日志 - 交互视图",
