@@ -46,30 +46,17 @@ def get_opener():
     return urllib.request.build_opener(*handlers)
 
 def check_regression_report(version: str, force: bool) -> None:
-    """发版前必须有 24h 内、同版本、live 全通过的回归报告。"""
-    report_path = BUILD_DIR / "regression_report.json"
-    problems = []
-    data = None
-    if not report_path.is_file():
-        problems.append("缺少 build/regression_report.json")
-    else:
-        try:
-            data = json.loads(report_path.read_text(encoding="utf-8"))
-        except Exception as exc:  # noqa: BLE001
-            problems.append(f"报告无法解析: {exc}")
-    if data:
-        if str(data.get("version")) != version:
-            problems.append(f"报告版本 {data.get('version')} != VERSION {version}")
-        if "live" not in (data.get("modes") or []):
-            problems.append("报告不含 live 用例（须跑 python scripts/verify_regressions.py）")
-        if not data.get("passed"):
-            problems.append(f"回归失败用例: {', '.join(data.get('failed') or [])}")
-        try:
-            age = time.time() - datetime.fromisoformat(data["generated_at"]).timestamp()
-            if age > 24 * 3600:
-                problems.append(f"报告已过期（{age / 3600:.1f} 小时前）")
-        except Exception:  # noqa: BLE001
-            problems.append("报告缺少可解析的 generated_at")
+    """发版前必须有 24h 内、同版本、含 static/installer/live 且全通过的回归报告。
+
+    判定逻辑统一放在 scripts/release_check.py（发版统一入库检查），避免两处门禁漂移；
+    这里只负责把问题列表打印成发布流程的语气并决定是否中止。
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import release_check
+
+    problems = list(release_check.check_regression_report())
+    if problems and str(VERSION_FILE.read_text(encoding="utf-8").strip()) != version:
+        problems.append(f"发布版本 {version} != VERSION {VERSION_FILE.read_text(encoding='utf-8').strip()}")
     if problems:
         print("==> 发版前回归校验未通过：")
         for p in problems:
@@ -81,7 +68,7 @@ def check_regression_report(version: str, force: bool) -> None:
             sys.exit(1)
         print("    !! --force 已启用：本次绕过回归校验，风险自负 !!")
     else:
-        print("==> 回归报告校验通过（版本匹配 / live 全通过 / 24h 内）")
+        print("==> 回归报告校验通过（版本匹配 / static+installer+live 全通过 / 24h 内）")
 
 
 def main():

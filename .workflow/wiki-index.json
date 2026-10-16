@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "generatedAt": 1792076810556,
+  "generatedAt": 1792112920474,
   "entries": [
     {
       "id": "knowhow-dcs-20261012-2009",
@@ -363,8 +363,8 @@
         "learning"
       ],
       "status": "active",
-      "created": "2026-10-15T15:06:32.134Z",
-      "updated": "2026-10-15T15:06:32.134Z",
+      "created": "2026-10-16T01:06:40.481Z",
+      "updated": "2026-10-16T01:06:40.481Z",
       "scope": "project",
       "category": "learning",
       "specCategory": null,
@@ -384,13 +384,34 @@
         "manual"
       ],
       "status": "active",
-      "created": "2026-10-15T15:06:32.134Z",
-      "updated": "2026-10-15T15:06:32.134Z",
+      "created": "2026-10-16T01:06:40.481Z",
+      "updated": "2026-10-16T01:06:40.481Z",
       "scope": "project",
       "category": "learning",
       "specCategory": null,
       "createdBy": null,
       "sourceRef": "session:ksyn-2107ce852f0cfe00:KDC-7191e208310ad5f7",
+      "parent": "spec:project:learnings",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "spec:project:learnings-002",
+      "type": "spec",
+      "title": "补丁类工具安装状态/设置/回退的权威定义（v4.1.6 事故）",
+      "summary": "### 补丁类工具安装状态/设置/回退的权威定义（v4.1.6 事故） # 补丁类工具的「安装状态 / 设置 / 回退」权威定义（v4.1.6 事故后确立） ## 事故（用户原话，2026-10-16） 「为什么我还原了也显示已经安装新版本了，这不就是我想回退也回退不了了么，而且之前的最小化托盘设置 啥的全都没有了。更新频率也没有了。」 ## 结论：六条必须遵守的约束 1. **状态真相只能是「部署实证」**：游戏目录内的安装清单（版本 + 时间 + 来源 + 关键文件",
+      "tags": [
+        "session-knowledge",
+        "manual"
+      ],
+      "status": "active",
+      "created": "2026-10-16T01:06:40.481Z",
+      "updated": "2026-10-16T01:06:40.481Z",
+      "scope": "project",
+      "category": "learning",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "session:ksyn-2107ce852f0cfe00:KDC-582adc500b56b446",
       "parent": "spec:project:learnings",
       "related": [],
       "repoId": null

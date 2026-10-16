@@ -39,7 +39,20 @@ python scripts/verify_regressions.py            # static + live，必须全绿
 - 结果写入 `build/regression_report.json`（含 VERSION、UTC 时间戳、逐条结果），**发布脚本会校验它**。
 - 详细清单与手工补充项（R9/R10/R11 抽样）见台账 `docs/BUG_REGISTRY.md`。
 
-## 3. 打包
+## 3. 统一入库检查（发版必须全绿）
+
+```bash
+python scripts/release_check.py          # 完整入库检查：版本/词库/菜单/想定与战役名/简报/地名集/DB 模板/
+                                         # 密钥/工作区/必需源与资产/static+installer 回归/
+                                         # 发版报告/产物哈希/绿色包内容与禁入项
+python scripts/release_check.py --pre    # 打包前预检：跳过产物与绿色包内容
+```
+
+- 清单本身见 `docs/RELEASE_MANIFEST.md`（要发什么、什么必须先入库、发布后自检、禁止入库清单）。
+- `package.sh` / `publish_release.py` 复用同一套判定（报告校验取自 `release_check.check_regression_report`），
+  不要在两处各写一份。
+
+## 4. 打包
 
 ```bash
 bash scripts/package.sh
@@ -48,19 +61,19 @@ bash scripts/package.sh
 - 内部已串：密钥门禁（工作区+全历史）→ `build.sh` → **static 回归硬门禁** → 资产覆盖率断言。
 - 任一门禁失败即中止，不得手动绕过；确需绕过必须在提交信息与本文件记录原因。
 
-## 4. 发布
+## 5. 发布
 
 ```bash
 python scripts/publish_release.py
 ```
 
 - 前置校验：`build/regression_report.json` 必须 ①版本号等于当前 `VERSION`、
-  ②包含 `live` 用例且全通过、③生成时间在 24 小时内。否则拒绝上传（可用 `--force` 显式跳过，
-  但必须在发布说明/提交信息中写明原因）。
+  ②包含 `static`/`installer`/`live` 三类且全通过、③生成时间在 24 小时内。否则拒绝上传
+  （可用 `--force` 显式跳过，但必须在发布说明/提交信息中写明原因）。
 - 发布说明自动取自 `docs/CHANGELOG.md` 的 `## v<version>` 段落，故**先写 CHANGELOG 再发布**。
-- 版本号：`VERSION` 文件 + 安装器 `CurrentVersion`/窗口标题 + 更新助手 `UpdaterVersion` 四处同步。
+- 版本号：`VERSION` 文件 + 安装器 `CurrentVersion`/窗口标题 + 更新助手 `UpdaterVersion` + 词典 `_meta.version` 五处同步。
 
-## 5. 发布后自检
+## 6. 发布后自检
 
 1. `https://api.github.com/repos/mj8724/CMO_CN/releases/latest` → tag 等于本次版本；
 2. 四个资产（安装包/绿色包 + 两个 `.sha256`）用带 `Range` 的请求验证 HTTP 206；

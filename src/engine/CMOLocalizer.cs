@@ -48,6 +48,157 @@ namespace CMOLocalizer
             catch { }
         }
 
+        // ─────────────────────────────────────────────────────────────────────
+        // 崩溃取证：注入进程里的任何未处理异常都必须留下可分析的堆栈。
+        // 背景（2026-10-16 用户实测）：在搜索框/任务名里输入一个字符即闪退；
+        // 事件日志显示 Command.exe 两次挂在 PresentationFramework（Environment.FailFast）
+        // 与 System.Windows.Forms（System.StackOverflowException）——都是异常从我们挂上
+        // 的回调里逃逸的签名。没有堆栈就无法定位，故先取证。
+        // ─────────────────────────────────────────────────────────────────────
+        private static string crashLogPath = "";
+        private static bool crashGuardInstalled = false;
+        private const int MAX_MUTATION_DEPTH = 8;
+        [ThreadStatic]
+        private static int _mutationDepth;
+        [ThreadStatic]
+        private static bool _depthCapLogged;
+
+        private static bool IsOurFrame(string stack)
+        {
+            return !string.IsNullOrEmpty(stack) && stack.IndexOf("CMOLocalizer", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void LogCrash(string source, Exception ex, bool terminating, bool swallowed)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(crashLogPath))
+                {
+                    crashLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CMOLocalizer_Crash.log");
+                }
+                string text = ex != null ? ex.ToString() : "(no exception object)";
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("===== " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "  " + source + " =====");
+                sb.AppendLine("terminating=" + terminating + "  swallowed=" + swallowed
+                              + "  ourFrame=" + IsOurFrame(text) + "  pid=" + System.Diagnostics.Process.GetCurrentProcess().Id);
+                sb.AppendLine(text);
+                sb.AppendLine();
+                File.AppendAllText(crashLogPath, sb.ToString(), Encoding.UTF8);
+                Log("CRASH [" + source + "] swallowed=" + swallowed + " ourFrame=" + IsOurFrame(text)
+                    + " -> " + (ex != null ? ex.GetType().Name : "?") + ": "
+                    + (ex != null ? ex.Message : ""));
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 安装三道未处理异常入口的取证器。原则：
+        /// · 一律记录完整堆栈（崩溃后仍可分析）；
+        /// · 只有堆栈里出现本引擎帧时才「吞掉」它——绝不让我们的缺陷变成用户的闪退；
+        /// · 游戏自身的异常保持原行为（记录后重新抛出，行为不变）。
+        /// </summary>
+        private static void InstallCrashGuard()
+        {
+            if (crashGuardInstalled) return;
+            crashGuardInstalled = true;
+            try
+            {
+                AppDomain.CurrentDomain.UnhandledException += delegate(object s, UnhandledExceptionEventArgs e)
+                {
+                    LogCrash("AppDomain.UnhandledException", e.ExceptionObject as Exception, e.IsTerminating, false);
+                };
+            }
+            catch { }
+            try
+            {
+                Application.ThreadException += delegate(object s, ThreadExceptionEventArgs e)
+                {
+                    bool ours = e.Exception != null && IsOurFrame(e.Exception.ToString());
+                    LogCrash("Application.ThreadException", e.Exception, false, ours);
+                    if (!ours && e.Exception != null) throw e.Exception;
+                };
+            }
+            catch { }
+            Log("CrashGuard installed (log: CMOLocalizer_Crash.log)");
+        }
+
+        /// <summary>
+        /// 改写控件/文档文本前的统一重入门闸。背景：我们在游戏自己的事件处理链里改写文本，
+        /// 改写又会触发对方的回调，形成同步 A→B→A 递归，最终 0xc00000fd 栈溢出闪退。
+        /// 超过深度上限直接拒绝本次改写并记录一次堆栈（既止血又留下定位证据）。
+        /// </summary>
+        private static bool EnterMutation(string what)
+        {
+            if (_mutationDepth >= MAX_MUTATION_DEPTH)
+            {
+                if (!_depthCapLogged)
+                {
+                    _depthCapLogged = true;
+                    Log("MUTATION DEPTH CAP(" + MAX_MUTATION_DEPTH + ") hit by " + what
+                        + "; refused. stack:\r\n" + Environment.StackTrace);
+                }
+                return false;
+            }
+            _mutationDepth++;
+            return true;
+        }
+
+        private static void ExitMutation()
+        {
+            if (_mutationDepth > 0) _mutationDepth--;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // 回写拉锯熔断：游戏把英文写回、我们又翻成中文，若它每收到我们的回写就再写回，
+        // 就是一场无终止的拉锯（表现为卡死/后台忙碌/最终栈溢出）。同一个控件被反复
+        // 写成同一个目标值时计数，超限就放弃该控件并留证。目标值在变时永不计入，
+        // 因此不会误伤燃油/时钟这类本当持续更新的面板。
+        // ─────────────────────────────────────────────────────────────────────
+        private static readonly Dictionary<int, string> lastWriteTarget = new Dictionary<int, string>();
+        private static readonly Dictionary<int, int> writeRepeatCount = new Dictionary<int, int>();
+        private static readonly HashSet<int> writeBlocked = new HashSet<int>();
+        private static readonly object writeBurstLock = new object();
+        private const int WRITE_REPEAT_LIMIT = 6;
+
+        private static bool IsWriteBlocked(int key)
+        {
+            lock (writeBurstLock) { return writeBlocked.Contains(key); }
+        }
+
+        /// <summary>
+        /// 回写前调用。target = 本次要写入的目标文本。
+        /// 同一个目标值在同一个控件上被重复写入超过 WRITE_REPEAT_LIMIT 次，
+        /// 判定为与游戏拉锯，永久放弃该控件并记录一次堆栈。
+        /// </summary>
+        private static bool AllowWrite(int key, string target, string what)
+        {
+            lock (writeBurstLock)
+            {
+                if (writeBlocked.Contains(key)) return false;
+                string prev;
+                if (lastWriteTarget.TryGetValue(key, out prev) && prev == target)
+                {
+                    int n;
+                    writeRepeatCount.TryGetValue(key, out n);
+                    n++;
+                    writeRepeatCount[key] = n;
+                    if (n > WRITE_REPEAT_LIMIT)
+                    {
+                        writeBlocked.Add(key);
+                        Log("WRITE LOOP BLOCKED " + what + " after " + n + " identical writes; stack:\r\n"
+                            + Environment.StackTrace);
+                        return false;
+                    }
+                }
+                else
+                {
+                    lastWriteTarget[key] = target;
+                    writeRepeatCount[key] = 0;
+                }
+                return true;
+            }
+        }
+
         public override void InitializeNewDomain(AppDomainSetup appDomainInfo)
         {
             try
@@ -55,6 +206,7 @@ namespace CMOLocalizer
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 logPath = Path.Combine(baseDir, "CMOLocalizer.log");
                 Log("=== CMOLocalizer v4.0 Engine Starting ===");
+                InstallCrashGuard();
 
                 SetupChineseDateTimeCulture();
 
@@ -942,6 +1094,11 @@ namespace CMOLocalizer
         private static void TranslateWpfElement(System.Windows.DependencyObject dep)
         {
             if (dep == null) return;
+            TranslateWpfElementInner(dep);
+        }
+
+        private static void TranslateWpfElementInner(System.Windows.DependencyObject dep)
+        {
             try
             {
                 if (dep is System.Windows.Controls.HeaderedContentControl)
@@ -994,6 +1151,7 @@ namespace CMOLocalizer
                                 desc.AddValueChanged(tb, (s, e) =>
                                 {
                                     if (_inWpfTextChanged) return;
+                                    if (!EnterMutation("WpfTextBlockHook")) return;
                                     try
                                     {
                                         _inWpfTextChanged = true;
@@ -1022,7 +1180,7 @@ namespace CMOLocalizer
                                         }
                                     }
                                     catch { }
-                                    finally { _inWpfTextChanged = false; }
+                                    finally { _inWpfTextChanged = false; ExitMutation(); }
                                 });
                             }
                         }
@@ -1103,6 +1261,7 @@ namespace CMOLocalizer
                                 desc.AddValueChanged(cc, (s, e) =>
                                 {
                                     if (_inWpfTextChanged) return;
+                                    if (!EnterMutation("WpfContentHook")) return;
                                     try
                                     {
                                         _inWpfTextChanged = true;
@@ -1118,7 +1277,7 @@ namespace CMOLocalizer
                                         }
                                     }
                                     catch { }
-                                    finally { _inWpfTextChanged = false; }
+                                    finally { _inWpfTextChanged = false; ExitMutation(); }
                                 });
                             }
                         }
@@ -1153,7 +1312,13 @@ namespace CMOLocalizer
                 // flickered on every refresh.
                 System.Windows.Documents.FlowDocument flowDoc = null;
                 System.Windows.Controls.RichTextBox rtb = dep as System.Windows.Controls.RichTextBox;
-                if (rtb != null) { flowDoc = rtb.Document; }
+                if (rtb != null)
+                {
+                    // 用户正在该富文本里输入时绝不碰其文档（与输入框同一类拉锯风险）
+                    bool focusedRtb = false;
+                    try { focusedRtb = rtb.IsKeyboardFocusWithin; } catch { }
+                    if (!focusedRtb) flowDoc = rtb.Document;
+                }
                 if (flowDoc == null)
                 {
                     Type dt = dep.GetType();
@@ -1195,14 +1360,18 @@ namespace CMOLocalizer
         /// </summary>
         private static void SetTextKeepBinding(System.Windows.Controls.TextBlock tb, string text)
         {
+            if (tb == null || string.IsNullOrEmpty(text)) return;
+            if (!EnterMutation("SetTextKeepBinding")) return;
             try
             {
+                if (!AllowWrite(tb.GetHashCode(), text, "WPF TextBlock")) return;
                 tb.SetCurrentValue(System.Windows.Controls.TextBlock.TextProperty, text);
             }
             catch
             {
                 try { tb.Text = text; } catch { }
             }
+            finally { ExitMutation(); }
         }
 
         private static void SetContentKeepBinding(System.Windows.Controls.ContentControl cc, string text)
@@ -1381,13 +1550,19 @@ namespace CMOLocalizer
                     TextBox tb2 = box as TextBox;
                     bool readOnlyBox = tb2 != null && tb2.ReadOnly;
                     if (!readOnlyBox && box.GetType().Name.IndexOf("RichText", StringComparison.OrdinalIgnoreCase) < 0) return;
+                    // 同一个源文本被反复回写 = 与游戏拉锯（用户实测：输入一个字符后闪退），
+                    // 计数超限即放弃该控件，不再参与翻译。
+                    string curText = "";
+                    try { curText = box.Text; } catch { }
+                    if (!AllowWrite(box.GetHashCode(), curText, "TextBoxBase '" + box.Name + "'")) return;
+                    if (!EnterMutation("TextBoxBaseTextChanged")) return;
                     try
                     {
                         _inControlTextChanged = true;
                         TranslateControlText(box);
                     }
                     catch { }
-                    finally { _inControlTextChanged = false; }
+                    finally { _inControlTextChanged = false; ExitMutation(); }
                 };
                 return;
             }
@@ -1397,13 +1572,17 @@ namespace CMOLocalizer
                 if (_inControlTextChanged) return;
                 Control c = s as Control;
                 if (c == null || c.IsDisposed) return;
+                string curText2 = "";
+                try { curText2 = c.Text; } catch { }
+                if (!AllowWrite(c.GetHashCode(), curText2, "Control '" + c.Name + "'")) return;
+                if (!EnterMutation("ControlTextChanged")) return;
                 try
                 {
                     _inControlTextChanged = true;
                     TranslateControlText(c);
                 }
                 catch { }
-                finally { _inControlTextChanged = false; }
+                finally { _inControlTextChanged = false; ExitMutation(); }
             };
         }
 
@@ -1417,6 +1596,15 @@ namespace CMOLocalizer
         {
             if (cb == null || cb.IsDisposed) return;
             if (IsProtectedDBViewerCombo(cb)) return;
+            // 输入期（正被编辑/自动完成中）与下拉展开中绝不改条目：
+            // 在用户按键的同栈里改 Items 会让 WinForms 重入自动完成与筛选逻辑，
+            // 用户实测就是「搜索框里输入一个字符即闪退」。
+            bool focused = false;
+            bool dropped = false;
+            try { focused = cb.Focused; } catch { }
+            try { dropped = cb.DroppedDown; } catch { }
+            if (focused || dropped) return;
+            if (!EnterMutation("LocalizeComboBoxSafe")) return;
             try
             {
                 if (cb.DataSource != null)
@@ -1459,6 +1647,8 @@ namespace CMOLocalizer
         private static void LocalizeListBoxSafe(ListBox lb)
         {
             if (lb == null || lb.IsDisposed) return;
+            try { if (lb.Focused) return; } catch { }
+            if (!EnterMutation("LocalizeListBoxSafe")) return;
             try
             {
                 for (int i = 0; i < lb.Items.Count; i++)
@@ -1572,7 +1762,15 @@ namespace CMOLocalizer
 
         private static void TranslateControlTree(Control ctrl)
         {
+            // 注意：本方法是「遍历器」，递归深度 = UI 树深度（正常且有限），
+            // 因此不能套深度闸门（曾导致深层控件全部漏译）；闸门只放在游戏事件的
+            // 回写路径上（见 HookControlTextChanged / WPF 值变更钩子）。
             if (ctrl == null) return;
+            TranslateControlTreeInner(ctrl);
+        }
+
+        private static void TranslateControlTreeInner(Control ctrl)
+        {
             HookControlTextChanged(ctrl);
 
             // Combo/item surfaces are localized at the item layer, never through
@@ -2629,6 +2827,9 @@ namespace CMOLocalizer
             bool dbViewer = IsInTargetLocalizableForm(cb, out formName)
                             && formName.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0;
             bool changed = false;
+            // 条目内容作指纹：同一份条目被反复重填并翻译 = 与游戏拉锯，超限即放弃。
+            string fingerprint = cb.Items.Count + ":" + (cb.Items.Count > 0 ? Convert.ToString(cb.Items[0]) : "");
+            if (!AllowWrite(cb.GetHashCode() * 31 + 7, fingerprint, "ComboBoxItems '" + cb.Name + "'")) return;
             for (int i = 0; i < cb.Items.Count; i++)
             {
                 string raw = cb.GetItemText(cb.Items[i]);
@@ -2799,6 +3000,11 @@ namespace CMOLocalizer
         private static void TranslateDarkTreeView(Control ctrl)
         {
             if (ctrl == null) return;
+            TranslateDarkTreeViewInner(ctrl);
+        }
+
+        private static void TranslateDarkTreeViewInner(Control ctrl)
+        {
             try
             {
                 if (_dtvNodesProp == null)
@@ -3400,6 +3606,29 @@ namespace CMOLocalizer
 
         private static void TranslateControlText(Control ctrl)
         {
+            if (ctrl == null) return;
+            TranslateControlTextInner(ctrl);
+        }
+
+        /// <summary>
+        /// 文本输入控件：正文属于用户输入，只能翻水印，绝不能回写正文。
+        /// DarkUI 的自定义输入框（如搜索想定框、任务名框）名字里带 TextBox/EditBox，
+        /// 但不继承 TextBoxBase，旧代码把它们的正文当成普通标签翻译，直接导致闪退。
+        /// </summary>
+        private static bool IsTextInputControl(Control ctrl)
+        {
+            if (ctrl == null) return false;
+            if (ctrl is TextBoxBase) return true;
+            if (ctrl is ComboBox || ctrl is ListControl || ctrl is UpDownBase) return true;
+            string tn = ctrl.GetType().Name;
+            if (tn.IndexOf("TextBox", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (tn.IndexOf("EditBox", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (tn.EndsWith("Edit", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private static void TranslateControlTextInner(Control ctrl)
+        {
             if (ctrl is Form)
             {
                 string fText = ctrl.Text;
@@ -3453,7 +3682,7 @@ namespace CMOLocalizer
                 }
             }
 
-            if (ctrl is TextBoxBase || ctrl.GetType().Name.IndexOf("TextBox", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (ctrl is TextBoxBase || IsTextInputControl(ctrl))
             {
                 TranslateWatermark(ctrl);
             }
@@ -3476,6 +3705,13 @@ namespace CMOLocalizer
                 }
                 return;
             }
+
+            // DarkUI 等自定义输入框（名字带 TextBox/Edit 但不继承 TextBoxBase）的正文
+            // 就是用户正在输入的内容，绝不可回写：
+            // 实证（2026-10-16 用户实测）——在搜索框输入 m，引擎把 m 当成单位换算译成「米」
+            // 写回输入框，游戏又写回 m，日志里 “UI Controls Translated count”
+            // 每 2.5 秒涨 50（m -> 米）直到 5900 后进程以 0xc00000fd 栈溢出闪退。
+            if (IsTextInputControl(ctrl)) return;
 
             // ComboBox, ListControl and UpDownBase hold internal query/code keys
             // or user inputs. Overwriting their .Text destroys SelectedIndex and breaks game logic!
@@ -3604,6 +3840,29 @@ namespace CMOLocalizer
                 string rest = raw.Substring(raw.IndexOf(']') + 1).Trim();
                 string tRest = TranslateString(rest);
                 return "[未授权] " + tRest;
+            }
+            // 想定浏览器标题行的变体：“[NOT LICENSED] Carrier Killer, 1985”。
+            // 标题与年份被拼成一个整串，整串查表永远落空（用户实测：战役里剧本名还是英文）。
+            // 拆成“前缀 + 标题 + 年份”分开处理，标题按普通词条翻译，年份原样保留。
+            if (raw.StartsWith("[NOT LICENSED]") || raw.StartsWith("[NOTLICENSED]")
+                || raw.StartsWith("[未授权]"))
+            {
+                int close = raw.IndexOf(']');
+                string rest = close >= 0 ? raw.Substring(close + 1).Trim() : raw;
+                string tail = "";
+                int comma = rest.LastIndexOf(", ");
+                if (comma > 0)
+                {
+                    string maybeYear = rest.Substring(comma + 2).Trim();
+                    if (maybeYear.Length == 4 && char.IsDigit(maybeYear[0]) && char.IsDigit(maybeYear[1])
+                        && char.IsDigit(maybeYear[2]) && char.IsDigit(maybeYear[3]))
+                    {
+                        tail = ", " + maybeYear;
+                        rest = rest.Substring(0, comma).Trim();
+                    }
+                }
+                string tTitle = TranslateString(rest);
+                return "[未授权] " + tTitle + tail;
             }
             if (raw.StartsWith("作战地域:") || raw.StartsWith("作战地域：") || raw.StartsWith("位置 / 设置:"))
             {

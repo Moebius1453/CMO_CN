@@ -71,16 +71,25 @@ def gate_scenario_meta() -> None:
     doc = json.loads((DICT / "CMOLocalizer.json").read_text(encoding="utf-8"))
     exact = doc["exact"]
     meta_file = DICT / "scenario_meta.json"
-    if not meta_file.is_file():
+    # 有游戏目录时重新抽取（新增/更新过想定后会多出未翻译的标题）；无游戏时用已入库快照。
+    if GAME.is_dir() or not meta_file.is_file():
         subprocess.run([sys.executable, str(ROOT / "scripts/scenario_meta.py")],
                        capture_output=True)
     meta = json.loads(meta_file.read_text(encoding="utf-8"))
     miss_t = [t for t in meta["titles"] if t not in exact]
     miss_s = [s for s in meta["settings"] if s not in exact]
-    ok = not miss_t and not miss_s
-    record("scenario meta", ok,
-           f"titles {len(meta['titles'])-len(miss_t)}/{len(meta['titles'])}, "
-           f"settings {len(meta['settings'])-len(miss_s)}/{len(meta['settings'])}")
+    # 战役内剧本名（*.campaign 的 <Name>）同样是引擎按整串匹配的显示文本；
+    # “Local Video: *.wmv|*.mp4”是游戏用于找视频文件的名字，不得翻译，故排除。
+    camp_names = sorted({n for c in meta.get("campaigns", []) for n in c.get("names", [])})
+    camp = [n for n in camp_names if not n.startswith("Local Video:")]
+    miss_c = [n for n in camp if n not in exact]
+    ok = not miss_t and not miss_s and not miss_c
+    detail = (f"titles {len(meta['titles'])-len(miss_t)}/{len(meta['titles'])}, "
+              f"settings {len(meta['settings'])-len(miss_s)}/{len(meta['settings'])}, "
+              f"campaign names {len(camp)-len(miss_c)}/{len(camp)}")
+    if miss_c:
+        detail += " | 缺失: " + ", ".join(miss_c[:8])
+    record("scenario meta", ok, detail)
 
 
 def gate_briefings() -> None:

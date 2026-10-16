@@ -55,7 +55,7 @@ class Runner:
 # R0 二进制标记：部署到游戏目录的引擎必须包含历次修复的关键符号。
 # 不用整文件哈希：csc 每次编译都产生不同 MVID/时间戳，重新 build 后哈希必变，
 # 但“旧包覆盖回不含修复的引擎”会被标记缺失抓住。
-DEPLOY_MARKERS = ["IsProtectedDBViewerCombo", "FindDBViewerForm"]
+DEPLOY_MARKERS = ["IsProtectedDBViewerCombo", "FindDBViewerForm", "IsTextInputControl", "InstallCrashGuard"]
 
 
 def run_static(r: Runner) -> None:
@@ -162,6 +162,75 @@ def run_static(r: Runner) -> None:
     r.record("R17-static-pack-readme", "R17 绿色包说明含自动登记安装状态（adopt）", pack_doc_ok,
              "README.md 含 adopt 说明（随包为 汉化说明.md）" if pack_doc_ok else "README.md 缺少 adopt 说明",
              "README.md")
+
+    # R19：输入期不得改写输入控件正文 + 崩溃取证 + 回写拉锯熔断。
+    # 实证（2026-10-16 用户输入 m 闪退）：DarkUI 自定义输入框不继承 TextBoxBase，
+    # 旧代码把它们当普通标签翻译 → 引擎写「米」、游戏写回「m」→ 日志里
+    # “UI Controls Translated count … (Sample: m -> 米)”每 2.5s 涨 50，直到
+    # 进程以 0xc00000fd 栈溢出闪退。
+    input_helper = re.search(r"private static bool IsTextInputControl\(Control ctrl\)", src)
+    input_early_return = re.search(
+        r"IsTextInputControl\(ctrl\)\)\s*\{\s*TranslateWatermark\(ctrl\);\s*\}", src)
+    input_skip = re.search(r"if \(IsTextInputControl\(ctrl\)\) return;", src)
+    crash_guard = ("private static void InstallCrashGuard()" in src
+                   and "CMOLocalizer_Crash.log" in src
+                   and "AppDomain.CurrentDomain.UnhandledException" in src
+                   and "Application.ThreadException" in src)
+    loop_guard = ("private static bool AllowWrite(int key, string target, string what)" in src
+                  and "WRITE LOOP BLOCKED" in src)
+    depth_guard = ("private static bool EnterMutation(string what)" in src
+                   and "MUTATION DEPTH CAP" in src)
+    r.record("R19-static-input-guard", "R19 输入控件正文不被改写 + 崩溃取证 + 熔断",
+             bool(input_helper and input_early_return and input_skip and crash_guard
+                  and loop_guard and depth_guard),
+             "IsTextInputControl/早退/InstallCrashGuard/AllowWrite/EnterMutation 均已就位"
+             if (input_helper and input_early_return and input_skip and crash_guard and loop_guard and depth_guard)
+             else f"helper={bool(input_helper)} 早退={bool(input_early_return)} skip={bool(input_skip)} "
+                  f"crash={crash_guard} loop={loop_guard} depth={depth_guard}",
+             "src/engine/CMOLocalizer.cs")
+
+    # R20：战役内剧本名与窗口标签必须进词典（含工坊叠译自愈项）。
+    dict_doc = json.loads(DICT.read_text(encoding="utf-8"))
+    exact = dict_doc["exact"]
+    meta_path = ROOT / "dict/scenario_meta.json"
+    camp_missing: list[str] = []
+    camp_total = 0
+    if meta_path.is_file():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        names = sorted({n for c in meta.get("campaigns", []) for n in c.get("names", [])})
+        camp = [n for n in names if not n.startswith("Local Video:")]
+        camp_total = len(camp)
+        camp_missing = [n for n in camp if n not in exact]
+    labels = ["Resume from save", "Delete selected save",
+              "Select one of the campaigns available to start a new session, "
+              "or resume an existing campaign session from a save."]
+    label_missing = [s for s in labels if s not in exact]
+    nested_ok = (exact.get("Steam Workshop") == "创意工坊"
+                 and exact.get("创意工坊 (Steam Workshop)") == "创意工坊"
+                 and exact.get("创意工坊 (创意工坊 (Steam Workshop))") == "创意工坊")
+    r.record("R20-static-campaign-names", "R20 战役内剧本名/窗口标签已入词典（工坊不叠译）",
+             bool(camp_total and not camp_missing and not label_missing and nested_ok),
+             f"战役剧本名 {camp_total - len(camp_missing)}/{camp_total}"
+             + (f"，缺: {camp_missing[:5]}" if camp_missing else "")
+             + (f"，窗口标签缺: {label_missing}" if label_missing else "")
+             + ("" if nested_ok else "，工坊叠译未被修正"),
+             "dict/CMOLocalizer.json + dict/src/campaign_ui.json")
+
+    # R21：发版打包清单 + 统一入库检查必须存在且互相引用。
+    manifest = ROOT / "docs/RELEASE_MANIFEST.md"
+    rc_path = ROOT / "scripts/release_check.py"
+    mtext = manifest.read_text(encoding="utf-8", errors="replace") if manifest.is_file() else ""
+    rtext = rc_path.read_text(encoding="utf-8", errors="replace") if rc_path.is_file() else ""
+    sop = (ROOT / "docs/RELEASE_TEST_SOP.md").read_text(encoding="utf-8", errors="replace")
+    manifest_ok = ("CMO_Chinese_Setup_v<VER>.exe" in mtext and "CMO_Chinese_Pack_<VER>.zip" in mtext
+                   and "禁止入库清单" in mtext and "scripts/release_check.py" in mtext)
+    rc_ok = ("def check_regression_report" in rtext and "def check_artifacts" in rtext
+             and "def check_pack_contents" in rtext and "RELEASE_MANIFEST.md" in rtext)
+    sop_ok = "release_check.py" in sop and "RELEASE_MANIFEST.md" in sop
+    r.record("R21-static-manifest", "R21 发版清单 + 统一入库检查（且 SOP 引用）",
+             bool(manifest_ok and rc_ok and sop_ok),
+             f"manifest={manifest_ok} release_check={rc_ok} sop={sop_ok}",
+             "docs/RELEASE_MANIFEST.md + scripts/release_check.py + docs/RELEASE_TEST_SOP.md")
 
 
 # ── live：需要在运行中的游戏里实测 ──────────────────────────────────────────

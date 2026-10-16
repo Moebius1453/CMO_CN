@@ -232,3 +232,36 @@
 7. **新增回归分层**：`--static`（源码/资产/单测，打包硬门禁）、`--installer`（临时合成游戏目录里
    跑安装/还原/回退/自愈，**不碰真实游戏目录也不需要游戏运行**）、`--live`（需游戏，国际惯例
    发版前必跑）。任何在真实游戏目录/注册表里做的自动化测试都必须自带备份与恢复。
+
+## 注入式汉化的三条硬约束（2026-10-16 输入闪退事故后确立）
+
+1. **输入控件的正文永远不许改写**。游戏 DarkUI 的自定义输入框（`DarkTextBox`）不继承 `TextBoxBase`，
+   只看 `TextBoxBase` 会漏判；判定要按「类型名含 TextBox/EditBox、以 Edit 结尾」这类特征兜底。
+   实证事故：引擎把用户输入的 `m` 按词典 `m → 米` 改写 → 游戏写回 `m` → 无限拉锯 →
+   日志 `UI Controls Translated count … (m -> 米)` 每 2.5 秒涨 50 → `0xc00000fd` 栈溢出闪退。
+2. **任何注入进游戏进程的回调都不许让异常逃逸**。异常从 `WndProc`/WPF dispatcher 这类原生→托管回调逃出时，
+   CLR 直接 `FailFast`（进程瞬间消失，无弹窗、无堆栈），用户看到的就是「闪退」；
+   必须内部消化 + 记录，并常备崩溃取证（`CMOLocalizer_Crash.log`）以便事后定位。
+   同理，回写前要有拉锯熔断（同一目标值重复写入即放弃该控件），熔断/封顶要留堆栈证据。
+3. **深度闸门只能挂在事件回写路径上**。遍历器（WPF 视觉树、控件树、想定树）的递归深度等于树深度，
+   把闸门套在遍历器上会静默漏译深层控件（本轮初版即如此，已回退）；
+   闸门的意义是切断「我们的回写→游戏回调→我们再回写」的循环，不是限制正常遍历。
+
+## 战役内剧本名属必译面（2026-10-16 用户实测）
+
+- 战役里显示的剧本名来自 `Scenarios/**/*.campaign` 的 `<Name>` 节点，与 `.scen` 里的 `<ScenTitle>` 是
+  **两套数据**；只覆盖 `.scen` 会让「战役里有些剧本名还是英文」。门禁必须同时断言两者的词典覆盖
+  （`verify_all.py` 的 `scenario meta` 现为 titles + settings + campaign names 三重覆盖）。
+- `Local Video: *.wmv|*.mp4` 是游戏用于找视频文件的字符串，**永远不要翻译**。
+- 游戏字符串池（`dict/strings_pool.json`）里的串必须写进 `offsets`（引擎启动时注入池中），
+  只写 `exact` 无效——`Resume from save` 就是这样长期显示英文的。
+- 词典词条必须幂等：`Steam Workshop → 创意工坊 (Steam Workshop)` 被二次翻译即成叠译
+  「创意工坊 (创意工坊 (Steam Workshop))」；凡是可能被重复施加的映射，值里不能再出现源串。
+
+## 发版必须先过统一入库检查（2026-10-16 用户要求）
+
+- 清单：`docs/RELEASE_MANIFEST.md`（要发什么 / 必须先入库什么 / 禁止带上什么 / 发布后自检 / 回滚路径）。
+- 一条命令：`python scripts/release_check.py`（`--pre` 为打包前预检）。判定逻辑单点：
+  `publish_release.py` 复用 `release_check.check_regression_report`，不要在别处再写一份报告校验。
+- 打包门禁（`package.sh` → `verify_regressions.py --static --no-report`）**不得**覆盖
+  `build/regression_report.json`；发布前最后一次回归必须是带 `--live` 的那次。

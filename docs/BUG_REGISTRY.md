@@ -215,3 +215,64 @@
   包缓存 Prune 保留最近 N + Previous、安装包版本戳解析（文件名优先 + 无版本号时回退内容戳）、
   门控真值表；全部在系统临时目录内运行（不碰用户设置与真实游戏目录）。
 - **回归测试点**：`static` `R18-static-selftest`（要求 ALL PASS，退出码 0）。
+
+## R19 创建任务/搜索剧本时输入一个字符即闪退（v4.1.7）
+
+- **现象**：用户实测——创建任务时在任务名框输入 `m` 就闪退；「搜索剧本」（加载想定）搜索框输入 `m` 也闪退。
+  表现为进程瞬间消失（无报错弹窗）。
+- **根因（有实证）**：
+  1) 事件日志（Application 1000/1001）：`Command.exe` 于 2026-10-14 20:16/20:18 以 `System.StackOverflowException`
+     崩在 `System.Windows.Forms.ni.dll`；于 2026-10-15 12:30/12:38/12:54/12:55 以
+     `Environment.FailFast` 终止（12:54 那条 faulting module = `PresentationFramework.ni.dll`）——两者都是
+     「异常/递归从注入进程的托管回调里逃逸」的签名。
+  2) 本机复现 + 引擎日志铁证：在「加载想定」搜索框输入 `m`，`CMOLocalizer.log` 出现
+     `UI Controls Translated count: 3700 (Sample: m -> 米)`，每 2.5 秒 +50，一路涨到 5900，
+     紧接着 15:11:12 进程以 `0xc00000fd`（栈溢出）消失。
+  3) 代码实证：`TranslateControlTextInner` 只对 `TextBoxBase` 做「聚焦即跳过」；游戏 DarkUI 的自定义输入框
+     （搜索想定框、任务名框）**不继承 TextBoxBase**，落进通用分支被当普通标签翻译；词典里有 `m → 米`
+     （单位换算）这类短词条，于是引擎把用户正在输入的 `m` 改写成「米」，游戏再写回 `m`，形成无终止拉锯。
+- **修复位置**：`src/engine/CMOLocalizer.cs`
+  - `IsTextInputControl()` + 在 `TranslateControlTextInner` 中提前返回：输入控件正文一律不改写（只翻水印）；
+  - 组合框聚焦或下拉展开时不改 `Items`；聚焦中的 WPF `RichTextBox` 不动其文档；
+  - `AllowWrite()` 回写拉锯熔断：同一控件被反复写同一个目标值超过 6 次即永久放弃该控件并打印堆栈；
+  - `EnterMutation()` 深度闸门（上限 8）+ 堆栈留证，只挂在游戏事件回写路径；
+  - `InstallCrashGuard()`：`AppDomain.UnhandledException` / `Application.ThreadException` / WPF 钩子，
+    完整堆栈写入游戏目录 `CMOLocalizer_Crash.log`，仅当堆栈含本引擎帧时才吞掉异常。
+- **用户可见验收**：在任务名框/搜索想定框输入 `m`、中文都不再闪退；输入内容保持原样；若仍有异常，
+  游戏目录出现 `CMOLocalizer_Crash.log` 供定位。
+- **回归测试点**：`static` 的 `R19-static-input-guard`（断言输入控件早退、崩溃取证、熔断、深度闸门均在位）；
+  `static` 的 `R0-static-env` 把 `IsTextInputControl`/`InstallCrashGuard` 纳入部署标记，防止旧引擎假绿；
+  `live` 的 `L0/R1-*` 保证加固没有让翻译回退。
+
+## R20 战役里部分剧本名与「系列战役」窗口标签仍是英文（v4.1.7）
+
+- **现象**：用户实测——新版里战役内有些剧本名又变回英文（「沉默的部队」整场如此）；
+  「系列战役」窗口有 `Select one of the campaigns…`、`Resume from save`、`Delete selected save` 三个英文标签，
+  工坊页签还叠译成「创意工坊 (创意工坊 (Steam Workshop))」。
+- **根因**：
+  1) 战役内剧本名来自 `Scenarios/**/*.campaign` 的 `<Name>`，共 154 条去重值中 **25 条从未入词典**
+     （`The Silent Service` 16 条全缺、`Desert Storm` 的 SCUD Hunting、`Northern Inferno` 的
+     The Grey Ghost from the East Coast，另 6 条是 `Local Video: *.wmv/mp4` 文件名，**不得翻译**）。
+  2) `Resume from save` 属游戏字符串池（offset 752572），引擎启动时把池内英文注入，只补 `exact` 不够，
+     必须同时补 `offsets`。
+  3) `Steam Workshop` 词条非幂等（`创意工坊 (Steam Workshop)`），被二次翻译即叠成
+     「创意工坊 (创意工坊 (Steam Workshop))」。
+  4) 想定浏览器标题是复合串 `[NOT LICENSED] <标题>, <年份>`，整串查表必然落空。
+- **修复位置**：`dict/CMOLocalizer.json`（19 条剧本名 + 3 条窗口标签 + 工坊幂等与清理项 + 2 条 offsets 注入）、
+  新增 `dict/src/campaign_ui.json`（精选批次，保证重建不丢）、`src/engine/CMOLocalizer.cs`（复合标题拆分规则）、
+  `scripts/verify_all.py`（scenario meta 门禁纳入 `<Name>`）。
+- **用户可见验收**：系列战役窗口三个标签为中文；战役内剧本名全中文；工坊页签显示「创意工坊」；
+  想定浏览器标题显示「[未授权] 航母杀手, 1985」。
+- **回归测试点**：`static` 的 `R20-static-campaign-names`（战役剧本名全覆盖断言 + 工坊叠译自愈断言）；
+  `verify_all.py` 的 `scenario meta` 门禁（`campaign names N/N`）；实机抽查「加载想定 → 沉默的部队 → 航母杀手」。
+
+## R21 缺少「发版打包清单」与统一入库检查（v4.1.7）
+
+- **现象**：要发版时没有一份权威清单说明「要发什么、必须先入库什么、禁止带上什么」；
+  门禁散落在 `package.sh`/`publish_release.py`/`verify_*` 里，靠记忆执行，容易漏项。
+- **根因**：发版知识与判定逻辑没有单一入口，且打包门禁曾覆盖 live 回归报告导致发布校验误报（见 R18 相关的
+  `--no-report` 修复）。
+- **修复位置**：`docs/RELEASE_MANIFEST.md`（清单）+ `scripts/release_check.py`（统一入库检查）+
+  `scripts/publish_release.py`（复用 `release_check.check_regression_report`）+ `docs/RELEASE_TEST_SOP.md`（接入顺序）。
+- **用户可见验收**：发布前一条命令 `python scripts/release_check.py` 即可看到逐项 PASS/FAIL。
+- **回归测试点**：`static` 的 `R21-static-manifest`（清单与脚本存在、互相引用、SOP 引用二者）。
