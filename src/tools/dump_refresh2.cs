@@ -31,7 +31,7 @@ class Program {
                 Console.WriteLine("IL Length: " + il.Length);
                 for (int i = 0; i < il.Length; i++) {
                     byte b = il[i];
-                    if (b == 0x20) { // ldc.i4
+                    if (b == 0x20 && i + 4 < il.Length) { // ldc.i4
                         int val = BitConverter.ToInt32(il, i + 1);
                         if (val > 1000 && val < 3000000) {
                             try {
