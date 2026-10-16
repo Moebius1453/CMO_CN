@@ -8,3 +8,4 @@
 {"type":"cli","id":"CLI-1792022124780-1","timestamp":"2026-10-14T23:55:24.780Z","command":"load","args":{"type":"knowhow","id":"knowhow-DCS-20261012-2009-001"}}
 {"type":"cli","id":"CLI-1792022125097-1","timestamp":"2026-10-14T23:55:25.097Z","command":"load","args":{"type":"knowhow","id":"knowhow-DCS-20261012-2009-002"}}
 {"type":"cli","id":"CLI-1792022130357-1","timestamp":"2026-10-14T23:55:30.357Z","command":"load","args":{"type":"knowhow","id":"knowhow-dcs-20261014-github-releases"}}
+{"type":"cli","id":"CLI-1792157441399-1","timestamp":"2026-10-16T13:30:41.399Z","command":"spec load","args":{"category":"review","stdin":false}}

@@ -249,6 +249,47 @@ public class GuiDriver
                 SendKeys.SendWait(args[1]);
                 Console.WriteLine("Sent keys: " + args[1]);
             }
+            else if (action == "children" && args.Length > 1)
+            {
+                // 进程外枚举子窗口（只看 Win32 句柄/类名/矩形，不碰托管控件）。
+                IntPtr parent = new IntPtr(long.Parse(args[1]));
+                List<WinInfo> kids = new List<WinInfo>();
+                EnumChildWindows(parent, delegate(IntPtr h, IntPtr lp)
+                {
+                    WinInfo wi = new WinInfo();
+                    wi.Hwnd = h;
+                    uint pid2;
+                    GetWindowThreadProcessId(h, out pid2);
+                    wi.Pid = pid2;
+                    wi.Visible = IsWindowVisible(h);
+                    StringBuilder cls = new StringBuilder(256);
+                    GetClassName(h, cls, cls.Capacity);
+                    wi.ClassName = cls.ToString();
+                    StringBuilder txt = new StringBuilder(512);
+                    GetWindowText(h, txt, txt.Capacity);
+                    wi.Title = txt.ToString();
+                    RECT rc;
+                    GetWindowRect(h, out rc);
+                    wi.Rect = rc;
+                    kids.Add(wi);
+                    return true;
+                }, IntPtr.Zero);
+                foreach (WinInfo w in kids)
+                {
+                    Console.WriteLine(string.Format("{0,-10} vis={1,-6} rect=[{2},{3},{4}x{5}] cls={6,-34} txt={7}",
+                        w.Hwnd.ToString(), w.Visible, w.Rect.Left, w.Rect.Top, w.Rect.Width, w.Rect.Height,
+                        w.ClassName, w.Title));
+                }
+            }
+            else if (action == "postchar" && args.Length >= 3)
+            {
+                // 向指定控件句柄投递 WM_CHAR（游戏窗口常拒绝 SendKeys 的输入，
+                // 但控件级消息仍走同一 WinForms 文本变更/事件链路）。
+                IntPtr h = new IntPtr(long.Parse(args[1]));
+                string text = args[2];
+                foreach (char ch in text) PostMessage(h, 0x0102, (IntPtr)ch, IntPtr.Zero);
+                Console.WriteLine(string.Format("Posted {0} char(s) to {1}", text.Length, h));
+            }
             else if (action == "cmd" && args.Length >= 3)
             {
                 string gDir = args[1];

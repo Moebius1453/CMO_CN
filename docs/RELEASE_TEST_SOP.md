@@ -34,6 +34,10 @@ python scripts/verify_regressions.py            # static + live，必须全绿
 
 - `live` 用例需要**游戏正在运行**（`Command.exe`）；脚本会自己 `CLICK_MENU 数据库查看器`
   并逐类点击条目取证，无需人工操作。
+- **`--static --installer` 与 `--live` 必须分两次运行**：installer 用例会调
+  `CMOShared.KillProcesses()`（对 `Command`/`CMO_Updater` 先 CloseMainWindow 再 Kill）——这是安装器的
+  正确产品行为；与游戏同时跑会让 live 在 L0-game 阶段假失败。正确顺序：先 `--static --installer`，
+  再重启游戏单独跑 `--live`（后者才是写入报告 live 模式的那次）。
 - 覆盖：R0 环境一致 / R1 数据库查看器八类详情渲染 + 类型框原生 token + 无频闪 /
   R2 汉化地名集资产 / R5 中文按钮图 / R6 offsets 无 SQL / R7 术语门禁 / R8 禁止改写下拉框 .Text。
 - 结果写入 `build/regression_report.json`（含 VERSION、UTC 时间戳、逐条结果），**发布脚本会校验它**。

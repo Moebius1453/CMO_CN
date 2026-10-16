@@ -1667,6 +1667,20 @@ namespace CMOLocalizer
         /// Self-drawn dark text boxes keep their placeholder in WatermarkText, not in
         /// Text, so the generic control-text pass never reaches it.
         /// </summary>
+        // 只读定位「加载想定」窗口；仅由 SCEN_CTRL_TREE 探针使用。
+        private static Form FindLoadScenarioForm()
+        {
+            FormCollection forms = Application.OpenForms;
+            if (forms == null) return null;
+            foreach (Form f in forms)
+            {
+                if (f == null || f.IsDisposed) continue;
+                if (f.GetType().Name.IndexOf("LoadScenario", StringComparison.OrdinalIgnoreCase) >= 0
+                    || f.Name.IndexOf("LoadScenario", StringComparison.OrdinalIgnoreCase) >= 0) return f;
+            }
+            return null;
+        }
+
         private static void CollectControlTree(Control ctrl, int depth, StringBuilder sb, ref bool first)
         {
             if (ctrl == null || depth > 12) return;
@@ -5245,6 +5259,19 @@ namespace CMOLocalizer
                 sb.Append("{\"status\":\"ok\",\"tree\":[");
                 bool firstNode = true;
                 CollectControlTree(dbForm, 0, sb, ref firstNode);
+                sb.Append("]}");
+                return sb.ToString();
+            }
+
+            // 只读探针：导出「加载想定」窗口控件树（输入保护回归用）。不得改写任何控件。
+            if (cmd == "SCEN_CTRL_TREE")
+            {
+                Form scenForm = FindLoadScenarioForm();
+                if (scenForm == null) return "{\"status\":\"error\",\"message\":\"LoadScenario window not open\"}";
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{\"status\":\"ok\",\"tree\":[");
+                bool firstNode = true;
+                CollectControlTree(scenForm, 0, sb, ref firstNode);
                 sb.Append("]}");
                 return sb.ToString();
             }

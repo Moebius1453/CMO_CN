@@ -44,6 +44,7 @@
 3. `bash scripts/deploy.sh`（把本轮引擎/词库装进游戏目录，否则 R0-static-env 会红）。
 4. `python scripts/verify_all.py` 全绿（词库/菜单/引擎解析/想定/战役名/简报/地名集/DB 模板/版本/密钥/工作区）。
 5. `python scripts/verify_regressions.py --live` 全绿（需游戏运行；这一步会写 `build/regression_report.json` 的 live 模式）。
+   - 与 `--static --installer` **分两次运行**：installer 用例会关闭游戏（`CMOShared.KillProcesses` 是安装器正确行为）。
 6. `python scripts/release_check.py --pre` 全绿（统一入库检查；`--pre` 跳过尚未产出的产物检查）。
 7. `bash scripts/package.sh` 产出 4 个资产。
 8. `python scripts/release_check.py`（完整版：含产物哈希与绿色包内容/禁入项）全绿。

@@ -55,7 +55,8 @@ class Runner:
 # R0 二进制标记：部署到游戏目录的引擎必须包含历次修复的关键符号。
 # 不用整文件哈希：csc 每次编译都产生不同 MVID/时间戳，重新 build 后哈希必变，
 # 但“旧包覆盖回不含修复的引擎”会被标记缺失抓住。
-DEPLOY_MARKERS = ["IsProtectedDBViewerCombo", "FindDBViewerForm", "IsTextInputControl", "InstallCrashGuard"]
+DEPLOY_MARKERS = ["IsProtectedDBViewerCombo", "FindDBViewerForm", "IsTextInputControl", "InstallCrashGuard",
+                  "FindLoadScenarioForm"]  # 注：标记必须是元数据标识符（字符串字面量在 #US 堆是 UTF-16，ASCII 搜不到）
 
 
 def run_static(r: Runner) -> None:
@@ -266,7 +267,8 @@ def run_live(r: Runner) -> None:
     print("== live 用例（实机）==", flush=True)
     import live_harness as H  # noqa: PLC0415
 
-    if H.game_pid() is None:
+    pid = H.game_pid()
+    if pid is None:
         r.record("L0-game", "L0 游戏进程在运行", False, "Command.exe 未运行，live 用例无法执行")
         return
     if not _open_viewer(H):
@@ -321,6 +323,152 @@ def run_live(r: Runner) -> None:
             r.record("R4-live-flicker", "R4 界面无中英频闪", False, "截图失败")
     else:
         r.record("R4-live-flicker", "R4 界面无中英频闪", False, "未找到查看器窗口句柄")
+
+    # L4：输入保护实机探针（R19——历史闪退点必须永远不再复发）
+    _input_guard_probe(H, r, pid)
+
+
+def _bounds_rect(bounds: str) -> tuple[int, int, int, int]:
+    m = re.search(r"X=(-?\d+),Y=(-?\d+),Width=(-?\d+),Height=(-?\d+)", bounds or "")
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))) if m else (0, 0, 0, 0)
+
+
+def _log_tail(path: Path, limit: int = 400_000) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")[-limit:]
+    except Exception:
+        return ""
+
+
+_CHILD_RE = re.compile(r"^\s*(\d+)\s+vis=(\w+)\s+rect=\[(-?\d+),(-?\d+),(\d+)x(\d+)\]\s+cls=(.*?)\s+txt=(.*)$")
+
+
+def _child_windows(hwnd: int) -> list[dict]:
+    """进程外枚举子窗口（Win32 句柄/类名/屏幕矩形）。
+
+    不用引擎读 `Control.Handle`：窗口树里的 WebView2 是 WPF 托管控件，从后台命令
+    线程强制创建句柄会让 WPF 在非 STA 线程初始化 InputManager 而直接搞崩游戏。
+    """
+    out = subprocess.run([str(ROOT / "build/GuiDriver.exe"), "children", str(hwnd)],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
+    kids = []
+    for line in (out.stdout or "").splitlines():
+        m = _CHILD_RE.match(line)
+        if m:
+            kids.append({"hwnd": int(m.group(1)), "visible": m.group(2) == "True",
+                         "x": int(m.group(3)), "y": int(m.group(4)),
+                         "w": int(m.group(5)), "h": int(m.group(6)),
+                         "cls": m.group(7).strip(), "text": m.group(8)})
+    return kids
+
+
+def _input_guard_probe(H, r: Runner, pid: int | None) -> None:
+    """R19 实机探针：往「加载想定」搜索框真实输入 `m`。
+
+    历史事故：词典含 m→米，DarkUI 输入框不继承 TextBoxBase 被当普通标签翻译，
+    形成「引擎改写 → 游戏写回 → 引擎再改写」的无限拉锯（日志 `-> 米` 每 2.5s 递增），
+    最终进程以 0xc00000fd 栈溢出闪退。本用例断言：进程存活、无新增「-> 米」、
+    无新崩溃日志、输入框仍为用户输入的 `m`。
+    差分对照：`XLATE m` 仍返回「米」，证明词典确实含该映射，断言非空跑。
+    """
+    name = "L-input-guard"
+    title = "L4 输入框正文不被改写且不闪退（R19 历史闪退点）"
+    log, crash = H.GAME / "CMOLocalizer.log", H.GAME / "CMOLocalizer_Crash.log"
+    t0 = time.time()
+    driver = str(ROOT / "build/GuiDriver.exe")
+
+    nodes = []
+    for _ in range(6):
+        res = H.send("SCEN_CTRL_TREE", timeout=20)
+        if res.get("status") == "ok" and res.get("tree"):
+            nodes = res["tree"]
+            break
+        H.send("CLICK_MENU TSMI_LoadScenario", timeout=20)
+        time.sleep(5.0)
+    if not nodes:
+        r.record(name, title, False, "「加载想定」窗口打不开或 SCEN_CTRL_TREE 不可用")
+        return
+    box = next((n for n in nodes if n.get("vis") and "TextBox" in (n.get("type") or "")), None)
+    if box is None:
+        r.record(name, title, False, f"树中无可见输入控件（{len(nodes)} 个节点）")
+        return
+
+    fx, fy, fw, fh = _bounds_rect(nodes[0].get("bounds", ""))
+    _, _, bw, bh = _bounds_rect(box.get("bounds", ""))
+    hwnd = next((w["hwnd"] for w in H.list_windows(pid)
+                 if w["visible"] and w["rect"]["X"] == fx and w["rect"]["Y"] == fy
+                 and w["rect"]["Width"] == fw and w["rect"]["Height"] == fh), None)
+    if hwnd is None:
+        r.record(name, title, False, "未定位「加载想定」窗口（位置+尺寸双匹配失败）")
+        return
+
+    kids = _child_windows(hwnd)
+    edits = [k for k in kids if "EDIT" in k["cls"].upper() and k["visible"]]
+    near = [k for k in edits if abs(k["w"] - (bw - 10)) <= 24 and abs(k["h"] - (bh - 5)) <= 12]
+    target = (near or edits or [None])[0]
+    if target is None:
+        r.record(name, title, False, f"窗口内无 EDIT 输入控件（子窗口 {len(kids)} 个）")
+        return
+
+    before = _log_tail(log)
+    label = next((n for n in nodes if n.get("name") == "LblScenSearch"), None)
+    label_cn = any("\u4e00" <= ch <= "\u9fff" for ch in (label or {}).get("text", ""))
+    H.click(target["x"] + target["w"] // 2, target["y"] + target["h"] // 2)
+    time.sleep(0.8)
+    subprocess.run([driver, "postchar", str(target["hwnd"]), "m"], capture_output=True)
+
+    def _box_text() -> str:
+        cur = H.send("SCEN_CTRL_TREE", timeout=20)
+        node = next((n for n in cur.get("tree", [])
+                     if n.get("name") == box.get("name") and n.get("type") == box.get("type")), None)
+        return (node or {}).get("text", "")
+
+    landed = ""
+    for _ in range(8):                     # 等输入落地
+        time.sleep(2.0)
+        landed = _box_text()
+        if landed:
+            break
+    time.sleep(45.0)                       # 历史拉锯每 2.5s 一次，45s 足以暴露
+    pid_after = H.game_pid()
+    box_text = _box_text()
+    after = _log_tail(log)
+    grew = after.count("-> 米") - before.count("-> 米")
+    crash_new = crash.is_file() and crash.stat().st_mtime > t0
+    would = json.dumps(H.send("XLATE m", timeout=20), ensure_ascii=False)
+
+    # R20 历史问题点：战役列表/战役内名称不得残留「词典里已有译文」的英文。
+    try:
+        exact = json.loads(DICT.read_text(encoding="utf-8")).get("exact", {})
+    except Exception:
+        exact = {}
+    texts = [t.strip() for t in (str(n.get("text", "")) for n in nodes if n.get("d", 0) <= 2) if t.strip()]
+    cn_nodes = [t for t in texts if any("\u4e00" <= ch <= "\u9fff" for ch in t)]
+    residual = sorted({t for t in texts
+                       if t in exact and exact[t] != t
+                       and not any("\u4e00" <= ch <= "\u9fff" for ch in t)})
+    r.record("L-campaign-names", "L4 战役列表名称不残留已有译文的英文（R20 历史问题点）",
+             bool(cn_nodes and not residual and exact),
+             f"树节点 {len(texts)} 个（中文 {len(cn_nodes)} 个）"
+             + (f"；残留英文: {residual[:6]}" if residual else "；无残留英文")
+             + ("" if exact else "；词典未读到"),
+             "evidence/live/scan")
+
+    ok = bool(pid_after == pid and box_text == "m" and grew <= 0 and not crash_new and label_cn)
+    r.record(name, title, ok,
+             f"控件 {box.get('name')}({(box.get('type') or '').split('.')[-1]}) "
+             f"EDIT#{target['hwnd']} 文本={box_text!r}（期望 'm'）；进程 {pid}→{pid_after}；"
+             f"新增「-> 米」{grew} 条；新崩溃日志={crash_new}；"
+             f"阳性对照 同窗标签已汉化={label_cn}（翻译通道确在工作）；"
+             f"差分对照 XLATE m→米={'米' in would}",
+             "evidence/live/scan")
+
+    # 收尾放在断言之后：关闭模态对话框后游戏可能自行正常退出（事件日志无错误记录），
+    # 不能让它影响判定，也不能污染下一次运行。
+    for _ in range(max(1, len(landed))):
+        subprocess.run([driver, "postchar", str(target["hwnd"]), "\b"], capture_output=True)
+        time.sleep(0.2)
+    H.send("CLOSE_FORM LoadScenario", timeout=20)
 
 
 # ── installer：安装/还原/回退的隔离验证（临时合成游戏目录，不需要游戏） ──────
