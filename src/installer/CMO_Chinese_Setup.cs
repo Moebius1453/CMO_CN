@@ -1373,9 +1373,10 @@ namespace CMOLocalizerInstaller
         // ──────────────────────────────────────────────────────────────
         //  自动升级（更新助手 CMO_Updater.exe）集成
         // ──────────────────────────────────────────────────────────────
-        public const string CurrentVersion = "4.1.7";
-        private const string RegPath = @"Software\CMOChinese";
-        private const string RunKeyName = "CMOChineseUpdater";
+        // 发布常量的唯一来源是 CMOShared.ReleaseConstants（禁止在本文件再写字面量副本）。
+        public const string CurrentVersion = ReleaseConstants.Version;
+        private const string RegPath = ReleaseConstants.RegPath;
+        private const string RunKeyName = ReleaseConstants.RunKeyName;
 
         private static object RegGet(string name)
         {
@@ -1543,7 +1544,7 @@ namespace CMOLocalizerInstaller
             if (RegGet("AutoStart") == null) RegSet("AutoStart", 1, RegistryValueKind.DWord);
             if (RegGet("NotifyMode") == null) RegSet("NotifyMode", 1, RegistryValueKind.DWord);
             if (RegGet("AutoInstall") == null) RegSet("AutoInstall", 1, RegistryValueKind.DWord);
-            if (RegGet("Mirror") == null) RegSet("Mirror", "https://ghproxy.net/", RegistryValueKind.String);
+            if (RegGet("Mirror") == null) RegSet("Mirror", ReleaseConstants.Mirror, RegistryValueKind.String);
             // 设置正文存 %APPDATA%\CMOChinese\settings.json（首次从上面的注册表值一次性迁移）
             CmoSettings st = CmoSettings.Load();
             if (string.IsNullOrEmpty(st.GamePath)) { st.GamePath = gamePath; st.Save(); }

@@ -19,6 +19,21 @@ using Microsoft.Win32;
 
 namespace CMOShared
 {
+    /// <summary>
+    /// 发布常量单一来源：安装器与更新助手都从这里取值，禁止再各自复制字面量。
+    /// 历史事故：版本号曾在安装器标题、安装器常量、助手常量、词典 _meta 四处各存一份，
+    /// 打包时漏同步就会造成「资产自称的版本与安装包名不符」。
+    /// 改动约束：RegPath / RunKeyName 是已安装用户的注册表身份，改了会丢设置与自启，禁止改值。
+    /// </summary>
+    public static class ReleaseConstants
+    {
+        public const string Version = "4.1.7";
+        public const string RegPath = @"Software\CMOChinese";
+        public const string RunKeyName = "CMOChineseUpdater";
+        public const string RepoApi = "https://api.github.com/repos/mj8724/CMO_CN/releases/latest";
+        public const string Mirror = "https://ghproxy.net/";
+    }
+
     public static class CmoPaths
     {
         public const string ManifestName = "CMOChinese_Installed.json";

@@ -177,9 +177,13 @@ def gate_version() -> None:
         m = re.search(pattern, text)
         return m.group(1) if m else None
 
-    inst_const = find(r'CurrentVersion\s*=\s*"([0-9.]+)"', inst)
+    # O-06 之后版本常量只存一处：CMOShared.ReleaseConstants.Version。
+    # 安装器/助手的 CurrentVersion / UpdaterVersion 只是对该常量的引用，不再是字面量副本。
+    shared_src = (ROOT / "src/shared/CMOShared.cs").read_text(encoding="utf-8")
+    shared_ver = find(r'class\s+ReleaseConstants[\s\S]*?Version\s*=\s*"([0-9.]+)"', shared_src)
     inst_title = find(r"一键安装工具 v([0-9.]+)", inst)
-    upd_const = find(r'UpdaterVersion\s*=\s*"([0-9.]+)"', upd)
+    inst_ref = bool(re.search(r'CurrentVersion\s*=\s*ReleaseConstants\.Version', inst))
+    upd_ref = bool(re.search(r'UpdaterVersion\s*=\s*ReleaseConstants\.Version', upd))
     try:
         dict_ver = _json.loads((ROOT / "dict/CMOLocalizer.json").read_text(encoding="utf-8"))["_meta"]["version"]
     except Exception as ex:  # noqa: BLE001
@@ -187,17 +191,20 @@ def gate_version() -> None:
 
     places = {
         "VERSION": ver,
-        "installer.CurrentVersion": inst_const,
+        "CMOShared.ReleaseConstants.Version": shared_ver,
         "installer.title": inst_title,
-        "updater.UpdaterVersion": upd_const,
         "dict._meta.version": dict_ver,
     }
     mismatch = {k: v for k, v in places.items() if v != ver}
     engine_ok = f"v{major}.0 Engine" in engine or f"v{ver} Engine" in engine
-    ok = not mismatch and engine_ok
+    refs_ok = inst_ref and upd_ref
+    ok = not mismatch and engine_ok and refs_ok
     detail = ", ".join(f"{k}={v}" for k, v in places.items()) + f", engine={'ok' if engine_ok else 'MISMATCH'}"
+    detail += f", installer/updater 引用共享常量={refs_ok}"
     if mismatch:
         detail += f" → 与 VERSION={ver} 不一致: {sorted(mismatch)}"
+    if not refs_ok:
+        detail += " → 安装器/助手又写回了版本字面量副本"
     record("version", ok, detail)
 
 

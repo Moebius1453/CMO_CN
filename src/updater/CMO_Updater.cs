@@ -22,10 +22,11 @@ namespace CMOUpdater
 {
     internal static class Cfg
     {
-        public const string RegPath = @"Software\CMOChinese";
-        public const string RunKeyName = "CMOChineseUpdater";
-        public const string UpdaterVersion = "4.1.7";
-        public const string RepoApi = "https://api.github.com/repos/mj8724/CMO_CN/releases/latest";
+        // 发布常量的唯一来源是 CMOShared.ReleaseConstants（禁止在本文件再写字面量副本）。
+        public const string RegPath = ReleaseConstants.RegPath;
+        public const string RunKeyName = ReleaseConstants.RunKeyName;
+        public const string UpdaterVersion = ReleaseConstants.Version;
+        public const string RepoApi = ReleaseConstants.RepoApi;
 
         public static string GamePath = "";
         public static string InstalledVersion = "";
@@ -35,7 +36,7 @@ namespace CMOUpdater
         public static string SkippedVersion = "";
         public static string LastCheckUtc = "";
         public static string LastNotifiedVersion = "";
-        public static string Mirror = "https://ghproxy.net/";
+        public static string Mirror = ReleaseConstants.Mirror;
         public static int NotifyMode = 1;      // 0=弹窗 1=托盘气泡 2=静默
         public static bool AutoInstall = true;
         public static bool TrayOnClose = true;              // 关闭窗口时最小化到托盘
