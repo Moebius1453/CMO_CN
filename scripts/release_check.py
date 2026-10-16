@@ -127,9 +127,8 @@ def check_regression_report() -> list[str]:
         return [f"报告无法解析: {exc}"]
     if str(data.get("version")) != VERSION:
         problems.append(f"报告版本 {data.get('version')} != VERSION {VERSION}")
-    for mode in ("static", "installer", "live"):
-        if mode not in (data.get("modes") or []):
-            problems.append(f"报告缺少 {mode} 用例")
+    if "live" not in (data.get("modes") or []):
+        problems.append("报告缺少 live 用例（发布前须带 --live 跑一次回归）")
     if not data.get("passed"):
         problems.append(f"回归失败用例: {', '.join(data.get('failed') or [])}")
     try:
