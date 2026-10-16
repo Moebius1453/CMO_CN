@@ -45,9 +45,11 @@ cp -f translations/ui_terms.json translations/cmo_master_dictionary.json "$DST/d
 cp -f scen_tree_dict.json all_scen_items.json extracted_campaigns_scens.json "$DST/dict/" 2>/dev/null || true
 
 # --- Pipeline scripts ---
+# 注：shards/translate_shard2.py 结构上不可解析（ast.parse → SyntaxError: unmatched '}' @580）
+# 且从不写出任何结果，已归档为 $DST/scripts/archive/translate_shard2.py（只读历史，
+# 不参与任何流程），因此不列入拷贝清单——本脚本不再引用它。
 for f in deep_translator_engine.py deep_translator_engine_v2.py find_nav_calls.py \
-         generate_deep_localization.py shards/run_translate.py shards/translate_shard1_a.py \
-         shards/translate_shard2.py ; do
+         generate_deep_localization.py shards/run_translate.py shards/translate_shard1_a.py ; do
   [ -f "$f" ] && cp -f "$f" "$DST/scripts/"
 done
 

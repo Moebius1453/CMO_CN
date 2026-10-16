@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -19,6 +20,7 @@ import re
 import subprocess
 import sys
 import time
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -253,6 +255,60 @@ def run_static(r: Runner) -> None:
              + (f"；命中: {leaks[:3]}" if leaks else "；无令牌命中")
              + (f"；无源孤儿: {orphan_pyc[:3]}" if orphan_pyc else "；无无源孤儿缓存"),
              "scripts/__pycache__/")
+
+    # R23：scripts/*.py 必须全部可解析（排除 archive/ 子目录）。
+    # 历史：scripts/translate_shard2.py 580 行在字典于第 82 行 "}" 闭合后又跟裸键值项、
+    # 末行 580 又是孤立 "}"，ast.parse 直接 SyntaxError（unmatched '}' @580）；它从不写出结果，
+    # 却被 migrate.sh 的拷贝清单以 [ -f ] 守卫方式引用。（评审 finding O-08 / COR-003）
+    # 必须用 ast.parse 而不是 compileall：后者会写出 .pyc，与 R22「不得有无源孤儿缓存」冲突。
+    parse_targets = sorted(p for p in (ROOT / "scripts").glob("*.py") if p.is_file())  # 非递归 → 排除 archive/
+    parse_bad, parse_warn = [], []
+    for p in parse_targets:
+        try:
+            # 捕获而非放任 SyntaxWarning 打到 stderr（历史脚本有非法转义序列）：只统计，不算解析失败。
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                ast.parse(p.read_text(encoding="utf-8", errors="replace"), filename=str(p))
+            if any(issubclass(w.category, SyntaxWarning) for w in caught):
+                parse_warn.append(p.name)
+        except SyntaxError as e:
+            parse_bad.append(f"{p.name}:{e.lineno}:{e.msg}")
+        except Exception as e:  # 读取/编码异常也不得静默通过
+            parse_bad.append(f"{p.name}:{type(e).__name__}:{e}")
+    r.record("R23-static-scripts-parse", "R23 scripts/*.py 全部可解析（排除 archive/）",
+             not parse_bad,
+             f"ast.parse 解析 {len(parse_targets)} 个脚本"
+             + (f"；不可解析 {len(parse_bad)} 个: {parse_bad[:3]}" if parse_bad else "；全部可解析")
+             + (f"；{len(parse_warn)} 个含 SyntaxWarning（非解析失败）: {parse_warn[:3]}" if parse_warn else ""),
+             "scripts/*.py（不含 scripts/archive/）")
+
+    # R24：词典必须能从源批次重建（可复现）。
+    # 历史：直接跑一次 build_dict 会 ①把 LF 全写成 CRLF（+49KB 纯换行 churn，违反「保持 LF/最小 diff」）
+    # ②把工坊页签值回退成非幂等的「创意工坊 (Steam Workshop)」（legacy_fixes 按字母序后加载覆盖）
+    # ③丢掉长标签（被 is_script_or_schema 误判，应放 labels.json）与 offset 7916
+    # （被 identifiers 过滤静默跳过，应放入人工核验过的 force_offsets.json）。
+    # 现在 build_dict 重跑后与已提交词典字节一致，本用例钉住这四个前提。
+    crlf = DICT.read_bytes().count(b"\r\n")
+    try:
+        s_legacy = json.loads((ROOT / "dict/src/legacy_fixes.json").read_text(encoding="utf-8"))
+        s_force = json.loads((ROOT / "dict/src/force_offsets.json").read_text(encoding="utf-8"))
+        s_labels = json.loads((ROOT / "dict/src/labels.json").read_text(encoding="utf-8"))
+    except Exception:
+        s_legacy, s_force, s_labels = {}, {}, {}
+    long_label = ("Select one of the campaigns available to start a new session, "
+                  "or resume an existing campaign session from a save.")
+    btext = (ROOT / "scripts/build_dict.py").read_text(encoding="utf-8")
+    repro = {
+        "词典纯 LF": crlf == 0,
+        "legacy_fixes 工坊幂等": s_legacy.get("Steam Workshop") == "创意工坊",
+        "force_offsets 含 7916": s_force.get("7916") == "创意工坊",
+        "长标签在源批次(labels)": long_label in s_labels,
+        "写入器强制 LF": 'newline="\\n"' in btext,
+    }
+    r.record("R24-static-dict-reproducible", "R24 词典可复现（LF/工坊幂等/长标签/7916）",
+             all(repro.values()),
+             "；".join(f"{k}={'ok' if v else 'FAIL'}" for k, v in repro.items()),
+             "dict/src/{legacy_fixes,force_offsets,labels}.json + scripts/build_dict.py")
 
 
 # ── live：需要在运行中的游戏里实测 ──────────────────────────────────────────
