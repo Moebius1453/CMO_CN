@@ -556,7 +556,47 @@ namespace CMOShared
         /// 同时用内嵌词典的 _meta.version 交叉校验（不一致只记日志）。
         /// 没有版本号的文件名（如用户自己改过名）才回退到内嵌版本戳。
         /// </summary>
+        // 记忆化：同一次安装/回退流程里同一个包会被反复问版本（CachedVersions/Prune/Previous），
+        // 每次都要解一次 14MB 包的嵌入资源流。键含 size + mtime，换过的包不会被当成旧的。
+        private static readonly object _verLock = new object();
+        private static readonly Dictionary<string, string> _verCache =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        private static string PackageKey(string path)
+        {
+            try
+            {
+                FileInfo fi = new FileInfo(path);
+                return path + "|" + fi.Length.ToString(CultureInfo.InvariantCulture)
+                    + "|" + fi.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture);
+            }
+            catch { return null; }
+        }
+
         public static string PackageVersion(string path)
+        {
+            string key = PackageKey(path);
+            if (key != null)
+            {
+                lock (_verLock)
+                {
+                    string hit;
+                    if (_verCache.TryGetValue(key, out hit)) return hit;
+                }
+            }
+            string result = ComputePackageVersion(path);
+            if (key != null)
+            {
+                lock (_verLock)
+                {
+                    if (_verCache.Count > 64) _verCache.Clear();
+                    _verCache[key] = result;
+                }
+            }
+            return result;
+        }
+
+        private static string ComputePackageVersion(string path)
         {
             string byName = VersionOfPackage(path);
             string byContent = EmbeddedAssetVersion(path);
@@ -699,9 +739,36 @@ namespace CMOShared
     /// <summary>读取安装包内嵌资源（csc -resource: 写入的清单资源），用于回退后的一致性校验。</summary>
     public static class PackageAssets
     {
+        private static readonly object _pkgAsmLock = new object();
+        private static string _pkgAsmPath;
+        private static long _pkgAsmSize = -1;
+        private static DateTime _pkgAsmMtime;
+        private static Assembly _pkgAsm;
+
+        /// <summary>
+        /// 同一个安装包（路径 + 大小 + mtime 均未变）只读一次。
+        /// 包是 14MB 级 EXE，安装/回退流程会多次要资源名与摘要；没缓存时每次都 ReadAllBytes 一遍，
+        /// 白白吃掉几十 MB 内存与磁盘 IO。缓存键必须含 size+mtime，否则换包后会读到旧程序集。
+        /// </summary>
         private static Assembly Load(string packagePath)
         {
-            return Assembly.Load(File.ReadAllBytes(packagePath));
+            FileInfo fi = new FileInfo(packagePath);
+            long size = fi.Length;
+            DateTime mtime = fi.LastWriteTimeUtc;
+            lock (_pkgAsmLock)
+            {
+                if (_pkgAsm != null && string.Equals(_pkgAsmPath, packagePath, StringComparison.OrdinalIgnoreCase)
+                    && _pkgAsmSize == size && _pkgAsmMtime == mtime)
+                {
+                    return _pkgAsm;
+                }
+                Assembly asm = Assembly.Load(File.ReadAllBytes(packagePath));
+                _pkgAsmPath = packagePath;
+                _pkgAsmSize = size;
+                _pkgAsmMtime = mtime;
+                _pkgAsm = asm;
+                return asm;
+            }
         }
 
         public static string[] EmbeddedResourceNames(string packagePath)
