@@ -315,9 +315,14 @@ def run_installer(r: Runner) -> None:
     settings = Path(os.environ["APPDATA"]) / "CMOChinese" / "settings.json"
     packages = Path(os.environ["LOCALAPPDATA"]) / "CMOChinese" / "packages"
     saved_settings = settings.read_bytes() if settings.exists() else None
-    saved_pkgs = sorted(p.name for p in packages.glob("*.exe")) if packages.is_dir() else []
     saved_reg = _reg_snapshot()
     tmp = Path(tempfile.mkdtemp(prefix="cmo-reg-installer-"))
+    # 安装包缓存整个搬走再搬回：用例内部会删缓存来验证“无缓存拒绝回退”，
+    # 不能把用户真实缓存的安装包（回退素材）弄丢。
+    pkg_backup = Path(tempfile.mkdtemp(prefix="cmo-pkg-backup-"))
+    if packages.is_dir():
+        for p in packages.glob("*.exe"):
+            shutil.move(str(p), str(pkg_backup / p.name))
 
     def run(*args: str, timeout: int = 600) -> tuple[int, str]:
         p = subprocess.run([str(setup), *args], capture_output=True, timeout=timeout)
@@ -406,8 +411,11 @@ def run_installer(r: Runner) -> None:
             settings.write_bytes(saved_settings)
         if packages.is_dir():
             for p in packages.glob("*.exe"):
-                if p.name not in saved_pkgs:
-                    p.unlink()
+                p.unlink()
+        for p in pkg_backup.glob("*.exe"):
+            packages.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(p), str(packages / p.name))
+        shutil.rmtree(pkg_backup, ignore_errors=True)
         _reg_restore(saved_reg)
         shutil.rmtree(tmp, ignore_errors=True)
 
