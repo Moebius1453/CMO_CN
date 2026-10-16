@@ -25,7 +25,8 @@ WPF="/c/Windows/Microsoft.NET/Framework64/v4.0.30319/WPF"
   -reference:"$(W "$WPF/PresentationCore.dll")" \
   -reference:"$(W "$WPF/PresentationFramework.dll")" \
   -reference:"$(W "/c/Windows/Microsoft.NET/Framework64/v4.0.30319/System.Xaml.dll")" \
-  "$(W "$ROOT/src/engine/CMOLocalizer.cs")"
+  "$(W "$ROOT/src/engine/CMOLocalizer.cs")" \
+  "$(W "$ROOT/src/engine/Reflect.cs")"
 
 echo "==> building CMO_Updater.exe"
 "$CSC" -nologo -target:winexe -platform:anycpu -optimize+ \

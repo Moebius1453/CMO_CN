@@ -58,7 +58,7 @@ class Runner:
 # 不用整文件哈希：csc 每次编译都产生不同 MVID/时间戳，重新 build 后哈希必变，
 # 但“旧包覆盖回不含修复的引擎”会被标记缺失抓住。
 DEPLOY_MARKERS = ["IsProtectedDBViewerCombo", "FindDBViewerForm", "IsTextInputControl", "InstallCrashGuard",
-                  "FindLoadScenarioForm"]  # 注：标记必须是元数据标识符（字符串字面量在 #US 堆是 UTF-16，ASCII 搜不到）
+                  "FindLoadScenarioForm", "propertyCache", "MemberKey", "AddPageGrams"]  # 注：标记必须是元数据标识符（字符串字面量在 #US 堆是 UTF-16，ASCII 搜不到）
 
 
 def run_static(r: Runner) -> None:

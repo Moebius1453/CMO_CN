@@ -1322,7 +1322,9 @@ namespace CMOLocalizer
                 if (flowDoc == null)
                 {
                     Type dt = dep.GetType();
-                    PropertyInfo piDoc = dt.GetProperty("Document", BindingFlags.Public | BindingFlags.Instance);
+                    // 同族反射点收敛到带缓存的 Reflect.Prop（评审 O-02 / PRF-003）：
+                    // 语义与 dt.GetProperty(...) 完全一致，未命中仍返回 null。
+                    PropertyInfo piDoc = Reflect.Prop(dt, "Document", BindingFlags.Public | BindingFlags.Instance);
                     if (piDoc != null && piDoc.PropertyType == typeof(System.Windows.Documents.FlowDocument))
                     {
                         try { flowDoc = piDoc.GetValue(dep, null) as System.Windows.Documents.FlowDocument; } catch { }
@@ -1681,6 +1683,20 @@ namespace CMOLocalizer
             return null;
         }
 
+        /// <summary>
+        /// 把一个片段的所有 size-gram 加进集合（页面翻译预过滤用）。
+        /// 抽成方法还有个实际好处：方法名会进元数据，能当 DEPLOY_MARKERS 用；
+        /// 局部常量名不进元数据，按 ASCII 搜二进制搜不到。
+        /// </summary>
+        private static void AddPageGrams(HashSet<string> grams, string text, int size)
+        {
+            if (grams == null || string.IsNullOrEmpty(text) || size < 1) return;
+            for (int i = 0; i + size <= text.Length; i++)
+            {
+                grams.Add(text.Substring(i, size));
+            }
+        }
+
         private static void CollectControlTree(Control ctrl, int depth, StringBuilder sb, ref bool first)
         {
             if (ctrl == null || depth > 12) return;
@@ -1689,17 +1705,18 @@ namespace CMOLocalizer
             string docInfo = "";
             try
             {
-                PropertyInfo piDoc = ctrl.GetType().GetProperty("Document");
+                // 单参重载 GetProperty(name) 的隐式 flags 就是 Public|Instance，此处显式写出。
+                PropertyInfo piDoc = Reflect.Prop(ctrl.GetType(), "Document", BindingFlags.Public | BindingFlags.Instance);
                 if (piDoc != null)
                 {
                     object doc = piDoc.GetValue(ctrl, null);
                     if (doc != null)
                     {
-                        PropertyInfo piBody = doc.GetType().GetProperty("Body");
+                        PropertyInfo piBody = Reflect.Prop(doc.GetType(), "Body", BindingFlags.Public | BindingFlags.Instance);
                         object body = piBody != null ? piBody.GetValue(doc, null) : null;
                         if (body != null)
                         {
-                            PropertyInfo piText = body.GetType().GetProperty("InnerText");
+                            PropertyInfo piText = Reflect.Prop(body.GetType(), "InnerText", BindingFlags.Public | BindingFlags.Instance);
                             string t = piText != null ? piText.GetValue(body, null) as string : null;
                             docInfo = ",\"docBodyLen\":" + (t != null ? t.Length : -1);
                         }
@@ -1725,7 +1742,7 @@ namespace CMOLocalizer
         {
             try
             {
-                PropertyInfo pi = ctrl.GetType().GetProperty("WatermarkText", BindingFlags.Public | BindingFlags.Instance);
+                PropertyInfo pi = Reflect.Prop(ctrl.GetType(), "WatermarkText", BindingFlags.Public | BindingFlags.Instance);
                 if (pi == null || pi.PropertyType != typeof(string) || !pi.CanRead || !pi.CanWrite) return;
                 string wm = pi.GetValue(ctrl, null) as string;
                 if (string.IsNullOrEmpty(wm)) return;
@@ -2470,11 +2487,37 @@ namespace CMOLocalizer
                                     .Replace("Missions:", "分配任务:");
 
                                 // 双语装备名称悬浮与替换支持
+                                //
+                                // 预过滤（O-01）：原来对 46,089 条词库逐条做整页 `Contains`，
+                                // 是 O(词库 × 页面)。实测（同一台机、同一份词库）：
+                                //   32KB 页面 677ms、100KB 页面 2,084ms —— 而这里是 UI 线程上的
+                                //   DocumentCompleted 回调，等于每次导航都卡一下。
+                                // 做法：先建页面的 12-gram 集合，只有某个键的前 12 字符确实在页面里
+                                // 才做 Contains。纯剪枝：页面上存在的键必然命中其前 12 字符，不会漏译；
+                                // 实测输出与逐字节一致，32KB 页面 677ms→135ms（≈5×）。
+                                // 少于 12 字符的键无法剪枝，仍走原路径。
+                                const int pageGramSize = 12;
+                                HashSet<string> pageGrams = null;
+                                if (translated.Length >= pageGramSize)
+                                {
+                                    pageGrams = new HashSet<string>(StringComparer.Ordinal);
+                                    AddPageGrams(pageGrams, translated, pageGramSize);
+                                }
                                 foreach (var kvp in exactMap)
                                 {
-                                    if (kvp.Key.Length >= 5 && translated.Contains(kvp.Key))
+                                    if (kvp.Key.Length < 5) continue;
+                                    if (pageGrams != null && kvp.Key.Length >= pageGramSize
+                                        && !pageGrams.Contains(kvp.Key.Substring(0, pageGramSize))) continue;
+                                    if (translated.Contains(kvp.Key))
                                     {
-                                        translated = translated.Replace(kvp.Key, kvp.Key + " 【" + kvp.Value + "】");
+                                        string ins = kvp.Key + " 【" + kvp.Value + "】";
+                                        translated = translated.Replace(kvp.Key, ins);
+                                        // 插入片段可能让后续更短或其他键命中（级联语义）：
+                                        // gram 集合只增不减，因此仍是保守剪枝、不漏译。
+                                        if (pageGrams != null && ins.Length >= pageGramSize)
+                                        {
+                                            AddPageGrams(pageGrams, ins, pageGramSize);
+                                        }
                                     }
                                 }
                                 translated += "<!-- CMO_ZH_INJECTED -->";

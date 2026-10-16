@@ -42,6 +42,7 @@ REPORT = BUILD / "regression_report.json"
 # 入库必需项（docs/RELEASE_MANIFEST.md §2）
 REQUIRED_SOURCES = [
     "src/engine/CMOLocalizer.cs",
+    "src/engine/Reflect.cs",
     "src/installer/CMO_Chinese_Setup.cs",
     "src/updater/CMO_Updater.cs",
     "src/shared/CMOShared.cs",
