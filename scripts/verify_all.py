@@ -110,10 +110,18 @@ def gate_briefings() -> None:
                      if HAN.search(re.sub(r"<[^>]+>", " ",
                                           f.read_text(encoding="utf-8",
                                                        errors="replace"))))
-    ok = translated >= len(files) - image_only
+    # 空集不得空过：无文件、或「图片型」占比过高（>10%）都判 FAIL。
+    # 旧式 `translated >= len(files) - image_only` 在 files 为空时是 0>=0，永远绿。
+    image_names = [f.name for f in files if not HAN.search(re.sub(r"<[^>]+>", " ",
+                                     f.read_text(encoding="utf-8", errors="replace"))) ]
+    ratio_ok = image_only * 10 <= max(1, len(files))
+    ok = bool(files) and ratio_ok and translated >= len(files) - image_only
+    if not files:
+        record("briefings", False, f"未找到任何简报文件（{SCEN} 下无 *.html），门禁目标为空判 FAIL")
+        return
     record("briefings", ok,
-           f"{translated}/{len(files)} files Chinese "
-           f"({image_only} image-only), {cjk} CJK chars")
+           f"{translated}/{len(files)} files Chinese ({image_only} image-only), {cjk} CJK chars"
+           + ("" if ratio_ok else f"；图片型占比过高需人工确认: {image_names[:3]}"))
 
 
 def gate_placenames() -> None:

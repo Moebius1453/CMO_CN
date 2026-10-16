@@ -107,15 +107,68 @@ def scan_worktree() -> tuple[list[str], list[str], dict[str, int]]:
     return hits, skipped, counts
 
 
-def scan_history() -> list[str]:
-    hits: list[str] = []
-    for label, rx in PATTERNS:
-        out = subprocess.run(["git", "log", "--all", "--oneline", "-G" + rx.pattern],
+def scan_history(max_bytes: int = 200_000_000) -> tuple[list[str], str]:
+    """扫描全部历史（按 blob 去重，避免逐提交重复读巨型文件）。
+
+    旧实现用 `git log -G<pattern>`：git 的正则方言不认 `\b`/`{20,}` 这类写法，
+    实测对真实存在的凭据提交零命中（而 `git log -S"sk-"` 能命中），等于历史门禁完全失效。
+    现改为：`rev-list --objects` 取全部对象 → `--batch-check` 按大小预筛 →
+    分块 `cat-file --batch` 读取并逐个 blob 跑同一套 PATTERNS（与工作区扫描同源）。
+    返回 (命中, 覆盖率说明)。
+    """
+    shas = sorted({line.split()[0] for line in _git("rev-list", "--objects", "--all") if line.strip()})
+    if not shas:
+        return [], "无历史对象"
+    # 先问类型与大小，剔除非 blob 与超大文件（不把 10MB 级词典反复拉进内存）。
+    chunk = 200
+    blobs: list[tuple[str, int]] = []
+    skipped_big = 0
+    for i in range(0, len(shas), chunk):
+        part = shas[i:i + chunk]
+        out = subprocess.run(["git", "cat-file", "--batch-check"], input="\n".join(part) + "\n",
                              capture_output=True, text=True, encoding="utf-8", errors="ignore").stdout
-        if out.strip():
-            hits.append(f"[{label}] 历史命中 {len(out.strip().splitlines())} 个提交:\n    " +
-                        "\n    ".join(out.strip().splitlines()[:5]))
-    return hits
+        for line in out.splitlines():
+            f = line.split()
+            if len(f) < 3 or f[1] != "blob":
+                continue
+            size = int(f[2])
+            if size > MAX_BYTES:
+                skipped_big += 1
+                continue
+            blobs.append((f[0], size))
+
+    hits: list[str] = []
+    budget = 0
+    scanned_files = 0
+    for i in range(0, len(blobs), chunk):
+        part = blobs[i:i + chunk]
+        if budget > max_bytes:
+            break
+        out = subprocess.run(["git", "cat-file", "--batch"],
+                             input=("\n".join(s for s, _ in part) + "\n").encode(),
+                             capture_output=True).stdout
+        pos = 0
+        for sha, size in part:
+            nl = out.find(b"\n", pos)
+            if nl < 0:
+                break
+            pos = nl + 1
+            data = out[pos:pos + size]
+            pos += size + 1
+            budget += size
+            scanned_files += 1
+            text = data.decode("utf-8", errors="ignore")
+            for label, rx in PATTERNS:
+                m = rx.search(text)
+                if m:
+                    hits.append(f"[{label}] 历史 blob {sha[:10]}（{size}B）："
+                                f"命中 {m.group(0)[:6]}…（长度 {len(m.group(0))}，值不展示）")
+                    break
+    note = (f"blob 去重后 {len(shas)} 个 → 扫描 {scanned_files} 个（{budget // 1024 // 1024}MB），"
+            f"跳过 >{MAX_BYTES // 1000 // 1000}MB 的 {skipped_big} 个")
+    if budget > max_bytes:
+        note += f"；⚠ 达到 {max_bytes // 1024 // 1024}MB 预算上限，后续 blob 未扫"
+    return hits, note
 
 
 def main() -> int:
@@ -135,9 +188,9 @@ def main() -> int:
     print(f"  命中 {len(w)}")
     for x in w[:20]:
         print("   ✗ " + x)
-    h = scan_history() if deep else []
+    h, hist_note = scan_history() if deep else ([], "")
     if deep:
-        print(f"  提交历史: 命中 {len(h)} 组")
+        print(f"  提交历史: {hist_note} → 命中 {len(h)} 组")
         for x in h:
             print("   ✗ " + x)
     if w or h:
