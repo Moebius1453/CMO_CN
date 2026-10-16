@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """发版前回归测试（台账 docs/BUG_REGISTRY.md 的可执行部分）。
 
-    python scripts/verify_regressions.py --static   # 无需游戏，package.sh 硬门禁
-    python scripts/verify_regressions.py --live     # 需游戏运行（发版前必跑）
-    python scripts/verify_regressions.py --all      # 两者都跑（默认）
+    python scripts/verify_regressions.py --static     # 无需游戏，package.sh 硬门禁
+    python scripts/verify_regressions.py --installer  # 隔离临时目录验证安装/还原/回退（无需游戏）
+    python scripts/verify_regressions.py --live       # 需游戏运行（发版前必跑）
+    python scripts/verify_regressions.py              # 三者都跑
 
 结果写入 build/regression_report.json；任一用例失败则退出码非零。
 新增 bug 时：在 docs/BUG_REGISTRY.md 记一条，并在这里加一条用例（本文件是唯一权威）。
@@ -13,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -132,6 +134,35 @@ def run_static(r: Runner) -> None:
     r.record("R7-static-terms", "R7 术语/机翻门禁", term.returncode == 0, tail[0][:120],
              "scripts/verify_terminology.py")
 
+    # R18：共享状态层单测（设置/清单/包缓存/门控），测试宿主由 build.sh 产出
+    shared = ROOT / "build/CMOSharedTest.exe"
+    if not shared.is_file():
+        r.record("R18-static-selftest", "R18 共享状态层单测（设置/清单/缓存/门控）", False,
+                 "缺少 build/CMOSharedTest.exe，请先跑 bash scripts/build.sh")
+    else:
+        p = subprocess.run([str(shared)], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        out = (p.stdout or "") + (p.stderr or "")
+        fails = [ln for ln in out.splitlines() if ln.startswith("FAIL ")]
+        passes = [ln for ln in out.splitlines() if ln.startswith("PASS ")]
+        r.record("R18-static-selftest", "R18 共享状态层单测（设置/清单/缓存/门控）",
+                 p.returncode == 0 and not fails,
+                 f"{len(passes)} 项 PASS" + (f"，失败 {fails[:3]}" if fails else ""),
+                 "src/shared/CMOSharedTest.cs")
+        # R16：降级提示门控真值表（负向：本地==远端 / 更旧但无缓存 → 不得提示回退）
+        gate_ok = ("PASS gate-truth-table" in out and "PASS gate-empty-inputs" in out
+                   and "PASS pkgversion-filename-wins" in out)
+        r.record("R16-static-gate", "R16 降级提示门控（无缓存不得提示回退）", gate_ok,
+                 "gate-truth-table + gate-empty-inputs + pkgversion-filename-wins 均通过"
+                 if gate_ok else "门控断言缺失或失败", "src/shared/CMOShared.cs")
+
+    # R17-static-pack-readme：绿色包说明（打包为 汉化说明.md）必须告知可自动登记安装状态
+    readme = (ROOT / "README.md").read_text(encoding="utf-8", errors="replace")
+    pack_doc_ok = ("登记安装状态" in readme) and ("--adopt" in readme)
+    r.record("R17-static-pack-readme", "R17 绿色包说明含自动登记安装状态（adopt）", pack_doc_ok,
+             "README.md 含 adopt 说明（随包为 汉化说明.md）" if pack_doc_ok else "README.md 缺少 adopt 说明",
+             "README.md")
+
 
 # ── live：需要在运行中的游戏里实测 ──────────────────────────────────────────
 def _ctrl_tree(H) -> dict:
@@ -223,18 +254,182 @@ def run_live(r: Runner) -> None:
         r.record("R4-live-flicker", "R4 界面无中英频闪", False, "未找到查看器窗口句柄")
 
 
+# ── installer：安装/还原/回退的隔离验证（临时合成游戏目录，不需要游戏） ──────
+def _reg_snapshot() -> dict:
+    import winreg  # noqa: PLC0415
+    keys = {}
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\CMOChinese") as k:
+            for name in ("GamePath", "Version", "AutoCheck", "CheckIntervalHours", "AutoStart",
+                         "NotifyMode", "AutoInstall", "Mirror"):
+                try:
+                    keys[name] = winreg.QueryValueEx(k, name)
+                except FileNotFoundError:
+                    pass
+    except FileNotFoundError:
+        pass
+    return keys
+
+
+def _reg_restore(keys: dict) -> None:
+    import winreg  # noqa: PLC0415
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, r"Software\CMOChinese") as k:
+        for name, (value, kind) in keys.items():
+            winreg.SetValueEx(k, name, 0, kind, value)
+
+
+def _decode(raw: bytes) -> str:
+    """安装器输出走控制台编码（中文 Windows 为 GBK）；先试 UTF-8 再回退 GBK。"""
+    for enc in ("utf-8", "gbk"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _mk_game(root: Path) -> Path:
+    game = root / "game"
+    for d in ("DB/Templates", "Symbols/Menu", "Scenarios"):
+        (game / d).mkdir(parents=True, exist_ok=True)
+    (game / "Command.exe").write_bytes(b"stub")
+    (game / "Command.exe.config").write_text(
+        '<?xml version="1.0"?><configuration><runtime></runtime></configuration>',
+        encoding="utf-8")
+    return game
+
+
+def run_installer(r: Runner) -> None:
+    """R13/R14/R15/R17：用安装器 CLI 在临时目录验证状态/设置/回退，不碰真实游戏目录。"""
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    print("== installer 用例（隔离临时目录）==", flush=True)
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    setup = ROOT / "build" / f"CMO_Chinese_Setup_v{version}.exe"
+    if not setup.is_file():
+        r.record("R13-installer-setup", "R13 安装器产物存在", False,
+                 f"缺少 {setup.name}，请先跑 bash scripts/build.sh")
+        return
+
+    settings = Path(os.environ["APPDATA"]) / "CMOChinese" / "settings.json"
+    packages = Path(os.environ["LOCALAPPDATA"]) / "CMOChinese" / "packages"
+    saved_settings = settings.read_bytes() if settings.exists() else None
+    saved_pkgs = sorted(p.name for p in packages.glob("*.exe")) if packages.is_dir() else []
+    saved_reg = _reg_snapshot()
+    tmp = Path(tempfile.mkdtemp(prefix="cmo-reg-installer-"))
+
+    def run(*args: str, timeout: int = 600) -> tuple[int, str]:
+        p = subprocess.run([str(setup), *args], capture_output=True, timeout=timeout)
+        return p.returncode, (_decode(p.stdout or b"") + _decode(p.stderr or b"")).strip()
+
+    try:
+        # R13：安装写清单 / 还原清清单（状态不再靠注册表字符串）
+        game = _mk_game(tmp / "a")
+        rc, out = run("--install", str(game), "--silent")
+        man = game / "CMOChinese_Installed.json"
+        man_data = json.loads(man.read_text(encoding="utf-8")) if man.is_file() else {}
+        dll = game / "CMOLocalizer.dll"
+        dll_ok = (dll.is_file()
+                  and man_data.get("files", {}).get("CMOLocalizer.dll") == hashlib.sha256(dll.read_bytes()).hexdigest())
+        r.record("R13-install-manifest", "R13 安装后写清单且哈希与磁盘一致",
+                 rc == 0 and man_data.get("version") == version and dll_ok,
+                 f"rc={rc} version={man_data.get('version')} dll_hash_match={dll_ok}", out[:80])
+
+        rc, out = run("--list-versions", str(game))
+        r.record("R13-list-versions", "R13 状态查询显示已安装版本",
+                 rc == 0 and f"installed=v{version}" in out, out.replace("\n", " | ")[:120])
+
+        rc, out = run("--uninstall", str(game), "--silent")
+        r.record("R13-uninstall-manifest", "R13 还原后清单消失（状态=未安装）",
+                 rc == 0 and not man.is_file() and not dll.is_file(),
+                 f"rc={rc} manifest={man.is_file()} dll={dll.is_file()}", out[:80])
+
+        # R14：还原/重装都不得丢设置
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        seed = {"schema": 1, "check_interval_hours": 3, "notify_mode": 0,
+                "tray_on_close": False, "mirror": "https://ghproxy.net/", "auto_check": True}
+        settings.write_text(json.dumps(seed, ensure_ascii=False, indent=1), encoding="utf-8")
+        run("--install", str(game), "--silent")
+        run("--uninstall", str(game), "--silent")
+        after = json.loads(settings.read_text(encoding="utf-8")) if settings.exists() else {}
+        kept = (settings.is_file() and after.get("check_interval_hours") == 3
+                and after.get("notify_mode") == 0 and after.get("tray_on_close") is False)
+        r.record("R14-uninstall-keeps-settings", "R14 还原后设置保留（频率/提醒/托盘）", kept,
+                 f"settings_exists={settings.is_file()} interval={after.get('check_interval_hours')} "
+                 f"notify={after.get('notify_mode')} tray={after.get('tray_on_close')}")
+        rc, out = run("--purge-settings")
+        r.record("R14-purge-explicit", "R14 仅显式清除才删设置（--purge-settings）",
+                 rc == 0 and not settings.exists(), f"rc={rc} settings_exists={settings.exists()}")
+
+        # R17：存量/绿色包自愈（有文件无清单 → adopt）
+        run("--install", str(game), "--silent")
+        man.unlink()
+        rc, out = run("--adopt", str(game))
+        adopted = json.loads(man.read_text(encoding="utf-8")) if man.is_file() else {}
+        r.record("R17-adopt-selfheal", "R17 无清单时自动登记安装状态（adopt）",
+                 rc == 0 and adopted.get("version") == version and adopted.get("source") == "adopted",
+                 f"rc={rc} version={adopted.get('version')} source={adopted.get('source')}", out[:80])
+
+        # R15：回退一致性（清单版本 → 目标版本；部署 dll 与缓存包内嵌 dll 一致）
+        packages.mkdir(parents=True, exist_ok=True)
+        cached = packages / f"CMO_Chinese_Setup_v{version}.exe"
+        if not cached.is_file():
+            shutil.copy(setup, cached)
+        data = json.loads(man.read_text(encoding="utf-8"))
+        data["version"] = "9.9.9"          # 模拟“已装了比缓存包更新的版本”
+        man.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        rc, out = run("--rollback", str(game), "--silent")
+        back = json.loads(man.read_text(encoding="utf-8")) if man.is_file() else {}
+        # 缓存包内嵌的引擎就是刚 build 出来的 build/CMOLocalizer.dll，所以直接比它
+        built_dll = ROOT / "build/CMOLocalizer.dll"
+        same_dll = (dll.is_file() and built_dll.is_file()
+                    and hashlib.sha256(dll.read_bytes()).hexdigest()
+                    == hashlib.sha256(built_dll.read_bytes()).hexdigest())
+        r.record("R15-rollback", "R15 回退到缓存版本且引擎与缓存包一致",
+                 rc == 0 and back.get("version") == version and same_dll,
+                 f"rc={rc} manifest=v{back.get('version')} dll==cached_pkg_dll:{same_dll}", out[:80])
+
+        cached.unlink()
+        data["version"] = "9.9.9"
+        man.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        rc, out = run("--rollback", str(game), "--silent")
+        unchanged = (json.loads(man.read_text(encoding="utf-8")).get("version") == "9.9.9")
+        r.record("R15-rollback-requires-cache", "R15 无缓存包时拒绝回退（清单不变+报错）",
+                 rc != 0 and unchanged and "9.9.9" in out,
+                 f"rc={rc} manifest_unchanged={unchanged} out={out[:80]}")
+    finally:
+        if saved_settings is None:
+            if settings.exists():
+                settings.unlink()
+        else:
+            settings.write_bytes(saved_settings)
+        if packages.is_dir():
+            for p in packages.glob("*.exe"):
+                if p.name not in saved_pkgs:
+                    p.unlink()
+        _reg_restore(saved_reg)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--static", action="store_true")
     ap.add_argument("--live", action="store_true")
+    ap.add_argument("--installer", action="store_true",
+                    help="安装/还原/回退的隔离验证（临时目录，不需要游戏）")
     args = ap.parse_args()
-    do_static = args.static or not (args.static or args.live)
-    do_live = args.live or not (args.static or args.live)
+    any_flag = args.static or args.live or args.installer
+    do_static = args.static or not any_flag
+    do_live = args.live or not any_flag
+    do_installer = args.installer or not any_flag
 
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     runner = Runner()
     if do_static:
         run_static(runner)
+    if do_installer:
+        run_installer(runner)
     if do_live:
         run_live(runner)
 
@@ -242,7 +437,8 @@ def main() -> int:
     report = {
         "version": version,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "modes": [m for m, on in (("static", do_static), ("live", do_live)) if on],
+        "modes": [m for m, on in (("static", do_static), ("installer", do_installer),
+                                  ("live", do_live)) if on],
         "passed": not failed,
         "failed": failed,
         "results": runner.results,

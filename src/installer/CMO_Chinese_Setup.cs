@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using CMOShared;
 using Microsoft.Win32;
 
 namespace CMOLocalizerInstaller
@@ -31,12 +32,18 @@ namespace CMOLocalizerInstaller
         private Button btnUpgrade;
         private Button btnCheckUpdate;
         private Button btnNeverRemind;
+        private ComboBox cbInterval;
+        private ComboBox cbNotify;
+        private Button btnRollback;
+        private CheckBox chkPurgeSettings;
         private bool suppressAutoStartEvent;
+        private bool suppressUpdateUiEvent;
+        private readonly ToolTip toolTip = new ToolTip();
 
         public InstallerForm(string initialPath)
         {
-            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.5";
-            this.Size = new Size(700, 655);
+            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.6";
+            this.Size = new Size(700, 770);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -102,6 +109,14 @@ namespace CMOLocalizerInstaller
             btnUninstall.Click += new EventHandler(OnUninstallClick);
             this.Controls.Add(btnUninstall);
 
+            chkPurgeSettings = new CheckBox();
+            chkPurgeSettings.Text = "还原时同时清除我的全部设置（更新频率/提醒方式等）";
+            chkPurgeSettings.AutoSize = true;
+            chkPurgeSettings.Checked = false;
+            chkPurgeSettings.ForeColor = Color.DimGray;
+            chkPurgeSettings.Location = new Point(347, 240);
+            this.Controls.Add(chkPurgeSettings);
+
             btnDonate = new Button();
             btnDonate.Text = "☕ 觉得好用？请作者喝杯咖啡 / 可乐";
             btnDonate.Font = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold);
@@ -109,7 +124,7 @@ namespace CMOLocalizerInstaller
             btnDonate.ForeColor = Color.FromArgb(180, 95, 20);
             btnDonate.FlatStyle = FlatStyle.Flat;
             btnDonate.FlatAppearance.BorderColor = Color.FromArgb(235, 195, 135);
-            btnDonate.Location = new Point(22, 246);
+            btnDonate.Location = new Point(22, 276);
             btnDonate.Size = new Size(625, 34);
             btnDonate.Cursor = Cursors.Hand;
             btnDonate.Click += new EventHandler(OnDonateClick);
@@ -118,8 +133,8 @@ namespace CMOLocalizerInstaller
             // ── 版本更新（自动升级）分组 ─────────────────────────────
             GroupBox grpUpdate = new GroupBox();
             grpUpdate.Text = "版本更新";
-            grpUpdate.Location = new Point(22, 290);
-            grpUpdate.Size = new Size(645, 140);
+            grpUpdate.Location = new Point(22, 320);
+            grpUpdate.Size = new Size(645, 230);
             this.Controls.Add(grpUpdate);
 
             lblUpdateState = new Label();
@@ -133,10 +148,39 @@ namespace CMOLocalizerInstaller
             lblUpdateNext.Location = new Point(14, 50);
             grpUpdate.Controls.Add(lblUpdateNext);
 
+            // 设置改为直接在此修改（旧版只有一行只读文字，用户反馈「更新频率也没有了」）
+            Label lblInterval = new Label();
+            lblInterval.Text = "自动检查频率:";
+            lblInterval.AutoSize = true;
+            lblInterval.Location = new Point(14, 79);
+            grpUpdate.Controls.Add(lblInterval);
+
+            cbInterval = new ComboBox();
+            cbInterval.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbInterval.Location = new Point(120, 75);
+            cbInterval.Size = new Size(190, 26);
+            cbInterval.Items.AddRange(new object[] { "每次开机检查一次", "每 1 小时", "每 3 小时", "每 6 小时（推荐）", "每 12 小时", "每 24 小时" });
+            cbInterval.SelectedIndexChanged += new EventHandler(OnIntervalChanged);
+            grpUpdate.Controls.Add(cbInterval);
+
+            Label lblNotify = new Label();
+            lblNotify.Text = "提醒方式:";
+            lblNotify.AutoSize = true;
+            lblNotify.Location = new Point(330, 79);
+            grpUpdate.Controls.Add(lblNotify);
+
+            cbNotify = new ComboBox();
+            cbNotify.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbNotify.Location = new Point(408, 75);
+            cbNotify.Size = new Size(160, 26);
+            cbNotify.Items.AddRange(new object[] { "弹窗提醒", "仅托盘气泡", "不提醒" });
+            cbNotify.SelectedIndexChanged += new EventHandler(OnNotifyChanged);
+            grpUpdate.Controls.Add(cbNotify);
+
             chkAutoStart = new CheckBox();
-            chkAutoStart.Text = "随 Windows 启动自动检查更新（每 6 小时）";
+            chkAutoStart.Text = "随 Windows 启动并在后台自动检查更新";
             chkAutoStart.AutoSize = true;
-            chkAutoStart.Location = new Point(14, 76);
+            chkAutoStart.Location = new Point(14, 112);
             chkAutoStart.CheckedChanged += new EventHandler(OnAutoStartChanged);
             grpUpdate.Controls.Add(chkAutoStart);
 
@@ -146,31 +190,44 @@ namespace CMOLocalizerInstaller
             btnUpgrade.BackColor = Color.FromArgb(30, 110, 200);
             btnUpgrade.ForeColor = Color.White;
             btnUpgrade.FlatStyle = FlatStyle.Flat;
-            btnUpgrade.Location = new Point(14, 102);
-            btnUpgrade.Size = new Size(200, 30);
+            btnUpgrade.Location = new Point(14, 146);
+            btnUpgrade.Size = new Size(150, 30);
             btnUpgrade.Click += new EventHandler(OnUpgradeClick);
             grpUpdate.Controls.Add(btnUpgrade);
 
             btnCheckUpdate = new Button();
             btnCheckUpdate.Text = "检查升级";
-            btnCheckUpdate.Location = new Point(224, 102);
-            btnCheckUpdate.Size = new Size(110, 30);
+            btnCheckUpdate.Location = new Point(174, 146);
+            btnCheckUpdate.Size = new Size(100, 30);
             btnCheckUpdate.Click += new EventHandler(OnCheckUpdateClick);
             grpUpdate.Controls.Add(btnCheckUpdate);
 
             btnNeverRemind = new Button();
             btnNeverRemind.Text = "不再提醒";
-            btnNeverRemind.Location = new Point(342, 102);
-            btnNeverRemind.Size = new Size(110, 30);
+            btnNeverRemind.Location = new Point(284, 146);
+            btnNeverRemind.Size = new Size(100, 30);
             btnNeverRemind.Click += new EventHandler(OnNeverRemindClick);
             grpUpdate.Controls.Add(btnNeverRemind);
+            btnRollback = new Button();
+            btnRollback.Text = "回退到上一版本";
+            btnRollback.Location = new Point(394, 146);
+            btnRollback.Size = new Size(180, 30);
+            btnRollback.Click += new EventHandler(OnRollbackClick);
+            grpUpdate.Controls.Add(btnRollback);
+
+            Label lblPolicy = new Label();
+            lblPolicy.AutoSize = true;
+            lblPolicy.ForeColor = Color.DimGray;
+            lblPolicy.Location = new Point(14, 186);
+            lblPolicy.Text = "注：「一键还原原版英文」不会删除你的更新设置；回退需要本地缓存过上一版本的安装包。";
+            grpUpdate.Controls.Add(lblPolicy);
 
             txtLog = new TextBox();
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.BackColor = Color.FromArgb(245, 247, 250);
-            txtLog.Location = new Point(22, 444);
+            txtLog.Location = new Point(22, 564);
             txtLog.Size = new Size(645, 150);
             this.Controls.Add(txtLog);
 
@@ -216,10 +273,29 @@ namespace CMOLocalizerInstaller
                 return;
             }
 
-            bool isInstalled = InstallerCore.CheckInstalled(gp);
-            if (isInstalled)
+            // 状态以游戏目录内的安装清单（部署实证）为准，不再单看注册表 Version：
+            // 注册表值会被任意安装包覆盖、会被旧版还原清空，从而“说谎”。
+            string detail;
+            ManifestState state = InstallManifest.Verify(gp, out detail);
+            if (state == ManifestState.Ok)
             {
-                lblStatus.Text = "当前状态: 已安装完整中文汉化补丁 (可直接启动游戏)";
+                InstallManifest m = InstallManifest.Read(gp);
+                lblStatus.Text = "当前状态: 已安装完整中文汉化补丁 v" + m.Version
+                    + "（" + InstallerCore.LocalTimeText(m.InstalledAt) + " 安装）";
+                lblStatus.ForeColor = Color.Green;
+            }
+            else if (state == ManifestState.Modified)
+            {
+                lblStatus.Text = "当前状态: 检测到" + detail + "，建议重新点击[一键安装中文汉化补丁]修复";
+                lblStatus.ForeColor = Color.DarkOrange;
+            }
+            else if (InstallerCore.CheckInstalled(gp))
+            {
+                // 存量 4.1.x 用户 / 绿色包用户：有文件无清单 → 自愈登记，不再误报“未安装”
+                InstallManifest.Adopt(gp, CmoSettings.RegistryInstalledVersion());
+                InstallManifest adopted = InstallManifest.Read(gp);
+                string shown = (adopted != null && adopted.Version.Length > 0) ? adopted.Version : "未知";
+                lblStatus.Text = "当前状态: 已安装完整中文汉化补丁（已登记当前状态，v" + shown + "）";
                 lblStatus.ForeColor = Color.Green;
             }
             else
@@ -231,18 +307,81 @@ namespace CMOLocalizerInstaller
 
         private void RefreshUpdateState()
         {
-            string ver = InstallerCore.InstalledVersion();
-            bool auto = InstallerCore.GetAutoCheck();
+            CmoSettings st = CmoSettings.Load();
+            suppressUpdateUiEvent = true;
+            cbInterval.SelectedIndex = IntervalPresets.ToIndex(st.CheckIntervalHours);
+            cbNotify.SelectedIndex = st.NotifyMode < 0 || st.NotifyMode > 2 ? 1 : st.NotifyMode;
+            suppressUpdateUiEvent = false;
             suppressAutoStartEvent = true;
             chkAutoStart.Checked = InstallerCore.GetAutoStart();
             suppressAutoStartEvent = false;
-            btnNeverRemind.Text = auto ? "不再提醒" : "开启提醒";
-            lblUpdateState.Text = auto
-                ? "自动检查已开启：开机后自动检查一次，之后每 6 小时检查一次"
+            btnNeverRemind.Text = st.AutoCheck ? "不再提醒" : "开启提醒";
+            lblUpdateState.Text = st.AutoCheck
+                ? ("自动检查已开启：开机后自动检查一次，之后" + IntervalPresets.Text(st.CheckIntervalHours) + "检查一次")
                 : "已关闭自动检查（点击「开启提醒」可随时恢复）";
-            lblUpdateNext.Text = ver.Length > 0
-                ? ("当前已安装版本 v" + ver + "　·　上次检查：" + InstallerCore.LastCheckText() + "　·　下次：" + InstallerCore.NextCheckText())
+
+            string installed = InstallerCore.StateVersion(txtPath.Text.Trim());
+            lblUpdateNext.Text = installed.Length > 0
+                ? ("当前已安装版本 v" + installed + "　·　上次检查：" + InstallerCore.LastCheckText() + "　·　下次：" + InstallerCore.NextCheckText())
                 : "尚未安装汉化补丁 —— 安装后即可使用开机自检与自动升级";
+
+            string prev = VersionStore.Previous(installed);
+            btnRollback.Text = prev != null ? ("回退到上一版本 v" + prev) : "回退到上一版本";
+            btnRollback.Enabled = prev != null;
+            toolTip.SetToolTip(btnRollback, prev != null
+                ? ("用本地缓存的 v" + prev + " 安装包重新安装，回到上一版本")
+                : "本地没有更旧版本的安装包缓存（安装/升级时会自动缓存安装包）");
+        }
+
+        private void OnIntervalChanged(object sender, EventArgs e)
+        {
+            if (suppressUpdateUiEvent) return;
+            CmoSettings st = CmoSettings.Load();
+            st.CheckIntervalHours = IntervalPresets.ToHours(cbInterval.SelectedIndex);
+            st.Save();
+            Log("已把自动检查频率改为" + IntervalPresets.Text(st.CheckIntervalHours) + "一次。");
+            RefreshUpdateState();
+        }
+
+        private void OnNotifyChanged(object sender, EventArgs e)
+        {
+            if (suppressUpdateUiEvent) return;
+            CmoSettings st = CmoSettings.Load();
+            st.NotifyMode = cbNotify.SelectedIndex < 0 ? 1 : cbNotify.SelectedIndex;
+            st.Save();
+            Log("已把提醒方式改为「" + cbNotify.Text + "」。");
+            RefreshUpdateState();
+        }
+
+        private void OnRollbackClick(object sender, EventArgs e)
+        {
+            string gp = txtPath.Text.Trim();
+            string installed = InstallerCore.StateVersion(gp);
+            string prev = VersionStore.Previous(installed);
+            if (prev == null)
+            {
+                MessageBox.Show("本地没有更旧版本的安装包缓存，无法离线回退。\n\n可在发布页下载对应版本安装包后手动安装。",
+                    "回退到上一版本", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (MessageBox.Show("将用本地缓存的 v" + prev + " 安装包重新安装，把补丁回退到 v" + prev + "。\n\n"
+                + "（如果游戏正在运行会先关闭游戏；回退后请重新启动游戏）\n\n确定继续？",
+                "回退到上一版本", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            Log("开始回退到 v" + prev + " ...");
+            string err;
+            if (Rollback.Run(gp, prev, false, out err))
+            {
+                Log("已回退到 v" + prev + "，安装状态已更新为 v" + prev + "。");
+                MessageBox.Show("已回退到 v" + prev + "。", "回退成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                Log("[错误] 回退失败: " + err);
+                MessageBox.Show("回退失败:\n" + err, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            RefreshStatus();
+            RefreshUpdateState();
         }
 
         private void OnAutoStartChanged(object sender, EventArgs e)
@@ -330,9 +469,18 @@ namespace CMOLocalizerInstaller
             string err;
             if (InstallerCore.Uninstall(gp, out err))
             {
-                Log("已成功卸载中文汉化补丁并恢复原版 Command.exe.config 配置。");
+                bool purge = chkPurgeSettings.Checked;
+                InstallManifest.Clear(gp);
+                if (purge) CmoSettings.Purge();
+                Log(purge
+                    ? "已成功卸载中文汉化补丁并恢复原版 Command.exe.config 配置（已按你的选择清除全部更新设置）。"
+                    : "已成功卸载中文汉化补丁并恢复原版 Command.exe.config 配置（你的更新设置已保留，重装后继续生效）。");
                 RefreshStatus();
-                MessageBox.Show("已无损还原为原版英文环境！", "还原成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                RefreshUpdateState();
+                MessageBox.Show(purge
+                    ? "已无损还原为原版英文环境！（更新设置也已按你的选择清除）"
+                    : "已无损还原为原版英文环境！\n\n你的更新设置（检查频率/提醒方式等）已保留，下次安装会继续使用。",
+                    "还原成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
             {
@@ -753,6 +901,25 @@ namespace CMOLocalizerInstaller
 
                 // 自动汉化 World Wind 标注图层瓦片 (WW/Cache/Stamen Terrain - Labels)
                 LocalizeMapLabelTiles(gamePath);
+
+                // 最后一步：写「安装清单」（部署实证）—— 它是「装了什么版本」的唯一真相，
+                // 也是「一键还原后立即显示原版英文环境」的依据；失败不得留下半份清单。
+                // 先做一次版本戳一致性自检：安装包内嵌词典 _meta.version 应与 CurrentVersion 一致，
+                // 不一致说明打包时忘了同步版本戳（历史上出现过，会让“已装版本”与实际资产不符）。
+                string bundleVer = VersionStore.PackageVersion(Application.ExecutablePath);
+                if (!string.IsNullOrEmpty(bundleVer) && bundleVer != CurrentVersion)
+                {
+                    CmoLog.Warn("版本戳不一致：安装包内嵌词典 _meta.version=" + bundleVer
+                        + "，安装器 CurrentVersion=" + CurrentVersion);
+                }
+                Dictionary<string, string> manifestFiles = InstallManifest.HashEngineFiles(gamePath);
+                if (!InstallManifest.Write(gamePath, CurrentVersion, Application.ExecutablePath, manifestFiles))
+                {
+                    errorMsg = "汉化文件已部署，但写入安装清单失败（状态可能显示不准，重新安装即可修复）。";
+                    return false;
+                }
+                // 缓存自身安装包：回退以整个安装包为单位（权威、自带全部资产）
+                VersionStore.Cache(Application.ExecutablePath);
 
                 return true;
             }
@@ -1206,7 +1373,7 @@ namespace CMOLocalizerInstaller
         // ──────────────────────────────────────────────────────────────
         //  自动升级（更新助手 CMO_Updater.exe）集成
         // ──────────────────────────────────────────────────────────────
-        public const string CurrentVersion = "4.1.5";
+        public const string CurrentVersion = "4.1.6";
         private const string RegPath = @"Software\CMOChinese";
         private const string RunKeyName = "CMOChineseUpdater";
 
@@ -1240,6 +1407,27 @@ namespace CMOLocalizerInstaller
             return v == null ? "" : v.ToString();
         }
 
+        /// <summary>状态显示用的已安装版本：清单优先，其次（迁移期）注册表。</summary>
+        public static string StateVersion(string gamePath)
+        {
+            if (!string.IsNullOrEmpty(gamePath) && Directory.Exists(gamePath))
+            {
+                InstallManifest m = InstallManifest.Read(gamePath);
+                if (m != null && m.Version.Length > 0 && m.Version != "unknown") return m.Version;
+            }
+            string reg = CmoSettings.RegistryInstalledVersion();
+            return reg == null ? "" : reg;
+        }
+
+        public static string LocalTimeText(string iso)
+        {
+            DateTime d;
+            if (DateTime.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d))
+                return d.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+            return "未知时间";
+        }
+
         public static void RememberGamePath(string gamePath)
         {
             if (!string.IsNullOrEmpty(gamePath)) RegSet("GamePath", gamePath, RegistryValueKind.String);
@@ -1247,36 +1435,39 @@ namespace CMOLocalizerInstaller
 
         public static bool GetAutoCheck()
         {
-            object v = RegGet("AutoCheck");
-            return v == null || Convert.ToInt64(v) != 0;
+            return CmoSettings.Load().AutoCheck;
         }
 
         public static void SetAutoCheck(bool on)
         {
-            RegSet("AutoCheck", on ? 1 : 0, RegistryValueKind.DWord);
+            CmoSettings st = CmoSettings.Load();
+            st.AutoCheck = on;
+            st.Save();
+            RegSet("AutoCheck", on ? 1 : 0, RegistryValueKind.DWord);   // 兼容旧版读取
         }
 
         /// <summary>「不再提醒」开关：关闭自动检查 + 记住当前版本；返回新的自动检查状态。</summary>
         public static bool ToggleNeverRemind()
         {
-            bool nowAuto = !GetAutoCheck();
-            SetAutoCheck(nowAuto);
-            if (!nowAuto)
+            CmoSettings st = CmoSettings.Load();
+            st.AutoCheck = !st.AutoCheck;
+            if (!st.AutoCheck)
             {
-                string ver = InstalledVersion();
-                RegSet("SkippedVersion", ver.Length > 0 ? ver : CurrentVersion, RegistryValueKind.String);
+                string ver = StateVersion(CmoSettings.Load().GamePath);
+                st.SkippedVersion = ver.Length > 0 ? ver : CurrentVersion;
             }
             else
             {
-                RegSet("SkippedVersion", "", RegistryValueKind.String);
+                st.SkippedVersion = "";
             }
-            return nowAuto;
+            st.Save();
+            RegSet("AutoCheck", st.AutoCheck ? 1 : 0, RegistryValueKind.DWord);
+            return st.AutoCheck;
         }
 
         public static bool GetAutoStart()
         {
-            object v = RegGet("AutoStart");
-            return v == null || Convert.ToInt64(v) != 0;
+            return CmoSettings.Load().AutoStart;
         }
 
         public static string GetGamePath()
@@ -1288,7 +1479,10 @@ namespace CMOLocalizerInstaller
 
         public static void SetAutoStart(bool on)
         {
-            RegSet("AutoStart", on ? 1 : 0, RegistryValueKind.DWord);
+            CmoSettings st = CmoSettings.Load();
+            st.AutoStart = on;
+            st.Save();
+            RegSet("AutoStart", on ? 1 : 0, RegistryValueKind.DWord);   // 兼容旧版读取
             try
             {
                 using (RegistryKey run = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
@@ -1306,8 +1500,8 @@ namespace CMOLocalizerInstaller
 
         public static string LastCheckText()
         {
-            object v = RegGet("LastCheckUtc");
-            if (v == null) return "尚未检查";
+            string v = CmoSettings.Load().LastCheckUtc;
+            if (string.IsNullOrEmpty(v)) return "尚未检查";
             DateTime d;
             if (!DateTime.TryParse(v.ToString(), System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d))
@@ -1317,14 +1511,14 @@ namespace CMOLocalizerInstaller
 
         public static string NextCheckText()
         {
-            if (!GetAutoCheck()) return "已关闭";
-            object v = RegGet("LastCheckUtc");
+            CmoSettings st = CmoSettings.Load();
+            if (!st.AutoCheck) return "已关闭";
+            string v = st.LastCheckUtc;
             DateTime d;
-            if (v == null || !DateTime.TryParse(v.ToString(), System.Globalization.CultureInfo.InvariantCulture,
+            if (string.IsNullOrEmpty(v) || !DateTime.TryParse(v.ToString(), System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out d))
                 return "开机后自动检查";
-            object iv = RegGet("CheckIntervalHours");
-            int hours = iv == null ? 6 : (int)Convert.ToInt64(iv);
+            int hours = st.CheckIntervalHours;
             if (hours < 1) hours = 6;
             DateTime next = d.ToLocalTime().AddHours(hours);
             if (next <= DateTime.Now) return "即将检查";
@@ -1350,7 +1544,11 @@ namespace CMOLocalizerInstaller
             if (RegGet("NotifyMode") == null) RegSet("NotifyMode", 1, RegistryValueKind.DWord);
             if (RegGet("AutoInstall") == null) RegSet("AutoInstall", 1, RegistryValueKind.DWord);
             if (RegGet("Mirror") == null) RegSet("Mirror", "https://ghproxy.net/", RegistryValueKind.String);
-            SetAutoStart(GetAutoStart());
+            // 设置正文存 %APPDATA%\CMOChinese\settings.json（首次从上面的注册表值一次性迁移）
+            CmoSettings st = CmoSettings.Load();
+            if (string.IsNullOrEmpty(st.GamePath)) { st.GamePath = gamePath; st.Save(); }
+            // 按用户的开机自启偏好重建 Run 键（还原时会被删掉，重装后需恢复）
+            SetAutoStart(st.AutoStart);
         }
 
         /// <summary>静默安装之后把更新助手重新拉起（供 --restart-updater 使用）。</summary>
@@ -1416,7 +1614,16 @@ namespace CMOLocalizerInstaller
                 }
             }
             catch { }
-            try { Registry.CurrentUser.DeleteSubKeyTree(RegPath, false); } catch { }
+            try
+            {
+                // 只清「安装态」的注册表版本号；更新频率/提醒方式/自启偏好等设置必须保留
+                //（用户明确反馈过：还原后设置全没了）
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(RegPath, true))
+                {
+                    if (k != null) k.DeleteValue("Version", false);
+                }
+            }
+            catch { }
             try
             {
                 if (!string.IsNullOrEmpty(gamePath))
@@ -1523,12 +1730,17 @@ namespace CMOLocalizerInstaller
                 string gpArg = null;
                 int waitPid = 0;
                 bool restartUpdater = false;
+                bool purgeSettings = false;
 
                 for (int i = 0; i < args.Length; i++)
                 {
                     string a = args[i];
                     if (a == "--install" || a == "/install") cmd = "install";
                     else if (a == "--uninstall" || a == "/uninstall") cmd = "uninstall";
+                    else if (a == "--rollback" || a == "/rollback") cmd = "rollback";
+                    else if (a == "--adopt" || a == "/adopt") cmd = "adopt";
+                    else if (a == "--list-versions" || a == "/list-versions") cmd = "list";
+                    else if (a == "--purge-settings" || a == "/purge-settings") purgeSettings = true;
                     else if (a == "--silent" || a == "/silent") { }
                     else if (a == "--restart-updater") restartUpdater = true;
                     else if (a == "--wait-pid" && i + 1 < args.Length)
@@ -1567,8 +1779,52 @@ namespace CMOLocalizerInstaller
                 else if (cmd == "uninstall")
                 {
                     bool ok = Uninstall(gp, out err);
-                    Console.WriteLine(ok ? "[SUCCESS] Uninstalled from " + gp : "[ERROR] " + err);
+                    if (ok)
+                    {
+                        InstallManifest.Clear(gp);
+                        if (purgeSettings) CmoSettings.Purge();
+                    }
+                    Console.WriteLine(ok
+                        ? "[SUCCESS] Uninstalled from " + gp + (purgeSettings ? " (settings purged)" : " (settings kept)")
+                        : "[ERROR] " + err);
                     return ok ? 0 : 1;
+                }
+                else if (cmd == "rollback")
+                {
+                    string installed = StateVersion(gp);
+                    string prev = VersionStore.Previous(installed);
+                    if (prev == null)
+                    {
+                        Console.WriteLine("[ERROR] 本地没有比 v" + installed + " 更旧的安装包缓存");
+                        return 1;
+                    }
+                    bool ok = Rollback.Run(gp, prev, true, out err);
+                    Console.WriteLine(ok ? "[SUCCESS] Rolled back to v" + prev : "[ERROR] " + err);
+                    return ok ? 0 : 1;
+                }
+                else if (cmd == "adopt")
+                {
+                    bool ok = InstallManifest.Adopt(gp, CmoSettings.RegistryInstalledVersion());
+                    InstallManifest m = InstallManifest.Read(gp);
+                    Console.WriteLine(ok
+                        ? "[SUCCESS] Adopted v" + (m == null ? "?" : m.Version) + " from " + gp
+                        : "[ERROR] 未找到完整引擎文件，无法登记安装状态");
+                    return ok ? 0 : 1;
+                }
+                else if (cmd == "list")
+                {
+                    InstallManifest m = InstallManifest.Read(gp);
+                    Console.WriteLine("game=" + gp);
+                    Console.WriteLine("installed=" + (m == null ? "none" : "v" + m.Version + " (" + m.Source + ")"));
+                    Console.WriteLine("cached=" + string.Join(",", VersionStore.CachedVersions().ToArray()));
+                    return 0;
+                }
+
+                if (purgeSettings)
+                {
+                    CmoSettings.Purge();
+                    Console.WriteLine("[SUCCESS] 已清除全部更新设置");
+                    return 0;
                 }
             }
 

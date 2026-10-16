@@ -203,3 +203,32 @@
   5. 不要连续多次 `CLICK_MENU 数据库查看器`：会堆叠多个查看器实例并让引擎命令通道卡死。
 - **证据**：`evidence/live/dbviewer/99_live_repro.png`（故障）vs `103_pane_rendered.png` /
   `140_final_state.png`（修复后 #4515 CH-4B Rainbow 详情页全中文）。
+
+## 安装状态/设置/回退的权威定义（2026-10-16，v4.1.6）
+
+**用户事故原话**：「为什么我还原了也显示已经安装新版本了，这不就是我想回退也回退不了了么，
+而且之前的最小化托盘设置啥的全都没有了。更新频率也没有了。」→ 由此确立下列硬约束：
+
+1. **状态真相只能是「部署实证」**：游戏目录内的 `CMOChinese_Installed.json`（版本 + 时间 + 来源 +
+   `CMOLocalizer.dll`/`CMOLocalizer.json` 的 sha256）。注册表 `Version` 只反映"最后运行的那个安装包"，
+   严禁再作为状态来源（历史事故：还原后仍显示「已安装 v4.1.5」，且任何旧包一装就把它改成旧版本号）。
+   没有任何清单时走 `InstallManifest.Adopt()` 自愈（版本回退链：注册表 Version → 已部署资产 `_meta.version` → unknown），
+   否则存量 4.1.x 用户与绿色包用户会被误报「未安装」。
+2. **设置与安装态必须解耦**：设置存 `%APPDATA%\CMOChinese\settings.json`（**Roaming**，
+   避免被 `%LOCALAPPDATA%` 清理逻辑波及），还原/卸载一律保留，只有显式 `--purge-settings` /
+   勾选「同时清除我的全部设置」才清。严禁再对设置做 `DeleteSubKeyTree` 式的连坐删除。
+3. **回退单位是整个安装包**（`%LOCALAPPDATA%\CMOChinese\packages\`，保留最近 `snapshot_keep` 个），
+   不做资产级快照——真实足迹含 Scenarios 323 文件/218MB、Symbols/Menu 158 文件，
+   快照引擎资产会得到"旧引擎 + 新资产"混合态。回退后由新版代码补写清单，
+   并校验部署 dll == 缓存包内嵌 dll，不一致就拒绝登记。
+4. **降级提示必须门控**：仅当 `远端 < 本地` **且本地已缓存该版本包**时才提示「可回退」，
+   否则静默（否则跑未发布内测版本的用户每次检查都会被劝着降级）。
+5. **版本号五处强制一致**：`VERSION` / 安装器 `CurrentVersion` / 安装器窗口标题 /
+   助手 `UpdaterVersion` / 词典 `_meta.version`，由 `verify_all.py` 的 version 门禁把关。
+   历史事故：词典戳停在 4.1.4 而版本已是 4.1.5，导致安装包名与包内资产自称版本不符。
+6. **共享逻辑只写一份**：设置/清单/缓存/回退/门控都在 `src/shared/CMOShared.cs`，
+   编译进安装器与助手两个 EXE；`build/CMOSharedTest.exe` 是不进包的单测宿主
+   （`verify_regressions.py --static` 的 R18 要求它 ALL PASS）。
+7. **新增回归分层**：`--static`（源码/资产/单测，打包硬门禁）、`--installer`（临时合成游戏目录里
+   跑安装/还原/回退/自愈，**不碰真实游戏目录也不需要游戏运行**）、`--live`（需游戏，国际惯例
+   发版前必跑）。任何在真实游戏目录/注册表里做的自动化测试都必须自带备份与恢复。

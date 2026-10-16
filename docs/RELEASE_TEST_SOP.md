@@ -68,7 +68,11 @@ python scripts/publish_release.py
 4. 绿色包条目数（当前 690）与 `DB/Templates 8 / WW/PlacenameSets 2 / Symbols/Menu 28 / Launcher 1` 齐全；
 5. 升级链：注册表 `HKCU\Software\CMOChinese\Version` 设为上一版本 → 运行 `CMO_Updater.exe --check`
    → 必须弹出「发现新版本 v<ver>」并显示安装包大小；测试后把注册表版本改回真实值；
-6. 实装一次安装包（或绿色包），再跑一次 `python scripts/verify_regressions.py --live` 确认发布物本身可用。
+6. 实装一次安装包（或绿色包），再跑一次 `python scripts/verify_regressions.py --live` 确认发布物本身可用；
+7. **清单与设置校验（v4.1.6 起）**：实装后游戏目录的 `CMOChinese_Installed.json` 版本必须等于本次 `VERSION`；
+   `CMO_Chinese_Setup.exe --list-versions "<游戏>"` 的 `installed` 必须与之一致；装完可跑一次
+   `python scripts/verify_regressions.py --static --installer`，其中 R13 会验证「安装写清单 / 还原清清单 /
+   设置保留（未勾选清除时）/ 回退后清单=目标版本且引擎与缓存包一致」。
 
 > 注意：发布后若在本地又跑了一次 `package.sh`，`build/*.sha256` 描述的是**新构建**，
 > 与已发布资产不再对应（csc 每次编译 MVID/时间戳不同）。要重新发布必须整批重传，

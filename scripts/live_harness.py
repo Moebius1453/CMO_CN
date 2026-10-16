@@ -131,6 +131,11 @@ def click(x: int, y: int, how: str | None = None) -> None:
     subprocess.run(args, capture_output=True, text=True)
 
 
+def focus(hwnd: int) -> None:
+    """把目标窗口拉到前台（否则后续鼠标点击会落到盖在上面的窗口上）。"""
+    subprocess.run([str(DRIVER), "focus", str(hwnd)], capture_output=True, text=True)
+
+
 def keys(combo: str) -> None:
     subprocess.run([str(DRIVER), "key", combo], capture_output=True, text=True)
 

@@ -32,7 +32,15 @@ echo "==> building CMO_Updater.exe"
   -out:"$(W "$OUT/CMO_Updater.exe")" \
   -reference:System.dll -reference:System.Core.dll \
   -reference:System.Windows.Forms.dll -reference:System.Drawing.dll \
+  "$(W "$ROOT/src/shared/CMOShared.cs")" \
   "$(W "$ROOT/src/updater/CMO_Updater.cs")"
+
+echo "==> building CMOSharedTest.exe (test host, not packaged)"
+"$CSC" -nologo -target:exe -platform:anycpu -optimize+ \
+  -out:"$(W "$OUT/CMOSharedTest.exe")" \
+  -reference:System.dll -reference:System.Core.dll \
+  "$(W "$ROOT/src/shared/CMOShared.cs")" \
+  "$(W "$ROOT/src/shared/CMOSharedTest.cs")"
 
 # Symbols/Menu 的中文按钮图（引擎启动时预加载，必须随包分发）
 SYM_ZIP="$OUT/Symbols_Menu.zip"
@@ -77,6 +85,7 @@ fi
   -reference:System.Windows.Forms.dll -reference:System.Drawing.dll \
   -reference:System.IO.Compression.dll -reference:System.IO.Compression.FileSystem.dll \
   "${RES[@]}" \
+  "$(W "$ROOT/src/shared/CMOShared.cs")" \
   "$(W "$ROOT/src/installer/CMO_Chinese_Setup.cs")"
 
 # Keep standard CMO_Chinese_Setup.exe as compatibility copy

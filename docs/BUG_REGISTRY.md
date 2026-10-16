@@ -134,3 +134,84 @@
 - **现象**：`自动交战`/`手动交战` 按钮悬停提示仍是英文。
 - **根因**：ToolTip 词条未入库。
 - **回归测试点**：`static` 词条存在性（`dict/CMOLocalizer.json` exact 含对应英文源串）。
+
+## R13 还原后仍显示「已安装 v4.1.5」，无法回退旧版本（v4.1.6）
+
+- **现象**：用户点「一键还原原版英文」后（或想回退旧版时），安装器/助手仍显示「已安装 v4.1.5」；
+  想装回旧版本也回退不了。
+- **根因**：
+  1. 「已安装什么版本」只存在 `HKCU\Software\CMOChinese\Version` 这一个字符串里，且**任何安装包**
+     安装后都会把它写成**该安装包自己的** `CurrentVersion`（`CMO_Chinese_Setup.cs` `WriteRegistrySettings`），
+     与真实部署的资产无关；
+  2. 更新助手只查 `releases/latest` 且比较用 `>`，永远不会提示「有更旧的版本」；
+  3. 安装器只有「一键安装 / 一键还原英文」，没有回退入口。
+- **修复位置**：游戏目录内新增 `CMOChinese_Installed.json` 安装清单（版本 + 时间 + 来源 + 引擎文件 sha256）
+  作为唯一状态真相；`CmoSettings.RegistryInstalledVersion()` 与清单 `Adopt()` 自愈只作迁移期回退；
+  `VersionStore` 缓存安装包 + `Rollback.Run()` 提供回退；安装器「回退到上一版本 vX」按钮与
+  助手托盘「回退到上一版本…」共用同一实现。
+- **用户可见验收**：还原后立刻显示「原版英文环境（未安装汉化补丁）」；装任何版本包后显示**该包**的版本与时间；
+  有本地缓存时可直接回退并显示回退后的版本。
+- **回归测试点**：`installer` 模式 `R13-install-manifest`（清单版本与磁盘哈希一致）、
+  `R13-uninstall-manifest`（还原后清单消失）、`R13-list-versions`；`R15-rollback`（回退后清单=目标版本
+  且部署 dll == 缓存包内嵌 dll）、`R15-rollback-requires-cache`（无缓存必须拒绝且清单不变）。
+
+## R14 还原后更新设置全部丢失（v4.1.6）
+
+- **现象**：用户反馈「之前的最小化托盘设置啥的全都没有了，更新频率也没有了」——还原一次后，检查频率、
+  提醒方式、镜像、开机自启偏好全部回到默认。
+- **根因**：设置与安装态共用同一个注册表键，而 `CleanupUpdater()`（还原路径）执行的是
+  `Registry.CurrentUser.DeleteSubKeyTree(@"Software\CMOChinese")`，一次删掉整个键。
+- **修复位置**：设置正文迁到 `%APPDATA%\CMOChinese\settings.json`（`CmoSettings`，含旧注册表一次性迁移、
+  原子写、损坏文件备份为 `.bad`）；还原只清安装态（清单 + Run 键 + 助手 exe + 注册表 `Version`），
+  设置一律保留；要清除必须显式勾选「还原时同时清除我的全部设置」或 `--purge-settings`。
+- **用户可见验收**：设 3 小时检查 + 弹窗提醒 → 还原 → 重装 → 仍然是 3 小时 + 弹窗提醒。
+- **回归测试点**：`installer` 模式 `R14-uninstall-keeps-settings`、`R14-purge-explicit`；
+  `static` `R18-static-selftest`（设置原子写往返/损坏回退/注册表迁移）。
+  另：`scripts/test_installer_ui.py` 会实机改频率/提醒方式并断言 `settings.json` 变化。
+
+## R15 回退会得到「旧引擎 + 新资产」混合态（v4.1.6，设计期拦截）
+
+- **现象（设计评审发现）**：若按"快照 dll+json"实现回退，回退后 Scenarios(323 文件/218MB)、Symbols/Menu
+  (158 文件)、地名集、DB 模板仍是新版本的 → 得到一个版本号对不上、资产互不匹配的混合安装。
+- **根因**：安装足迹远大于引擎资产；且旧版安装器不写新清单。
+- **修复位置**：回退单位改为**整个安装包**（`%LOCALAPPDATA%\CMOChinese\packages\`，保留最近 `snapshot_keep`
+  个），由新版代码执行 `缓存包 --install --silent` 后**补写清单**，并校验部署的 `CMOLocalizer.dll`
+  sha256 == 该包内嵌的 dll sha256，不一致则拒绝登记清单（避免混合态被记成"正常"）。
+- **用户可见验收**：回退后安装器显示回退后的版本；文件与缓存包一致；再升级可正常回到新版本。
+- **回归测试点**：`installer` 模式 `R15-rollback`（含 dll 一致性）、`R15-rollback-requires-cache`。
+
+## R16 「可回退」提示会骚扰装了新版本的用户（v4.1.6，评审 P0 拦截）
+
+- **现象（评审发现）**：把比较从 `>` 改成"不相等就提示"后，如果本地跑的是**比线上更新**的版本
+  （未发布/内测），每次检查更新都会提示用户"回退到线上那个更旧的版本"，属于反向骚扰。
+- **根因**：缺少"本地是否真的有那个版本的安装包"这一前置条件。
+- **修复位置**：`ReleaseGate.ShouldOfferRollback(local, remote, hasCachedRemote)`：仅当
+  `remote < local` **且** 本地已缓存该版本安装包时才提示回退；否则静默（只写日志）。
+  助手 `--check` 在"本地更高但无缓存"时给出明确说明而不是升级/回退流程。
+- **用户可见验收**：本地等于线上 → 静默；本地更高且无缓存 → 不提示回退（说明原因）；
+  本地更高且已缓存 → 提示「发现可回退版本 vX」。
+- **回归测试点**：`static` `R16-static-gate`（共享层门控真值表 + 空输入）、
+  实机 `scripts/test_updater_live.py` 的四条 `--check` 路径（有更新/已最新/可回退/门控）。
+
+## R17 存量 4.1.x 用户与绿色包用户被误报「未安装」（v4.1.6）
+
+- **现象（评审发现）**：状态改成只读清单后，用旧版本装过的用户（没有清单文件）会看到
+  「原版英文环境（未安装汉化补丁）」；只解压绿色包的用户同样没有清单。
+- **根因**：清单是新增文件，历史安装不会凭空产生它。
+- **修复位置**：`InstallManifest.Adopt(game, fallbackVersion)` 自愈：引擎文件存在但清单缺失时，
+  按当前文件重新生成清单（`source="adopted"`），版本回退链 = 调用方给的注册表 `Version`
+  → 已部署资产的 `_meta.version` → `unknown`；安装器打开、助手启动/检查时自动执行，
+  并可用 `--adopt "<game>"` 手动触发。绿色包说明（README → 包内 `汉化说明.md`）已写明。
+- **用户可见验收**：旧版用户打开安装器显示「已安装完整中文汉化补丁（已登记当前状态，v4.1.5）」
+  而不是「未安装」；执行一次 `--adopt` 后 `--list-versions` 显示该版本且 `source=adopted`。
+- **回归测试点**：`installer` 模式 `R17-adopt-selfheal`；`static` `R17-static-pack-readme`。
+
+## R18 状态机缺少可执行单测（v4.1.6）
+
+- **现象（评审发现）**：设置/清单/包缓存/回退这些新逻辑如果没有单测，后续改动很容易悄悄破坏，
+  而实机用例（需游戏）太重，发版前不一定跑得起来。
+- **修复位置**：`src/shared/CMOSharedTest.cs`（测试宿主，`build.sh` 编译为 `build/CMOSharedTest.exe`，
+  不进入安装包）：设置首次写/覆盖写/损坏备份/注册表迁移、清单往返 + Modified + Clear、Adopt 需要完整引擎文件、
+  包缓存 Prune 保留最近 N + Previous、安装包版本戳解析（文件名优先 + 无版本号时回退内容戳）、
+  门控真值表；全部在系统临时目录内运行（不碰用户设置与真实游戏目录）。
+- **回归测试点**：`static` `R18-static-selftest`（要求 ALL PASS，退出码 0）。

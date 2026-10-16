@@ -145,15 +145,43 @@ def gate_db_templates() -> None:
 
 
 def gate_version() -> None:
+    """版本号单一来源：五处必须一致（VERSION / 安装器 CurrentVersion / 安装器标题 /
+    助手 UpdaterVersion / 词典 _meta.version）。历史事故：词典戳停在 4.1.4，
+    而 VERSION 已到 4.1.5，导致发布包里资产自称的版本与安装包名不符。"""
+    import json as _json
+
     ver = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     engine = (ROOT / "src/engine/CMOLocalizer.cs").read_text(encoding="utf-8")
-    inst = (ROOT / "src/installer/CMO_Chinese_Setup.cs").read_text(
-        encoding="utf-8")
+    inst = (ROOT / "src/installer/CMO_Chinese_Setup.cs").read_text(encoding="utf-8")
+    upd = (ROOT / "src/updater/CMO_Updater.cs").read_text(encoding="utf-8")
     major = ver.split(".")[0]
-    ok = (f"v{major}.0 Engine" in engine or f"v{ver} Engine" in engine) \
-        and f"v{ver}" in inst
-    record("version", ok, f"VERSION={ver}, engine={'ok' if 'v4.0 Engine' in engine else 'MISMATCH'}, "
-                          f"installer={'ok' if f'v{ver}' in inst else 'MISMATCH'}")
+
+    def find(pattern: str, text: str) -> str | None:
+        m = re.search(pattern, text)
+        return m.group(1) if m else None
+
+    inst_const = find(r'CurrentVersion\s*=\s*"([0-9.]+)"', inst)
+    inst_title = find(r"一键安装工具 v([0-9.]+)", inst)
+    upd_const = find(r'UpdaterVersion\s*=\s*"([0-9.]+)"', upd)
+    try:
+        dict_ver = _json.loads((ROOT / "dict/CMOLocalizer.json").read_text(encoding="utf-8"))["_meta"]["version"]
+    except Exception as ex:  # noqa: BLE001
+        dict_ver = f"<读取失败: {ex}>"
+
+    places = {
+        "VERSION": ver,
+        "installer.CurrentVersion": inst_const,
+        "installer.title": inst_title,
+        "updater.UpdaterVersion": upd_const,
+        "dict._meta.version": dict_ver,
+    }
+    mismatch = {k: v for k, v in places.items() if v != ver}
+    engine_ok = f"v{major}.0 Engine" in engine or f"v{ver} Engine" in engine
+    ok = not mismatch and engine_ok
+    detail = ", ".join(f"{k}={v}" for k, v in places.items()) + f", engine={'ok' if engine_ok else 'MISMATCH'}"
+    if mismatch:
+        detail += f" → 与 VERSION={ver} 不一致: {sorted(mismatch)}"
+    record("version", ok, detail)
 
 
 def gate_repository() -> None:
