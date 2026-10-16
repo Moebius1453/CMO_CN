@@ -233,6 +233,27 @@ def run_static(r: Runner) -> None:
              f"manifest={manifest_ok} release_check={rc_ok} sop={sop_ok}",
              "docs/RELEASE_MANIFEST.md + scripts/release_check.py + docs/RELEASE_TEST_SOP.md")
 
+    # R22：字节码缓存/凭据文件不得含明文令牌。
+    # 历史：scripts/__pycache__/translate_worker.cpython-312.pyc 里藏着明文 sk- 令牌，
+    # 而 __pycache__/ 被 .gitignore 忽略 → 只扫 git ls-files 的密钥门禁完全看不见。
+    secret_rx = re.compile(r"sk-[A-Za-z0-9]{20,}")
+    caches = sorted(p for p in ROOT.glob("**/__pycache__/*.pyc") if ".git" not in p.parts)
+    leaks = []
+    for p in caches:
+        try:
+            if secret_rx.search(p.read_text(encoding="utf-8", errors="ignore")):
+                leaks.append(str(p.relative_to(ROOT)))
+        except Exception:
+            continue
+    orphan_pyc = sorted(str(p.relative_to(ROOT)) for p in caches
+                        if not (p.parent.parent / (p.name.split(".")[0] + ".py")).is_file())
+    r.record("R22-static-bytecode-secrets", "R22 字节码缓存不含明文令牌且无无源孤儿缓存",
+             bool(not leaks and not orphan_pyc),
+             f"扫描 {len(caches)} 个 .pyc"
+             + (f"；命中: {leaks[:3]}" if leaks else "；无令牌命中")
+             + (f"；无源孤儿: {orphan_pyc[:3]}" if orphan_pyc else "；无无源孤儿缓存"),
+             "scripts/__pycache__/")
+
 
 # ── live：需要在运行中的游戏里实测 ──────────────────────────────────────────
 def _ctrl_tree(H) -> dict:

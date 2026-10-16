@@ -2,9 +2,17 @@
 """密钥门禁：禁止任何明文凭据进入仓库（工作区、历史、发布产物）。
 
 用法:
-    python scripts/verify_no_secrets.py            # 扫描已跟踪文件（快，作为提交/发布门禁）
+    python scripts/verify_no_secrets.py            # 扫描工作区（已跟踪 + 未跟踪 + 危险忽略项）
     python scripts/verify_no_secrets.py --history   # 追加扫描全部提交历史（git pickaxe）
 退出码 0 = 干净，1 = 发现疑似凭据。
+
+扫描范围三层（历史教训：只看 `git ls-files` 会漏掉真凭据）：
+  1) 已跟踪文件；
+  2) 未跟踪但未被忽略的文件（新增脚本/笔记）；
+  3) **危险的忽略项**——`__pycache__/*.pyc`、`.env*`、`*.pem/*.key/*.pfx`、`*.log`。
+     2026-10-16 的真实泄漏：`scripts/__pycache__/translate_worker.cpython-312.pyc` 里
+     有明文 `sk-` 令牌，但 `__pycache__/` 被 .gitignore 忽略，第 1 层完全看不到。
+所有跳过项（过大/不属于三层范围）都会打印原因，不再静默 skip。
 """
 from __future__ import annotations
 
@@ -26,20 +34,68 @@ PATTERNS = [
 # 允许出现的占位符/环境变量形式
 ALLOW = re.compile(r"(os\.environ|getenv|Environment\.GetEnvironmentVariable|\*\*\*|REMOVED|MASKED|你的|xxxx|<[A-Za-z_]+>)")
 
+# 危险忽略项：这些路径默认被 .gitignore 排除，但历史证明它们会藏真凭据。
+DANGEROUS_GLOBS = (
+    "**/__pycache__/*.pyc", "**/*.pyc", "**/*.pyo",
+    ".env", ".env.*", "**/.env", "**/.env.*",
+    "**/*.pem", "**/*.key", "**/*.pfx", "**/*.p12",
+    "**/*.log", "**/credentials*.json", "**/*secret*.json",
+)
 
-def tracked_files() -> list[Path]:
-    out = subprocess.run(["git", "ls-files"], capture_output=True, text=True, encoding="utf-8").stdout
-    return [Path(p) for p in out.splitlines() if p.strip()]
+MAX_BYTES = 5_000_000
 
 
-def scan_worktree() -> list[str]:
-    hits: list[str] = []
-    for f in tracked_files():
-        try:
-            if f.stat().st_size > 5_000_000:
+def _git(*args: str) -> list[str]:
+    out = subprocess.run(["git", *args], capture_output=True, text=True,
+                         encoding="utf-8", errors="ignore").stdout
+    return [p for p in out.splitlines() if p.strip()]
+
+
+def candidate_files() -> tuple[list[Path], dict[str, int]]:
+    """待扫描文件 + 分组计数（已跟踪 / 未跟踪 / 危险忽略项）。"""
+    root = Path.cwd()
+    groups: list[tuple[str, list[Path]]] = []
+    groups.append(("tracked", [Path(p) for p in _git("ls-files")]))
+    groups.append(("untracked", [Path(p) for p in _git("ls-files", "--others", "--exclude-standard")]))
+    danger: dict[Path, None] = {}
+    for pat in DANGEROUS_GLOBS:
+        for p in root.glob(pat):
+            if p.is_file() and ".git" not in p.parts:
+                danger[p] = None
+    groups.append(("dangerous-ignored", sorted(danger)))
+
+    files: list[Path] = []
+    counts: dict[str, int] = {}
+    seen: set[Path] = set()
+    for label, items in groups:
+        counts[label] = 0
+        for p in items:
+            if p in seen or not p.is_file():
                 continue
+            seen.add(p)
+            files.append(p)
+            counts[label] += 1
+    return files, counts
+
+
+def scan_worktree() -> tuple[list[str], list[str], dict[str, int]]:
+    """返回 (命中, 跳过说明, 分组计数)。"""
+    hits: list[str] = []
+    skipped: list[str] = []
+    files, counts = candidate_files()
+    for f in files:
+        try:
+            size = f.stat().st_size
+        except Exception as exc:
+            skipped.append(f"{f}（无法读取大小: {exc}）")
+            continue
+        if size > MAX_BYTES:
+            skipped.append(f"{f}（{size // 1024 // 1024}MB > {MAX_BYTES // 1000 // 1000}MB，未扫）")
+            continue
+        try:
             text = f.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
+        except Exception as exc:
+            skipped.append(f"{f}（读取失败: {exc}）")
             continue
         for i, line in enumerate(text.splitlines(), 1):
             if ALLOW.search(line):
@@ -48,7 +104,7 @@ def scan_worktree() -> list[str]:
                 if rx.search(line):
                     hits.append(f"{f}:{i}  [{label}]")
                     break
-    return hits
+    return hits, skipped, counts
 
 
 def scan_history() -> list[str]:
@@ -66,10 +122,19 @@ def main() -> int:
     deep = "--history" in sys.argv
     print("密钥门禁（verify_no_secrets）")
     print("-" * 62)
-    w = scan_worktree()
-    print(f"  已跟踪文件: {len(tracked_files())} 个 → 命中 {len(w)}")
-    for h in w[:20]:
-        print("   ✗ " + h)
+    w, skipped, counts = scan_worktree()
+    total = sum(counts.values())
+    print(f"  扫描范围: 已跟踪 {counts.get('tracked', 0)} + 未跟踪 {counts.get('untracked', 0)}"
+          f" + 危险忽略项 {counts.get('dangerous-ignored', 0)} = {total} 个文件")
+    if skipped:
+        print(f"  跳过 {len(skipped)} 个（已列出，不再静默 skip）:")
+        for s in skipped[:10]:
+            print("   - " + s)
+        if len(skipped) > 10:
+            print(f"   - …还有 {len(skipped) - 10} 个")
+    print(f"  命中 {len(w)}")
+    for x in w[:20]:
+        print("   ✗ " + x)
     h = scan_history() if deep else []
     if deep:
         print(f"  提交历史: 命中 {len(h)} 组")
