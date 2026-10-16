@@ -44,9 +44,10 @@
 3. `bash scripts/deploy.sh`（把本轮引擎/词库装进游戏目录，否则 R0-static-env 会红）。
 4. `python scripts/verify_all.py` 全绿（词库/菜单/引擎解析/想定/战役名/简报/地名集/DB 模板/版本/密钥/工作区）。
 5. `python scripts/verify_regressions.py --live` 全绿（需游戏运行；这一步会写 `build/regression_report.json` 的 live 模式）。
-6. `python scripts/release_check.py` 全绿（统一入库检查，含上面所有门禁 + 资产/产物/绿色包内容/报告新鲜度）。
+6. `python scripts/release_check.py --pre` 全绿（统一入库检查；`--pre` 跳过尚未产出的产物检查）。
 7. `bash scripts/package.sh` 产出 4 个资产。
-8. `python scripts/publish_release.py --version <VER>` 上传（会再校验回归报告：同版本、含 live、24h 内）。
+8. `python scripts/release_check.py`（完整版：含产物哈希与绿色包内容/禁入项）全绿。
+9. `python scripts/publish_release.py --version <VER>` 上传（会再校验回归报告：同版本、含 static/installer/live、24h 内）。
    - 打包门禁用 `--no-report` 运行，不会覆盖 live 报告；**发布前最后一次回归必须是带 `--live` 的那次**。
 
 ## 4. 版本与一致性约束
