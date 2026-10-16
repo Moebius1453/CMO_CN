@@ -957,7 +957,12 @@ namespace CMOLocalizerInstaller
                             foreach (ZipArchiveEntry e in zip.Entries)
                             {
                                 if (e.Name.Length == 0) continue;
-                                string dest = Path.Combine(menuDir, e.FullName.Replace('/', '\\'));
+                                string dest;
+                                if (!CmoPaths.TryResolveInside(menuDir, e.FullName, out dest))
+                                {
+                                    CmoLog.Warn("跳过越界 zip 条目: " + e.FullName);
+                                    continue;
+                                }
                                 string dir = Path.GetDirectoryName(dest);
                                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
                                 string bak = dest + ".orig";
@@ -1078,8 +1083,12 @@ namespace CMOLocalizerInstaller
                         foreach (ZipArchiveEntry e in zip.Entries)
                         {
                             if (e.Length == 0) continue;
-                            string rel = e.FullName.Replace('/', Path.DirectorySeparatorChar);
-                            string dest = Path.Combine(gamePath, rel);
+                            string dest;
+                            if (!CmoPaths.TryResolveInside(gamePath, e.FullName, out dest))
+                            {
+                                CmoLog.Warn("跳过越界 zip 条目: " + e.FullName);
+                                continue;
+                            }
                             string dir = Path.GetDirectoryName(dest);
                             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
                             if (dest.EndsWith(".orig", StringComparison.OrdinalIgnoreCase))

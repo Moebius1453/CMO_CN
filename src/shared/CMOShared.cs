@@ -36,6 +36,35 @@ namespace CMOShared
 
     public static class CmoPaths
     {
+        /// <summary>
+        /// 把压缩包条目名解析为目标根目录内的绝对路径；越界（绝对路径、.. 逃逸、
+        /// 盘符/UNC 前缀）时返回 false 且 dest 为 null。
+        /// 解压落盘前必须过这一关：安装器是提权运行的，一个构造过的压缩包可以靠
+        /// `..\..\` 条目往游戏目录之外写文件（.orig 备份还会再生成第二个越界文件）。
+        /// </summary>
+        public static bool TryResolveInside(string root, string entryName, out string dest)
+        {
+            dest = null;
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(entryName)) return false;
+            try
+            {
+                string rel = entryName.Replace('/', Path.DirectorySeparatorChar)
+                                      .Replace('\\', Path.DirectorySeparatorChar);
+                if (rel.Length == 0 || Path.IsPathRooted(rel)) return false;
+                if (rel.IndexOf(':') >= 0) return false;          // 盘符或备用数据流前缀
+                string rootFull = Path.GetFullPath(root);
+                if (!rootFull.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
+                {
+                    rootFull += Path.DirectorySeparatorChar;
+                }
+                string candidate = Path.GetFullPath(Path.Combine(rootFull, rel));
+                if (!candidate.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase)) return false;
+                dest = candidate;
+                return true;
+            }
+            catch { return false; }
+        }
+
         public const string ManifestName = "CMOChinese_Installed.json";
         public static string RegistryPathOverride;   // 自测用：避免碰真实 HKCU\Software\CMOChinese
         public static string RoamingDirOverride;     // 自测用：临时目录

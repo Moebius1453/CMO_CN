@@ -275,6 +275,26 @@ internal static class CMOSharedSelfTest
         Check("gate-empty-inputs", !ReleaseGate.ShouldOfferRollback("", "4.1.5", true)
             && !ReleaseGate.ShouldOfferRollback("4.1.6", "", true),
             "empty inputs must not offer rollback");
+
+        // 解压包含性校验：安装器是提权运行的，越界条目必须被拦下（不能靠 `..\..\` 往游戏目录外写）
+        string insideRoot = Game("zip-root");
+        string d1, d2, d3;
+        Check("zip-inside-normal", CmoPaths.TryResolveInside(insideRoot, "MenuItem/foo.png", out d1)
+            && Path.GetFullPath(d1).StartsWith(Path.GetFullPath(insideRoot), StringComparison.OrdinalIgnoreCase),
+            "normal entry should resolve inside root");
+        Check("zip-inside-nested-ok",
+            CmoPaths.TryResolveInside(insideRoot, "a/b/c/d.bin", out d2) && d2 != null,
+            "nested in-root entry should be accepted");
+        Check("zip-escape-dotdot", !CmoPaths.TryResolveInside(insideRoot, @"..\..\escaped.txt", out d3),
+            "dotdot escape must be rejected");
+        Check("zip-escape-mixed", !CmoPaths.TryResolveInside(insideRoot, "a/../../escaped.txt", out d3),
+            "mixed dotdot escape must be rejected");
+        Check("zip-escape-absolute", !CmoPaths.TryResolveInside(insideRoot, @"C:\Windows\evil.dll", out d3)
+            && !CmoPaths.TryResolveInside(insideRoot, "/etc/passwd", out d3),
+            "absolute paths must be rejected");
+        Check("zip-escape-empty", !CmoPaths.TryResolveInside(insideRoot, "", out d3)
+            && !CmoPaths.TryResolveInside("", "a.txt", out d3),
+            "empty root/entry must be rejected");
     }
 
     private static string Game(string tag)
