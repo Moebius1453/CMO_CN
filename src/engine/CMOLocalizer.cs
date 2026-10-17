@@ -3773,6 +3773,11 @@ namespace CMOLocalizer
                         ctrl.Text = "损伤与系统状态 - " + fText.Substring("Damage Status for ".Length);
                         return;
                     }
+                    if (fText.StartsWith("Weapons for "))
+                    {
+                        ctrl.Text = "武器：" + fText.Substring("Weapons for ".Length);
+                        return;
+                    }
                     string trTitle = TranslateTitleText(fText);
                     if (!string.IsNullOrEmpty(trTitle) && trTitle != fText)
                     {
@@ -3843,6 +3848,20 @@ namespace CMOLocalizer
                     {
                         ctrl.Text = "可选择 " + mSel.Groups[1].Value + " 个阵营";
                         return;
+                    }
+                    // 推演选项窗口的刷新频率是动态值：「Every 5 seconds」/「Every 30 seconds」。
+                    Match mEvery = Regex.Match(ctext, @"^Every\s+(\d+)\s+(second|seconds|minute|minutes|ms)$");
+                    if (mEvery.Success)
+                    {
+                        int nEvery;
+                        if (int.TryParse(mEvery.Groups[1].Value, out nEvery))
+                        {
+                            bool isMinute = mEvery.Groups[2].Value.StartsWith("minute", StringComparison.Ordinal);
+                            bool isMs = mEvery.Groups[2].Value == "ms";
+                            ctrl.Text = "每 " + nEvery.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                                + (isMs ? " 毫秒" : isMinute ? " 分钟" : " 秒");
+                            return;
+                        }
                     }
                     if (ctext == "Inherited From Doctrine:")
                     {

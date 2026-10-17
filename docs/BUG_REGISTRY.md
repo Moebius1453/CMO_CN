@@ -513,3 +513,24 @@
   指纹改为「本次待写入的翻译」，写成功则下次不再计数，只有游戏把条目改回去的**真拉锯**才会累加触发熔断。
   实机验证：`Combo_StateSelection` **12/12 去重值全中文、纯英文 0 条**；熔断事件 **311 → 311（零新增）**。
 
+## R29 界面英文残留的系统扫描（含下拉项）与修复（v4.1.8，未发布）
+
+- **做法（本轮确立的可复用方法）**：① 逐个开菜单/对话框；② 同时采 **控件文本**（`CTRL_TREE`）与
+  **每个 ComboBox 的全部 Items**（`DUMP_COMBOS`，含 `bound`/`sel`）——只查控件当前文本会漏掉
+  「下拉打开后才看得见的英文」；③ 变化判定按「组合框身份 + 条目内容」而不是窗体名（按窗体名会漏掉
+  在已有窗体里打开的窗口）；④ 关键窗口截图目视复核（`evidence/team-review-20261016/shots/`）。
+- **本轮已修（实机验证）**：`Frequency`→频率、`Stylized`→样式化、`Directional Stylized`→方向化样式、
+  `Show on cursor`→在光标处显示、`Select...`→选择…、四色警戒等级（蓝/黄/橙/红）、
+  `Minor`/`Servere`→轻微/较严重、四条「重置受影响单位/任务（继承上方 EMCON/WRA）」、
+  动态规则 `Every N seconds`→每 N 秒、`Weapons for <单位>`→「武器：<单位>」；
+  并把 `Green` 的旧值「绿色 (Green)」改成「绿」，与其它三色统一（实机：AlertLevel 项 = 橙/红/绿/蓝/黄）。
+- **有意不修（附理由）**：`All`/`Normal`/`Major` 属多义词（`Major` 在别处是军衔「少校」），
+  全局 exact 条目会在其它界面误译；`CB_OSMstyle` 的一串地图样式名（`Bright`/`Dark Matter`/`Fiord Color`/
+  `Toner`/`Positron`/`OSM OpenMapTiles`）是 OSM 样式专有名，与既有 `Sentinel-2 卫星影像` 同类保留；
+  `(c) Matrix Games 2013-2026` 是版权行；`AutoSideID`/`AutoSideAndUnitID` 疑似内部枚举标识。
+- **仍需跟进**：① 「想定特性与设置」里的特性列表整片英文（截图可见
+  `Allow instant loading for landing planner`、`Point To Point Unit Communication`、`Realistic Order Chain`、
+  `Variable burnout speed on boost-coast weapons` 等，约 15-20 条待齐套）；② `Ghosted` 与
+  `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**；
+  ③ 一处叠译 `三维态势联动（三维态势联动 (Tacview))`（同 R20 的工坊类非幂等模式）。
+
