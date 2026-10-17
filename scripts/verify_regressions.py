@@ -404,6 +404,9 @@ def run_live(r: Runner) -> None:
     # L4：输入保护实机探针（R19——历史闪退点必须永远不再复发）
     _input_guard_probe(H, r, pid)
 
+    # L5：界面英文残留抽样（R27——天气/快捷键/控制台等窗口）
+    _ui_residual_probe(H, r, pid)
+
 
 def _bounds_rect(bounds: str) -> tuple[int, int, int, int]:
     m = re.search(r"X=(-?\d+),Y=(-?\d+),Width=(-?\d+),Height=(-?\d+)", bounds or "")
@@ -546,6 +549,72 @@ def _input_guard_probe(H, r: Runner, pid: int | None) -> None:
         subprocess.run([driver, "postchar", str(target["hwnd"]), "\b"], capture_output=True)
         time.sleep(0.2)
     H.send("CLOSE_FORM LoadScenario", timeout=20)
+
+
+def _ui_residual_probe(H, r: Runner, pid: int | None) -> None:
+    """R27 实机探针：已入词典的界面文本必须显示中文（抽多个窗口比对）。
+
+    历史：天气编辑器的 Calm/Hurricane/Level 0、快捷键窗口的 Own Units、Lua 控制台的
+    Insert/RUN 都是「用户看得见的英文」——而那 6 条当时根本不在词典里。
+    已知盲区：快捷键窗口的正文在 DarkRichTextBox 里（富文本，直接改 Text 会丢格式且
+    碰 R19 的输入保护不变量），本用例显式跳过并报告条数，不算它失败。
+    """
+    name = "L-ui-residuals"
+    title = "R27 已入词典的界面文本显示中文（多窗口抽样）"
+    windows = [("WeatherToolStripMenuItem", "天气编辑器"),
+               ("HotkeysToolStripMenuItem", "快捷键"),
+               ("TSMI_ScriptingConsole", "Lua 脚本控制台"),
+               ("OptionsToolStripMenuItem1", "推演选项"),
+               ("MapSettingsToolStripMenuItem1", "地图设置窗口")]
+    fixed = {"WeatherToolStripMenuItem": [("Calm", "无风"), ("Hurricane", "飓风"), ("Level 0", "层级 0")],
+             "HotkeysToolStripMenuItem": [("Own Units", "己方单位")],
+             "TSMI_ScriptingConsole": [("Insert", "插入"), ("RUN", "运行")]}
+    try:
+        exact = json.loads(DICT.read_text(encoding="utf-8")).get("exact", {})
+    except Exception:
+        exact = {}
+    missing: list[str] = []
+    residual: list[str] = []
+    rich_skipped = 0
+    checked_forms = 0
+    for menu, label in windows:
+        H.send("CLOSE_FORM ALL", timeout=20)
+        time.sleep(1.2)
+        base = {(c.get("text") or "").strip()
+                for c in H.send("CTRL_TREE", timeout=25).get("nodes", [])}
+        if H.send("CLICK_MENU " + menu, timeout=20).get("status") != "ok":
+            missing.append(f"{label}:打不开")
+            continue
+        time.sleep(3.2)
+        nodes = H.send("CTRL_TREE", timeout=25).get("nodes", [])
+        now = {(c.get("text") or "").strip() for c in nodes}
+        checked_forms += 1
+        # 断言“当前状态”：中文在、原英文不在。不能只看开窗差分——
+        # 有些窗口（如 Lua 控制台）本来就没关，其文本不会出现在差分里（曾因此假红）。
+        for en, zh in fixed.get(menu, []):
+            if zh not in now:
+                missing.append(f"{label}:缺{zh}")
+            elif en in now:
+                missing.append(f"{label}:仍显{en!r}")
+        for c in nodes:
+            t = (c.get("text") or "").strip()
+            if not t or t in base or len(t) > 40 or not c.get("v"):
+                continue
+            if "RichTextBox" in (c.get("t") or ""):
+                rich_skipped += 1
+                continue
+            if any("\u4e00" <= ch <= "\u9fff" for ch in t):
+                continue
+            if exact.get(t):
+                residual.append(f"{label}:{t!r}")
+    H.send("CLOSE_FORM ALL", timeout=20)
+    ok = bool(exact and checked_forms >= 3 and not missing and not residual)
+    r.record(name, title, ok,
+             f"抽查 {checked_forms}/{len(windows)} 个窗口；已入词典却仍显英文 {len(residual)} 条"
+             + (f"（{residual[:4]}）" if residual else "")
+             + (f"；已知盲区跳过富文本 {rich_skipped} 处" if rich_skipped else "")
+             + (f"；缺失: {missing}" if missing else ""),
+             "evidence/live/scan")
 
 
 # ── installer：安装/还原/回退的隔离验证（临时合成游戏目录，不需要游戏） ──────

@@ -347,5 +347,11 @@
   "Flank": "最大极速",
   "Full": "全速前进",
   "Creep": "微速潜行",
-  "Stop": "停车"
+  "Stop": "停车",
+  "Calm": "无风",
+  "Hurricane": "飓风",
+  "Level 0": "层级 0",
+  "Own Units": "己方单位",
+  "Insert": "插入",
+  "RUN": "运行"
 }
