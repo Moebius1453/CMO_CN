@@ -89,6 +89,9 @@ ERROR_PROBE = re.compile(r"^Error at\b")
 XML_FRAGMENT = re.compile(r"^\s*</?[A-Za-z_]|</[A-Za-z_]+>\s*$|<[A-Za-z_]+>.*</[A-Za-z_]+>\s*$")
 HTML_FRAGMENT = re.compile(r"<\s*(td|tr|table|br|b|i|u|font|span|div|p)\b", re.I)
 CODE_EXPR = re.compile(r"(==|!=|&&|\|\||=>|::|;\s*$|\bnull\b|\bvoid\b|\bstring\b\s*\()")
+# 编译后源码字面量的碎片（枚举/switch 标签表里被截出来的），例如 ", 'Aircraft', '"。
+# 它不是界面文案，而偏移池注入会改坏游戏代码里的字面量（R31 实证：偏移 280066）。
+CODE_LITERAL_FRAGMENT = re.compile(r"^\s*[,']\s*'[^']{0,40}'\s*,?\s*'?\s*$")
 MEMBER_CALL = re.compile(r"\.\w+\s*\(|\w+\s*\(\s*\)\s*$")
 # Executable script text.  Injecting a translation over one of these corrupts the
 # engine exactly the way translating a Lua sandbox keyword did before.
@@ -190,6 +193,8 @@ def classify(s: str) -> str:
     if MEMBER_CALL.search(t):
         return "internal"
     if CODE_EXPR.search(t):
+        return "internal"
+    if CODE_LITERAL_FRAGMENT.match(t):
         return "internal"
     if _is_camel_db_field(t):
         return "internal"

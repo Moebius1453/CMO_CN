@@ -376,5 +376,10 @@
   "Allow instant loading for landing planner": "着陆规划器即时装载",
   "Point To Point Unit Communication": "点对点单位通信",
   "Realistic Order Chain": "真实指挥链",
-  "Variable burnout speed on boost-coast weapons": "助推-滑翔武器的燃尽速度可变"
+  "Variable burnout speed on boost-coast weapons": "助推-滑翔武器的燃尽速度可变",
+  "AvGas": "航空汽油",
+  "Underground Tank": "地下油罐",
+  "Liter": "升",
+  "Liters": "升",
+  "Sorties": "架次"
 }
