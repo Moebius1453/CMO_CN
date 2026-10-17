@@ -437,6 +437,78 @@ def run_live(r: Runner) -> None:
     # L6：条令下拉项全中文 + 无新增写拉锯熔断（R28）
     _doctrine_probe(H, r, pid)
 
+    # L7：构建号适配哨兵（R31——游戏更新导致注入静默失效那次事故）
+    _build_adaptation_probe(H, r, pid)
+
+
+def _build_adaptation_probe(H, r: Runner, pid: int | None) -> None:
+    """R31 实机探针：游戏内部版本必须与声明一致，偏移池注入必须真的生效。
+
+    2026-10-17 事故：Steam 把游戏升到 Build 1900.23，混淆成员名全部重命名，
+    `TryInjectCoreDecryption` 反射取字段全为 null 且没有任何日志 → 3523 条偏移池
+    注入静默失效（状态栏/HUD/标尺全回英文），我们却一直不知道。本用例把三件事钉住：
+    ① 引擎真的完成了注入（日志有 pre-populated、且无 not available/not found 告警）；
+    ② 游戏实际构建号与仓库声明的 GAME_BUILD 一致（引擎哨兵日志）；
+    ③ 状态栏/HUD 关键偏移在当前池里确实是中文（POOL_DUMP 导出后核对）。
+    另抽 3 个消息日志模板断言已规则化（R31/T5）。
+    """
+    name = "L-build-adaptation"
+    title = "R31 游戏构建号一致 + 偏移池注入生效（状态栏中文/日志模板）"
+    log = H.GAME / "CMOLocalizer.log"
+    tail = _log_tail(log)
+    game_build = (ROOT / "GAME_BUILD").read_text(encoding="utf-8").strip()
+
+    injected = 'Successfully pre-populated' in tail and 'offset injection disabled' not in tail
+    sentinel = f'GameBuild: detected game internal build {game_build}' in tail
+    warned = 'GameBuild: 警告！' in tail
+
+    # 状态栏/HUD 关键偏移：直接读入工程维护的白名单（force_offsets.json）
+    pool_hits, pool_miss = [], []
+    try:
+        fo = json.loads((ROOT / "dict/src/force_offsets.json").read_text(encoding="utf-8"))
+    except Exception:
+        fo = {}
+    want = {int(k): v for k, v in fo.items() if k.isdigit() and v}
+    dump = H.send("POOL_DUMP", timeout=90)
+    if dump.get("status") == "ok" and dump.get("file"):
+        pool = {}
+        for line in Path(dump["file"]).read_text(encoding="utf-8-sig", errors="replace").splitlines():
+            if "\t" in line:
+                off, txt = line.split("\t", 1)
+                try:
+                    pool[int(off)] = txt
+                except ValueError:
+                    continue
+        sample = {k: want[k] for k in sorted(want)[:12]}
+        for off, zh in sample.items():
+            got = pool.get(off, "")
+            (pool_hits if got == zh else pool_miss).append(f"{off}:{got!r}≠{zh!r}" if got != zh else str(off))
+    else:
+        pool_miss.append(f"POOL_DUMP 失败: {dump.get('message') or dump.get('status')}")
+
+    # 消息日志模板（R31/T5）：抽 3 个形态，断言翻出中文
+    patterns = {
+        "endgame": ("AIM-120C-7 AMRAAM P3I.3 #925's Endgame Report HIT", "终局报告"),
+        "contact": ("New air contact (BOGEY #147)", "新空中目标接触"),
+        "vanished": ("BOGEY #147 vanished", "已消失"),
+    }
+    batch = H.GAME / "CMOLocalizer_XlateIn.json"
+    batch.write_text(json.dumps([v[0] for v in patterns.values()], ensure_ascii=False), encoding="utf-8")
+    xl = H.send("XLATE_BATCH " + str(batch), timeout=90)
+    got_out = {it.get("in"): it.get("string", "") for it in xl.get("items", [])}
+    log_bad = [k for k, (src, need) in patterns.items() if need not in got_out.get(src, "")]
+
+    ok = injected and sentinel and not warned and not pool_miss and not log_bad
+    detail = (f"注入={'ok' if injected else 'MISSING'}，构建号哨兵={'ok' if sentinel else 'MISSING'}"
+              f"（声明 {game_build}{'，已告警不一致' if warned else ''}），"
+              f"池内中文 {len(pool_hits)}/{len(pool_hits) + len(pool_miss)}"
+              f"，日志模板 {len(patterns) - len(log_bad)}/{len(patterns)}")
+    if pool_miss:
+        detail += "；池异常: " + ", ".join(pool_miss[:3])
+    if log_bad:
+        detail += "；模板未中: " + ", ".join(log_bad)
+    r.record(name, title, ok, detail)
+
 
 def _bounds_rect(bounds: str) -> tuple[int, int, int, int]:
     m = re.search(r"X=(-?\d+),Y=(-?\d+),Width=(-?\d+),Height=(-?\d+)", bounds or "")

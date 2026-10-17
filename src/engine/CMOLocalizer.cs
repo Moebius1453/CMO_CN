@@ -4413,6 +4413,92 @@ namespace CMOLocalizer
             }
         }
 
+        /// <summary>
+        /// 消息日志行识别：只处理确实是游戏日志模板拼出来的形态（R31/T5）。
+        /// </summary>
+        private static bool LooksLikeMessageLogLine(string s)
+        {
+            if (s.IndexOf("'s Endgame Report", StringComparison.Ordinal) >= 0) return true;
+            if (s.IndexOf("now platform-classified", StringComparison.Ordinal) >= 0) return true;
+            if (s.IndexOf("has been destroyed!", StringComparison.Ordinal) >= 0) return true;
+            if (s.IndexOf(" vanished", StringComparison.Ordinal) >= 0) return true;
+            if (s.IndexOf(" spoo", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (s.IndexOf("jamme", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (Regex.IsMatch(s, @"^[Nn]ew (air|surface|submarine|weapon|ground|underwater) contact \(", RegexOptions.IgnoreCase)) return true;
+            if (Regex.IsMatch(s, @"^[Nn]ew contact!? Designated ", RegexOptions.IgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// 消息日志行的模板化翻译：只翻“框架”，武器/单位型号名保持原样；术语沿用词典
+        /// 已有译法（终局报告 / 平台现已分类 / 新空中目标接触 / 未能欺骗 / 已被摧毁 …）。
+        /// 返回 null 表示不是已知形态（调用方继续走后续通道）。
+        /// </summary>
+        private static string TranslateMessageLogLine(string s)
+        {
+            Match m;
+
+            m = Regex.Match(s, @"^(.{1,80}?) #(\d+)'s Endgame Report (HIT|MISS)$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                bool hit = m.Groups[3].Value.Equals("HIT", StringComparison.OrdinalIgnoreCase);
+                return m.Groups[1].Value + " #" + m.Groups[2].Value + " 的终局报告：" + (hit ? "命中" : "脱靶");
+            }
+
+            m = Regex.Match(s, @"^(.{1,60}?) #(\d+) now platform-classified:\s*(.+)$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                return m.Groups[1].Value + " #" + m.Groups[2].Value + " 平台现已分类：" + m.Groups[3].Value.Trim();
+            }
+
+            m = Regex.Match(s, @"^[Nn]ew (air|surface|submarine|weapon|ground|underwater) contact \((.{1,40}?) #(\d+)\)$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                string kind = m.Groups[1].Value.ToLowerInvariant();
+                string head = kind == "air" ? "新空中目标接触" : kind == "surface" ? "新水面目标接触"
+                            : kind == "submarine" ? "新潜艇目标接触" : kind == "ground" ? "新地面目标接触"
+                            : kind == "underwater" ? "新水下目标接触" : "新建武器接触";
+                return head + "（" + m.Groups[2].Value + " #" + m.Groups[3].Value + "）";
+            }
+
+            m = Regex.Match(s, @"^(.{1,80}?) #(\d+) vanished$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                return m.Groups[1].Value + " #" + m.Groups[2].Value + " 已消失";
+            }
+
+            // 诱饵/干扰：左边必是带 [] 的干扰物名，右边是导引头，形态很窄，不会吃简报长句。
+            m = Regex.Match(s, @"^(.{2,60}?\])\s+(spoofed|failed to spoof)\s+(.{2,40}?)$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                bool failed = m.Groups[2].Value.StartsWith("failed", StringComparison.OrdinalIgnoreCase);
+                return m.Groups[1].Value + (failed ? " 未能欺骗 " : " 欺骗了 ") + m.Groups[3].Value;
+            }
+
+            m = Regex.Match(s, @"^(.{1,120}?) has been destroyed!$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                return m.Groups[1].Value + " 已被摧毁！";
+            }
+
+            m = Regex.Match(s, @"^[Nn]ew contact!? Designated (.{1,60}?) #(\d+) - Detected by (.{1,60}?)\s*\[Sensors:\s*(.{1,60}?)\]\s*at\s*(.{1,40})$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                string tail = Regex.Replace(m.Groups[5].Value.Trim(), @"(\d+(?:\.\d+)?)\s*deg", "$1°");
+                return "新接触目标！标识编号：" + m.Groups[1].Value + " #" + m.Groups[2].Value
+                     + " - 探测方式：" + m.Groups[3].Value.Trim()
+                     + " [传感器：" + m.Groups[4].Value.Trim() + "] 方位 " + tail;
+            }
+
+            m = Regex.Match(s, @"^(.{1,60}?) jammed (.{2,40}?) successfully$", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                return m.Groups[1].Value + " 成功干扰 " + m.Groups[2].Value;
+            }
+
+            return null;
+        }
+
         private static string DoTranslate(string raw)
         {
             if (IsForbiddenCodeOrEnum(raw)) return raw;
@@ -4491,6 +4577,14 @@ namespace CMOLocalizer
                     {
                         return trKind + "（" + mFuel.Groups[2].Value + " 升 " + trTank + "）";
                     }
+                }
+
+                // 2.3 消息日志动态消息（游戏按模板+参数拼装；R31/T5 实测的 9 类形态）。
+                //      只处理“像日志行”的文本，且形态刻意收得很紧，避免误伤简报正文长句。
+                if (normRaw.Length <= 200 && LooksLikeMessageLogLine(normRaw))
+                {
+                    string trLog = TranslateMessageLogLine(normRaw);
+                    if (trLog != null && trLog != normRaw) return trLog;
                 }
 
                 // 通用「前缀 (正文)」组合：两侧都有整串词条且都不含中文时才组译（防误译/叠译）。
