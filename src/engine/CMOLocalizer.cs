@@ -2896,19 +2896,37 @@ namespace CMOLocalizer
             string formName;
             bool dbViewer = IsInTargetLocalizableForm(cb, out formName)
                             && formName.IndexOf("InternalDBViewer", StringComparison.OrdinalIgnoreCase) >= 0;
-            bool changed = false;
-            // 条目内容作指纹：同一份条目被反复重填并翻译 = 与游戏拉锯，超限即放弃。
-            string fingerprint = cb.Items.Count + ":" + (cb.Items.Count > 0 ? Convert.ToString(cb.Items[0]) : "");
-            if (!AllowWrite(cb.GetHashCode() * 31 + 7, fingerprint, "ComboBoxItems '" + cb.Name + "'")) return;
+            // 先算出真正要改的项，再决定是否动用拉锯熔断。
+            // 历史 bug（2026-10-17 实测）：旧实现在入口**无条件**调 AllowWrite，而 AllowWrite 按
+            // 「同一 target 被重复调用超限」计数——于是**一次都没写入**的组合框只要被反复访问
+            // 就会被永久静音。日志里 269 次「WRITE LOOP BLOCKED ComboBoxItems」
+            // （CB_ScenOrder 28 次、Combo_AlertLevel、Combo_StateSelection 等）即由此产生，
+            // 表现为下拉项大面积英文（条令/交战规则窗口的 Inherited, … 就是其中一例）。
+            List<KeyValuePair<int, string>> plan = new List<KeyValuePair<int, string>>();
             for (int i = 0; i < cb.Items.Count; i++)
             {
                 string raw = cb.GetItemText(cb.Items[i]);
                 if (string.IsNullOrEmpty(raw) || ContainsChinese(raw)) continue;
                 string tr = dbViewer ? TranslateDBComboItem(raw) : TranslateComboItemText(raw);
                 if (string.IsNullOrEmpty(tr) || tr == raw) continue;
+                plan.Add(new KeyValuePair<int, string>(i, tr));
+            }
+            if (plan.Count == 0) return;   // 无需写入 → 不计数、不熔断
+            // 指纹改为「本次待写入的翻译」：写成功后下次访问计划为空（不再计数）；
+            // 若游戏把条目改回去（真拉锯），同一计划重现才会累加并触发熔断。
+            StringBuilder fp = new StringBuilder();
+            fp.Append(cb.Items.Count).Append(':');
+            foreach (KeyValuePair<int, string> kv in plan)
+            {
+                fp.Append(kv.Key).Append('=').Append(kv.Value).Append('|');
+            }
+            if (!AllowWrite(cb.GetHashCode() * 31 + 7, fp.ToString(), "ComboBoxItems '" + cb.Name + "'")) return;
+            bool changed = false;
+            foreach (KeyValuePair<int, string> kv in plan)
+            {
                 try
                 {
-                    cb.Items[i] = tr;
+                    cb.Items[kv.Key] = kv.Value;
                     changed = true;
                 }
                 catch { }

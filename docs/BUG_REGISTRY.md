@@ -497,4 +497,19 @@
   而 R8 的教训是「按文本分派的下拉框禁止改写 `.Text`」（改写会破坏 `SelectedIndex` 与游戏逻辑）。
   可行的下一步（需功能验证，不是纯文本改动）：先确认游戏是否按 `SelectedIndex` 取值——
   若是，则可安全翻译 `Items`（下拉列表）并保持 `.Text` 语义；若否，则只能放弃或改用显示层方案。
+- **本轮已修（2026-10-17 第二轮，实机验证通过）**：
+  ① 术语补齐：`dict/src/chunk03.json` 追加 8 条条令选项值（`Inherited, Pessimistic` → 「继承自上级，悲观估计」、
+  `Inherited, Always Continue Guidance` → 「…始终持续制导」、`…Except Tankers Refuelling Tankers` →
+  「…始终开火（加油机为加油机加油除外）」、`…Automatic for search and localization` → 「…自动（用于搜索与定位）」、
+  `…Pick Nearest` → 「…就近选取」、`…Prioritize Mission Specific Targets` → 「…优先任务特定目标」、
+  `…Shortest Route` → 「…最短航线」、`…For Weapon Targets, WRA Quantity …` → 「…对武器目标：WRA 数量由任意制导武器满足」），
+  严格按 R24 改**源批次**、不直接改产物；重跑 `build_dict.py` 后 `exact` 46095→46103，**只新增这 8 条**、无删除无改值、offsets 一致、纯 LF。
+  沿用词典既有惯例 `继承自上级，<状态>`（词典里早有 `Inherited, Free/Hold/Tight/Various` 的译文，
+  说明「翻译条令下拉值」在本项目**已是既有行为**，不是新风险）。
+  ② **同时修掉一个我们自己的缺陷（假熔断）**：`TranslateComboItems` 在入口**无条件**调用 `AllowWrite`，
+  而 `AllowWrite` 按「同一 target 被重复调用超限」计数 —— 于是**一次都没写入**的组合框只要被反复访问就会被
+  **永久静音**。游戏日志里有 **269~311 次** `WRITE LOOP BLOCKED ComboBoxItems`（`CB_ScenOrder` 28 次、
+  `Combo_AlertLevel`、`EMCON` 系列…）。修法：先算出「真正要改的项」，计划为空直接返回（不计数）；
+  指纹改为「本次待写入的翻译」，写成功则下次不再计数，只有游戏把条目改回去的**真拉锯**才会累加触发熔断。
+  实机验证：`Combo_StateSelection` **12/12 去重值全中文、纯英文 0 条**；熔断事件 **311 → 311（零新增）**。
 

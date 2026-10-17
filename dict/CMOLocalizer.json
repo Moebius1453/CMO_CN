@@ -4,7 +4,7 @@
   "version": "4.1.7",
   "counts": {
    "n_offsets": 3523,
-   "n_exact": 46095,
+   "n_exact": 46103,
    "n_partial": 0,
    "n_words": 0
   }
@@ -23272,9 +23272,17 @@
   "Inherit from parent": "继承自上级",
   "Inherited": "继承上级条令",
   "Inherited,": "已继承上级,",
+  "Inherited, Always Continue Guidance": "继承自上级，始终持续制导",
+  "Inherited, Always Except Tankers Refuelling Tankers": "继承自上级，始终开火（加油机为加油机加油除外）",
+  "Inherited, Automatic for search and localization": "继承自上级，自动（用于搜索与定位）",
+  "Inherited, For Weapon Targets, WRA Quantity is Fulfilled by any Guided Weapon": "继承自上级，对武器目标：WRA 数量由任意制导武器满足",
   "Inherited, Free": "继承自上级，自由开火",
   "Inherited, Hold": "继承自上级，禁止开火",
   "Inherited, No": "继承上级：否",
+  "Inherited, Pessimistic": "继承自上级，悲观估计",
+  "Inherited, Pick Nearest": "继承自上级，就近选取",
+  "Inherited, Prioritize Mission Specific Targets": "继承自上级，优先任务特定目标",
+  "Inherited, Shortest Route": "继承自上级，最短航线",
   "Inherited, Tight": "继承自上级，限制开火",
   "Inherited, Various": "继承自上级，多项不同",
   "Inherited, Yes": "继承上级：是",
