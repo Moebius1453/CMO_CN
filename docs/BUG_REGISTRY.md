@@ -585,3 +585,46 @@
   已用同一段逻辑对当前 CHANGELOG 复算：`v4.1.8 — 引擎性能与门禁加固`。
   本次已通过 Release API 把 v4.1.8 的标题更正为正常形态（历史 v4.1.5/v4.1.7 标题未改，属已发布元数据）。
 - **回归测试点**：无自动化断言（发布脚本本身的文案逻辑）；下次发版用 `release_check.py` 后目视一次 Release 标题。
+
+## R31 游戏更新到 Build 1900.23 后汉化大面积失效 + 频闪（v4.1.8 发布当日发现）
+
+- **触发事件（实证，非猜测）**：2026-10-17 20:46 Steam 更新 AppID 1076160——
+  `starting commit … : 2971 updated, 0 moved, 0 deleted files`、
+  `finished update, 2 mounted depots (BuildID 25865381)`，**两个 depot 的清单号同时变化**
+  （`1076161: 1281736160605491036 → 6122376107217215217`、`1076162: 8276838379014883079 → 2749776043223916049`）；
+  上一次更新是 2026-10-10（BuildID 25673213）。→ 这是**发布方的新构建**，不是 Steam 回写我们改过的文件。
+  引擎日志同时抓到新标题 `Command: Modern Operations v1.10 - Build 1900.23`（我们适配并记录的是 **1900.20**）。
+- **用户可见现象（用户 7 张截图，21:00 前后，游戏 20:49:51 启动）**：
+  ① 状态栏整条英文（`Time: … - Zulu: … - Local: … - Camera: … - AU Count: …`）；
+  ② 主标题半截混排「现代行动：指挥：Modern Operations v1.10 - Build 1900.23」；
+  ③ 条令/EMCON：`Inherited, Always Fire`、`Inherited, Ignore`、`Inherited, Bingo`、`Inherited, 5%`、`Inherited, 100%`；
+  ④ 「快速周转」值 `2 Sorties (Maximum)`；⑤ 编队燃料 `AvGas (200k Liter Underground Tank)`；
+  ⑥ 「航空作业」飞机列表行 `8x F-16I Falcon [Sufa] (Ramat David)`；⑦ 消息日志整段英文
+  （`AIM-120C-7 AMRAAM P3I.3 #925's Endgame Report HIT`、`new weapon contact (MISSILE #381)`…）；
+  ⑧ EMCON 页签「警告ALERT：」行的值文本可见性异常（被遮挡，待定位）；⑨ 条令/EMC 窗口多处中英频闪。
+- **根因（四条，均已定位到证据）**：
+  1. **偏移池注入整条通道失效（最主要）**：`src/engine/CMOLocalizer.cs` 的 `TryInjectCoreDecryption()` 靠反射找
+     `AoIBWWlDJbaf7LijnA.oMu6jVbdhHEH79DDhU` 的 `gTbYFnJa7EN` / `OVoYFvH0GRf` / `vWjYFIwuiK7` / `ad6YFOZX46s` 字段，
+     再把 3523 条中文写进游戏的解密缓冲。新构建里该类/字段已变化 ⇒ 本次会话日志**既无**
+     `Set gTbYFnJa7EN anti-debug flag to 100.` **也无** `Successfully pre-populated 3525 translated strings…`
+     （此前每次启动都有，今日 17:29/17:35/18:52/19:04/19:06/19:22 各一次）⇒ 显示层（状态栏/HUD/标尺/视高/显卡等）全部回到英文。
+  2. **构建号专属串失配**：词典只有整串 `Command: Modern Operations v1.10 - Build 1900.20`，新版是 `…Build 1900.23`，
+     于是只被词级路径替换成半截「现代行动：指挥：…」（引擎日志可见）。
+  3. **新版新增/变更文本不在词典**（与 R27/R29-2 同类：真缺词条）：`Inherited, Always Fire`、`Inherited, Ignore`、
+     `Inherited, Bingo`（含 `Inherited, Bingo 60%`）、`Inherited, 5%`、`Inherited, 100%`、`2 Sorties (Maximum)`
+     （词典只有带前导空格的 ` Sorties (Maximum)`）、`AvGas (…Liter Underground Tank)` 等 exact 查无。
+  4. **频闪 = 重译与游戏回写拉锯**：本次会话两条熔断——`WRITE LOOP BLOCKED WPF TextBlock after 7 identical writes`（20:51:05）、
+     `WRITE LOOP BLOCKED ComboBoxItems 'Combo_StateSelection' after 7 identical writes`（21:10:06）；
+     新构建下 WPF/组合框的文本行为变化是诱因（与 R4 同类）。
+- **已核验并排除：打包/部署没有缺失（用户怀疑项）**：`build/CMO_Chinese_Pack_4.1.8.zip` 690 条目 → 实装 **688 条逐字节一致、0 条内容不同**；
+  其余 2 条为 `Command.exe.config.patch`（模板，已应用到 `Command.exe.config`，含 `CMOLocalizer` 注入配置）与 `汉化说明.md`（实装为 `README_汉化说明.txt`）。
+  实装 `CMOLocalizer.dll` / `CMOLocalizer.json` 与仓库同哈希（`4dd2b763…` / `142e52c1…`），运行中的引擎自报
+  `3523 offsets, 46122 exact texts`（= 仓库词典）。
+- **影响面**：所有已装汉化的用户在游戏更新到 1900.23 后都会遇到；`--live` 门禁与既有回归用例**不会自动发现**
+  （它们只断言文本，不校验游戏构建号）。
+- **待办修法（按顺序，需用户授权后再动）**：① 重新定位新构建的混淆类/字段并重采偏移（`scripts/bisect_offsets.py` / `identifiers.py` 流程）；
+  ② 补词典（新版标题、条令值、快速周转、燃料名等）；③ 消息日志这类动态拼接文本改用规则翻译（R28 `2 selectable sides` 先例）；
+  ④ 按熔断日志定位频闪；⑤ 门禁全跑 + 版本提升 + 打包 + 发布。
+- **回归测试点（修好后落）**：`static` 增加「游戏构建号哨兵」——记录已适配的 build/标题串，构建号一变直接红；
+  `live` 增加状态栏/标题断言（`时间:`、`当地:`、`内部版本`）。
+- **状态**：待修（2026-10-17 记录；用户截图存于 `…/Tencent Files/3622024135/nt_qq/nt_data/Pic/2026-10/Ori/`）。
