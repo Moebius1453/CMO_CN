@@ -27,7 +27,7 @@ namespace CMOShared
     /// </summary>
     public static class ReleaseConstants
     {
-        public const string Version = "4.1.7";
+        public const string Version = "4.1.8";
         public const string RegPath = @"Software\CMOChinese";
         public const string RunKeyName = "CMOChineseUpdater";
         public const string RepoApi = "https://api.github.com/repos/mj8724/CMO_CN/releases/latest";
