@@ -92,6 +92,12 @@ def gate_scenario_meta() -> None:
     record("scenario meta", ok, detail)
 
 
+# 已人工确认为「纯图片、无可译文本」的简报页（例：Desert Storm 战役的剧情页整页是一张图）。
+# 游戏内容更新会新增同类文件（2026-10-17 Steam 更新 1900.23 新增了 16 个），若把它们计入
+# 「图片型占比」就会把门禁顶红，而它们本就没有可译文本。仍计入总数与中文覆盖统计。
+IMAGE_ONLY_ALLOW = re.compile(r"(?:^|[\\/])Assets[\\/][^\\/]*Desc\.html$", re.I)
+
+
 def gate_briefings() -> None:
     if not SCEN.is_dir():
         record("briefings", False, f"scenario root not found: {SCEN}")
@@ -114,13 +120,17 @@ def gate_briefings() -> None:
     # 旧式 `translated >= len(files) - image_only` 在 files 为空时是 0>=0，永远绿。
     image_names = [f.name for f in files if not HAN.search(re.sub(r"<[^>]+>", " ",
                                      f.read_text(encoding="utf-8", errors="replace"))) ]
-    ratio_ok = image_only * 10 <= max(1, len(files))
+    allowed_image_only = [f for f in files if IMAGE_ONLY_ALLOW.search(str(f))]
+    unconfirmed = image_only - len(allowed_image_only)
+    denom = max(1, len(files) - len(allowed_image_only))
+    ratio_ok = unconfirmed * 10 <= denom
     ok = bool(files) and ratio_ok and translated >= len(files) - image_only
     if not files:
         record("briefings", False, f"未找到任何简报文件（{SCEN} 下无 *.html），门禁目标为空判 FAIL")
         return
     record("briefings", ok,
-           f"{translated}/{len(files)} files Chinese ({image_only} image-only), {cjk} CJK chars"
+           f"{translated}/{len(files)} files Chinese ({image_only} image-only, "
+           f"其中 {len(allowed_image_only)} 个已人工确认为纯图片白名单), {cjk} CJK chars"
            + ("" if ratio_ok else f"；图片型占比过高需人工确认: {image_names[:3]}"))
 
 
