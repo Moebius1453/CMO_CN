@@ -90,7 +90,11 @@ def main():
     m = re.search(r"## v" + re.escape(version) + r"\s+([^\n]*)\n(.*?)(?=\n## v|\Z)", changelog, re.S)
     notes = m.group(0).strip() if m else f"## v{version}\n\n《现代行动：指挥》汉化更新包发布。"
 
-    title = f"v{version} — {m.group(1).strip()}" if m else f"v{version}"
+    # CHANGELOG 小标题自带破折号（"## v4.1.8 — 引擎性能与门禁加固"）时，
+    # 不能再拼一个：否则发布标题会变成 "v4.1.8 — — 引擎性能与门禁加固"
+    # （历史 v4.1.5/v4.1.7 就带着这个双破折号）。
+    subtitle = re.sub(r"^[—–\-]\s*", "", m.group(1).strip()) if m else ""
+    title = f"v{version} — {subtitle}" if subtitle else f"v{version}"
     body = f"""{notes}
 
 ### 安装方式
