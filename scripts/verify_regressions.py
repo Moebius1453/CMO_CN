@@ -606,6 +606,18 @@ def _ui_residual_probe(H, r: Runner, pid: int | None) -> None:
                 missing.append(f"{label}:缺{zh}")
             elif en in now:
                 missing.append(f"{label}:仍显{en!r}")
+        # R29：地图显示设置页签的两项只在下拉项里（控件 Text 看不见），必须查 Items。
+        if menu == "OptionsToolStripMenuItem1":
+            opts = {c.get("name"): (c.get("items") or [])
+                    for c in H.send("DUMP_COMBOS", timeout=30).get("combos", [])
+                    if c.get("form") == "Options"}
+            for cname, en, zh in (("CB_SonobuoyVisibility", "Ghosted", "虚影"),
+                                  ("Combo_SlugTrailFreq", "Every 5 seconds", "每 5 秒")):
+                items = opts.get(cname) or []
+                if zh not in items:
+                    missing.append(f"{label}:{cname} 缺{zh}")
+                elif en in items:
+                    missing.append(f"{label}:{cname} 仍显{en!r}")
         for c in nodes:
             t = (c.get("text") or "").strip()
             if not t or t in base or len(t) > 40 or not c.get("v"):

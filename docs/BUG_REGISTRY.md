@@ -542,7 +542,14 @@
   修法：补 4 条词条（着陆规划器即时装载 / 点对点单位通信 / 真实指挥链 / 助推-滑翔武器的燃尽速度可变，
   术语跟随既有 exact：`Realistic Order Chain Enabled`→「已启用真实指挥链」、`助推-滑翔`（6 条 vs `助推-滑行` 1 条）），
   实机复验 17/17 全中文、0 残留（`shots/r29_realism_features_fixed.png`）。
-- **仍需跟进**：`Ghosted` 与 `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**。
+- **R29-3 页签扫描（本轮完成）**：`推演选项` 实测 **7 个页签**（通用/地图显示设置/消息日志/声音与推演音效/推演速度/
+  三维态势联动/悬停信息——比原记录多一个「悬停信息」）。新增只读探针 `SELECT_TAB <窗体过滤> <索引或页签名>`
+  （UI 线程切页签，不点确定/应用），逐页签采控件文本 + 下拉项 + 截图（`shots/r29_options_tab*.png`）：
+  **无用户可见英文**——纯英文项只有控件内部名（`ToolStrip1`/`MenuStrip1`/`WorldWindow1` 等，不渲染）、数字值，
+  以及「有意保留」的 OSM 样式名与单位缩写（`KPH`/`MPH`）；悬停信息页签的 WPF 内容用 `WPF_DUMP` 查也是 0 条英文。
+  两项待确认项用**下拉项**（不是控件 text）钉住：`CB_SonobuoyVisibility` = 正常显示/**虚影**/不显示、
+  `Combo_SlugTrailFreq` = **每 5 秒**/每 15 秒/每 60 秒；已加入 live `L-ui-residuals` 断言。
+  另注：`CB_OSMstyle` 里 `Basic`→「基础」而其 7 个样式名保持英文（专有名），属文档化的混排。
 - **同类残余风险（未修，记录在案）**：凡是「值 = 中文 (英文字典键)」的词条（全词典 1370 条），一旦该文本再次走
   `TranslateString` 的括注通道（`TranslateBracketSegments`）就会被叠译——本轮 A/B 已确认 TabPage 文本会走这条路。
   实机捕获里还有两条同形可见文本：`节 (Knots)`、`自动暂停 (Auto-Pause)`（都是下拉项，当前只翻译一次故不叠；
@@ -550,6 +557,12 @@
 - **回归测试点**：`live` 的 `L-ui-residuals`（打开「推演选项」后必须出现「三维态势联动」，且不得出现
   「三维态势联动 (Tacview)」与双层形态；同一用例再用 `WPF_DUMP` 断言「想定特性与设置」≥10 条特性全中文、
   4 条源串不再出现）；`static` 的 `R24-static-dict-reproducible`（重建字节一致，自愈项与幂等值不会在重建后丢失）。
-- **附带产出**：新增只读探针 `DUMP_LISTS`（导出 ListBox / CheckedListBox / ListView 的条目）——
-  本轮那个对话框不是 WinForms 列表（所以没命中），但事件编辑器/参考点管理器这类窗口后续可直接用它查。
+- **附带产出**：新增只读探针 `DUMP_LISTS`（导出 ListBox / CheckedListBox / ListView 的条目）。
+- **探针自身缺陷（R29-3 发现并修复）**：`DUMP_LISTS` 一直**不可达**——它被写在
+  `if (cmd == "WPF_DUMP" || cmd == "DUMP_COMBOS" || cmd == "XLATE_BATCH")` 块里，调用只会得到
+  `Unknown command`（此前「那个对话框不是 WinForms 列表（所以没命中）」的结论实为命令没执行）。
+  现已加入外层条件，并改为**逐控件兜异常 + 单独登记非 WinForms 列表控件的基类**：实测
+  「区域与参考点数管理器」的 4 个 `DarkListView` 都是 `DarkScrollView` 自绘控件
+  （`kind=非 WinForms 列表（基类 DarkScrollView）`）→ 它们没有可读的 WinForms `Items`，
+  **以后看到 `items: []` 必须结合 `kind` 判读**，别再当成「窗口里没有列表」。
 

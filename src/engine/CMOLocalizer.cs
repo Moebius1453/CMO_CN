@@ -5122,6 +5122,78 @@ namespace CMOLocalizer
                 return "{\"status\":\"error\",\"message\":\"Button not found: " + JsonEsc(arg) + "\"}";
             }
 
+            if (cmd == "SELECT_TAB")
+            {
+                // SELECT_TAB <窗体过滤> <索引或页签标题片段>：只读切页签（UI 线程），
+                // 用于逐页签采控件文本（不点确定/应用，不写任何设置）。
+                string filter = arg;
+                string want = "";
+                int tabSp = arg.LastIndexOf(' ');
+                if (tabSp > 0)
+                {
+                    filter = arg.Substring(0, tabSp).Trim();
+                    want = arg.Substring(tabSp + 1).Trim();
+                }
+                Form tabForm = null;
+                TabControl tabCtl = null;
+                FormCollection tabForms = Application.OpenForms;
+                if (tabForms != null)
+                {
+                    foreach (Form f in tabForms)
+                    {
+                        if (f == null || f.IsDisposed) continue;
+                        if (filter.Length > 0 &&
+                            (f.Text ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
+                            (f.Name ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        TabControl tc = FindTabControlIn(f);
+                        if (tc == null) continue;
+                        tabForm = f;
+                        tabCtl = tc;
+                        break;
+                    }
+                }
+                if (tabCtl == null)
+                {
+                    return "{\"status\":\"error\",\"message\":\"TabControl not found: " + JsonEsc(filter) + "\"}";
+                }
+                int wantIdx = -1;
+                StringBuilder tabNames = new StringBuilder();
+                for (int i = 0; i < tabCtl.TabPages.Count; i++)
+                {
+                    string tn = tabCtl.TabPages[i].Text ?? "";
+                    if (i > 0) tabNames.Append(",");
+                    tabNames.Append("\"").Append(JsonEsc(tn)).Append("\"");
+                    if (wantIdx < 0 && want.Length > 0 &&
+                        tn.IndexOf(want, StringComparison.OrdinalIgnoreCase) >= 0) wantIdx = i;
+                }
+                if (wantIdx < 0)
+                {
+                    int parsedIdx;
+                    if (int.TryParse(want, out parsedIdx)) wantIdx = parsedIdx;
+                }
+                if (wantIdx < 0 || wantIdx >= tabCtl.TabPages.Count)
+                {
+                    return "{\"status\":\"error\",\"message\":\"tab not found: " + JsonEsc(want) + "\",\"tabs\":[" + tabNames + "]}";
+                }
+                Form targetForm = tabForm;
+                TabControl targetTab = tabCtl;
+                int targetIdx = wantIdx;
+                ManualResetEvent tabDone = new ManualResetEvent(false);
+                try
+                {
+                    targetForm.BeginInvoke((MethodInvoker)delegate
+                    {
+                        try { targetTab.SelectedIndex = targetIdx; } catch { }
+                        try { tabDone.Set(); } catch { }
+                    });
+                }
+                catch { }
+                tabDone.WaitOne(3000);
+                return "{\"status\":\"ok\",\"action\":\"SELECT_TAB\",\"form\":\"" + JsonEsc(targetForm.Name)
+                     + "\",\"index\":" + wantIdx + ",\"text\":\"" + JsonEsc(tabCtl.TabPages[wantIdx].Text ?? "")
+                     + "\",\"tabs\":[" + tabNames + "]}";
+            }
+
             if (cmd == "RUN_LUA")
             {
                 try
@@ -5646,7 +5718,7 @@ namespace CMOLocalizer
                     + "\",\"combo\":\"" + JsonEsc(target.Name) + "\",\"text\":\"" + JsonEsc(target.Text) + "\"}";
             }
 
-            if (cmd == "WPF_DUMP" || cmd == "DUMP_COMBOS" || cmd == "XLATE_BATCH")
+            if (cmd == "WPF_DUMP" || cmd == "DUMP_COMBOS" || cmd == "DUMP_LISTS" || cmd == "XLATE_BATCH")
             {
                 if (cmd == "XLATE_BATCH")
                 {
@@ -5889,6 +5961,17 @@ namespace CMOLocalizer
         private static void CollectLists(Control root, StringBuilder sb, ref bool first)
         {
             if (root == null || root.IsDisposed) return;
+            // 每个控件单独兜异常：一个控件读取失败不得连带丢掉同窗体其余列表
+            // （历史：整棵子树被一个异常静默中止，输出 0 条 → 被误读成「窗口里没有列表」）。
+            try { AppendListInfo(root, sb, ref first); } catch { }
+            foreach (Control child in root.Controls)
+            {
+                try { CollectLists(child, sb, ref first); } catch { }
+            }
+        }
+
+        private static void AppendListInfo(Control root, StringBuilder sb, ref bool first)
+        {
             Form owner = null;
             try { owner = root.FindForm(); } catch { }
             string formName = owner != null ? owner.GetType().Name : "";
@@ -5908,15 +5991,18 @@ namespace CMOLocalizer
                     sb.Append("\"").Append(JsonEsc(Convert.ToString(lb.Items[i]))).Append("\"");
                 }
                 sb.Append("]}");
+                return;
             }
             ListView lv = root as ListView;
             if (lv != null)
             {
+                int selIdx = -1;
+                try { if (lv.SelectedIndices.Count > 0) selIdx = lv.SelectedIndices[0]; } catch { }
                 if (!first) sb.Append(",");
                 first = false;
                 sb.Append("{\"form\":\"").Append(JsonEsc(formName))
                   .Append("\",\"name\":\"").Append(JsonEsc(lv.Name))
-                  .Append("\",\"type\":\"ListView\",\"sel\":").Append(lv.SelectedIndices.Count > 0 ? lv.SelectedIndices[0] : -1)
+                  .Append("\",\"type\":\"ListView\",\"sel\":").Append(selIdx)
                   .Append(",\"items\":[");
                 for (int i = 0; i < lv.Items.Count; i++)
                 {
@@ -5924,8 +6010,20 @@ namespace CMOLocalizer
                     sb.Append("\"").Append(JsonEsc(lv.Items[i].Text ?? "")).Append("\"");
                 }
                 sb.Append("]}");
+                return;
             }
-            foreach (Control child in root.Controls) CollectLists(child, sb, ref first);
+            // 名字像列表、但不是 WinForms ListBox/ListView（游戏自绘控件）也要如实登记，
+            // 否则「0 条」会被当成「没有列表」而错过整块界面。
+            string tn = root.GetType().Name;
+            if (tn.IndexOf("List", StringComparison.OrdinalIgnoreCase) < 0) return;
+            if (!first) sb.Append(",");
+            first = false;
+            string baseName = "";
+            try { baseName = root.GetType().BaseType != null ? root.GetType().BaseType.Name : ""; } catch { }
+            sb.Append("{\"form\":\"").Append(JsonEsc(formName))
+              .Append("\",\"name\":\"").Append(JsonEsc(root.Name))
+              .Append("\",\"type\":\"").Append(JsonEsc(tn))
+              .Append("\",\"kind\":\"非 WinForms 列表（基类 ").Append(JsonEsc(baseName)).Append("）\",\"items\":[]}");
         }
 
         private static string GetWpfElementName(System.Windows.DependencyObject dep)
@@ -6018,6 +6116,19 @@ namespace CMOLocalizer
             foreach (Control child in root.Controls)
             {
                 Control found = FindControlByTypeOrName(child, target);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static TabControl FindTabControlIn(Control root)
+        {
+            if (root == null || root.IsDisposed) return null;
+            TabControl tc = root as TabControl;
+            if (tc != null) return tc;
+            foreach (Control child in root.Controls)
+            {
+                TabControl found = FindTabControlIn(child);
                 if (found != null) return found;
             }
             return null;
