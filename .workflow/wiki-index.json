@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "generatedAt": 1792157607830,
+  "generatedAt": 1792211961766,
   "entries": [
     {
       "id": "knowhow-dcs-20261012-2009",
@@ -348,6 +348,97 @@
       "createdBy": null,
       "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,src/engine/CMOLocalizer.cs:1416,src/engine/CMOLocalizer.cs:2523",
       "parent": "knowhow-tip-20261015-b3e6c7fed2efa60d",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-tip-20261017-3611d56f2835a17f",
+      "type": "knowhow",
+      "title": "注入式汉化加固与发版统一入库检查规范（v4.1.7 + 2026-10-17 实测补充）",
+      "summary": "（本条目原为 v4.1.7 输入闪退事故的加固规范；2026-10-17 按 RV-20261016 落地结果补充更新。）",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted"
+      ],
+      "status": "active",
+      "created": "2026-10-17T04:39:20.008Z",
+      "updated": "2026-10-17T04:39:20.008Z",
+      "scope": null,
+      "category": "tip",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,docs/BUG_REGISTRY.md,docs/project_memory.md,src/engine/CMOLocalizer.cs,scripts/release_check.py,docs/RELEASE_MANIFEST.md",
+      "parent": null,
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-TIP-20261017-3611d56f2835a17f-001",
+      "type": "knowhow",
+      "title": "一、输入防拉锯（v4.1.7 输入闪退事故）",
+      "summary": "- **现象与根因**：在搜索想定/任务名输入框输入 `m` 时，引擎日志出现 `UI Controls Translated count … (Sample: m -> 米)` 每 2.5 秒 +50，累计到 5900 后进程以 `0xc00000fd`（栈溢出）闪退。机制：DarkUI 自定义输入框不继承 `TextBoxBase`，落进通用文本翻译分支； 词典里有 `m → 米`，于是引擎把用户正在输入的 `m` 改写成「米」，游戏再写回 `m`，形成无终止",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted",
+        "tip"
+      ],
+      "status": "active",
+      "created": "2026-10-17T04:39:20.008Z",
+      "updated": "2026-10-17T04:39:20.008Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,docs/BUG_REGISTRY.md,docs/project_memory.md,src/engine/CMOLocalizer.cs,scripts/release_check.py,docs/RELEASE_MANIFEST.md",
+      "parent": "knowhow-tip-20261017-3611d56f2835a17f",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-TIP-20261017-3611d56f2835a17f-002",
+      "type": "knowhow",
+      "title": "二、发版统一入库检查",
+      "summary": "- 清单：`docs/RELEASE_MANIFEST.md`（发什么/必须先入库什么/禁止带上什么/发布后自检/回滚）。 - 一条命令：`python scripts/release_check.py`（`--pre` 为打包前预检）。判定逻辑单点： `publish_release.py` 复用 `release_check.check_regression_report`，不要在别处再写一份。 - `--static --installer` 与 `--live` ",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted",
+        "tip"
+      ],
+      "status": "active",
+      "created": "2026-10-17T04:39:20.008Z",
+      "updated": "2026-10-17T04:39:20.008Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,docs/BUG_REGISTRY.md,docs/project_memory.md,src/engine/CMOLocalizer.cs,scripts/release_check.py,docs/RELEASE_MANIFEST.md",
+      "parent": "knowhow-tip-20261017-3611d56f2835a17f",
+      "related": [],
+      "repoId": null
+    },
+    {
+      "id": "knowhow-TIP-20261017-3611d56f2835a17f-003",
+      "type": "knowhow",
+      "title": "三、2026-10-17 落地补充（RV-20261016 实测得出，六条硬约束）",
+      "summary": "1. **词典必须能从源重建**：写入显式 LF；同一事实只能有一个源——`legacy_fixes.json` 不得覆盖 `campaign_ui.json` 的正确值、长标签放 `labels.json`、人工核验过的偏移注入放 `force_offsets.json` （且它必须能越过 `identifiers` 过滤）。重跑 `build_dict.py` 必须与已提交词典**字节一致**。 实测踩到的四个子缺陷：LF→CRLF 造成 +49,427",
+      "tags": [
+        "session-knowledge",
+        "manual",
+        "promoted",
+        "tip"
+      ],
+      "status": "active",
+      "created": "2026-10-17T04:39:20.008Z",
+      "updated": "2026-10-17T04:39:20.008Z",
+      "scope": null,
+      "category": "general",
+      "specCategory": null,
+      "createdBy": null,
+      "sourceRef": "evidence:session:ksyn-2107ce852f0cfe00,docs/BUG_REGISTRY.md,docs/project_memory.md,src/engine/CMOLocalizer.cs,scripts/release_check.py,docs/RELEASE_MANIFEST.md",
+      "parent": "knowhow-tip-20261017-3611d56f2835a17f",
       "related": [],
       "repoId": null
     },
