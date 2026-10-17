@@ -4,7 +4,7 @@
   "version": "4.1.7",
   "counts": {
    "n_offsets": 3523,
-   "n_exact": 46118,
+   "n_exact": 46122,
    "n_partial": 0,
    "n_words": 0
   }
@@ -10030,6 +10030,7 @@
   "Allocated to ": "已分配至 ",
   "Allow QRA Launch": "允许快速反应警戒起飞",
   "Allow automatic salvo timeout": "允许齐射自动超时",
+  "Allow instant loading for landing planner": "着陆规划器即时装载",
   "Allow instant loading of units on Landing Planner": "允许在着陆规划器上即时装载单位",
   "Allow merging clones of the same side": "允许合并同阵营克隆体",
   "Allow off-axis attack": "允许偏轴攻击",
@@ -30814,6 +30815,7 @@
   "Point Defence": "点防御",
   "Point Defence BVR": "超视距点防御",
   "Point Defence WVR": "视距内点防御",
+  "Point To Point Unit Communication": "点对点单位通信",
   "Point defence systems on ": "点防御系统位于 ",
   "Point defense resolution": "点防御结算",
   "Point feature expected": "应为点要素",
@@ -32630,6 +32632,7 @@
   "Real-Time (1:1)": "1:1 真实物理时间",
   "Real-life platforms only": "仅真实平台",
   "Realism Settings": "作战真实度与仿真选项",
+  "Realistic Order Chain": "真实指挥链",
   "Realistic Order Chain Enabled": "已启用真实指挥链",
   "Realistic Submarine Communications": "真实潜艇通信",
   "Realistic submarine communications (Depth/speed restrictions)": "拟真潜艇通信（受深度与航速限制）",
@@ -45851,6 +45854,7 @@
   "Values are: ": "取值为： ",
   "Vampire FB. Mk52 [Fighter Bomber]": "吸血鬼 FB.Mk52 [战斗轰炸机]",
   "Variable boost-coast burnout speed": "可变助推-滑翔燃尽速度",
+  "Variable burnout speed on boost-coast weapons": "助推-滑翔武器的燃尽速度可变",
   "Variable time": "可变时间",
   "Variant of S.2 for RAF squadrons. Capable of carrying the Martel anti-radar or anti-shipping missile. Forty-six built between 1973 and 1977, plus three for Ministry of Defence weapons trials work.": "供英国皇家空军（RAF）中队使用的S.2改型。能够挂载Martel反辐射或反舰导弹。在1973年至1977年间共制造了46架，另有3架用于英国国防部武器试验。",
   "Variants A and B of Chengdu J-10": "成都J-10的A型与B型",

@@ -561,6 +561,9 @@ def _ui_residual_probe(H, r: Runner, pid: int | None) -> None:
     Insert/RUN 都是「用户看得见的英文」——而那 6 条当时根本不在词典里。
     已知盲区：快捷键窗口的正文在 DarkRichTextBox 里（富文本，直接改 Text 会丢格式且
     碰 R19 的输入保护不变量），本用例显式跳过并报告条数，不算它失败。
+    R29：「想定特性与设置」是 WPF 窗口（CTRL_TREE 看不见），必须改用 WPF_DUMP 断言——
+    实测该列表无 ScrollViewer/ItemsControl，17 条特性全部 realize 且同屏可见，
+    所以那 4 条英文是真缺词条，不是「WPF 虚拟化离屏项」（旧判断已纠正）。
     """
     name = "L-ui-residuals"
     title = "R27 已入词典的界面文本显示中文（多窗口抽样）"
@@ -614,13 +617,44 @@ def _ui_residual_probe(H, r: Runner, pid: int | None) -> None:
                 continue
             if exact.get(t):
                 residual.append(f"{label}:{t!r}")
+    # R29：想定特性与设置是 WPF，上面的 CTRL_TREE 抽不到；用 WPF_DUMP 再钉一遍。
+    wpf_rows = 0
+    wpf_missing: list[str] = []
+    wpf_en_left: list[str] = []
     H.send("CLOSE_FORM ALL", timeout=20)
-    ok = bool(exact and checked_forms >= 3 and not missing and not residual)
+    time.sleep(1.2)
+    if H.send("CLICK_MENU RealismSettingsToolStripMenuItem", timeout=20).get("status") == "ok":
+        time.sleep(4.5)
+        dump = H.send("WPF_DUMP", timeout=40)
+        views = [w for w in dump.get("windows", []) if "Realism" in (w.get("title") or "")]
+        texts = {(n.get("text") or "").strip()
+                 for w in views for n in (w.get("nodes") or []) if n.get("text")}
+        rows = texts - {"确定", "取消"}
+        wpf_rows = len(rows)
+        for en in ("Allow instant loading for landing planner", "Point To Point Unit Communication",
+                   "Realistic Order Chain", "Variable burnout speed on boost-coast weapons"):
+            zh = exact.get(en, "")
+            if not zh:
+                continue
+            if zh not in texts:
+                wpf_missing.append(f"想定特性:缺{zh}")
+            if en in texts:
+                wpf_en_left.append(en)
+        wpf_en_left += [t for t in rows
+                        if not any("\u4e00" <= ch <= "\u9fff" for ch in t) and exact.get(t)]
+        wpf_en_left = sorted(set(wpf_en_left))
+        H.send("CLICK_WPF 取消", timeout=20)
+    else:
+        wpf_missing.append("想定特性与设置:打不开")
+    H.send("CLOSE_FORM ALL", timeout=20)
+    ok = bool(exact and checked_forms >= 3 and not missing and not residual
+              and wpf_rows >= 10 and not wpf_missing and not wpf_en_left)
     r.record(name, title, ok,
              f"抽查 {checked_forms}/{len(windows)} 个窗口；已入词典却仍显英文 {len(residual)} 条"
              + (f"（{residual[:4]}）" if residual else "")
              + (f"；已知盲区跳过富文本 {rich_skipped} 处" if rich_skipped else "")
-             + (f"；缺失: {missing}" if missing else ""),
+             + f"；WPF 想定特性 {wpf_rows} 条（仍显英文 {len(wpf_en_left)}、缺译文 {len(wpf_missing)}）"
+             + (f"；缺失: {missing + wpf_missing}" if (missing or wpf_missing) else ""),
              "evidence/live/scan")
 
 

@@ -531,21 +531,25 @@
   全局 exact 条目会在其它界面误译；`CB_OSMstyle` 的一串地图样式名（`Bright`/`Dark Matter`/`Fiord Color`/
   `Toner`/`Positron`/`OSM OpenMapTiles`）是 OSM 样式专有名，与既有 `Sentinel-2 卫星影像` 同类保留；
   `(c) Matrix Games 2013-2026` 是版权行；`AutoSideID`/`AutoSideAndUnitID` 疑似内部枚举标识。
-- **已澄清（本轮修正，避免误判）**：「想定特性与设置」这个对话框是 **WPF 窗口**
-  （`WPF_DUMP` 里标题为 `Scenario Features + Realism Settings`，含 38 条文本），而它**可见的条目已经全是中文**
-  （详细火炮火控 / 机场与海军基地弹药库无限制 / 战机战损 / 真实潜艇通信 / 地形类型影响 / 地形类型影响 - 高级…）。
-  截图里看到的那几条英文（`Allow instant loading for landing planner`、`Point To Point Unit Communication`、
-  `Realistic Order Chain`、`Variable burnout speed on boost-coast weapons`）判断为 **WPF 虚拟化的离屏项**：
-  不在视觉树里 → 引擎的 WPF 通道碰不到 → 滚到那一屏被实现（realize）后才可能翻译。要真正确认必须把列表滚到底
-  （本轮的自动化无法可靠滚动 WPF 列表），故标注为「待确认」，**不是「整片英文」**。
-- **仍需跟进**：① 上述 WPF 列表离屏项（需滚动验证；若确认未译，考虑在 realize 后补一轮 WPF 翻译）；
-  ② `Ghosted` 与 `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**。
+- **已澄清并修复（本轮实测纠正上一轮判断）**：「想定特性与设置」是 **WPF 窗口**
+  （`WPF_DUMP` 标题 `Scenario Features + Realism Settings`；`CTRL_TREE` 看不到）。上一轮把截图里那 4 条英文
+  （`Allow instant loading for landing planner`、`Point To Point Unit Communication`、`Realistic Order Chain`、
+  `Variable burnout speed on boost-coast weapons`）判断为「WPF 虚拟化离屏项」——**实测证伪**：
+  该窗口 400×467、17 条特性同屏全部可见（视觉树里既无 `ScrollViewer` 也无 `ListBox`/`ItemsControl`，
+  不存在需要滚动才 realize 的项；`shots/r29_realism_features.png` 里 4 条英文赫然在列），
+  而它们的英文源串**根本不在词典里**（同窗可见的 13 条中文项各自都有 exact 词条）
+  → 结论：真残留 = 缺词条，与 realize/滚动无关。
+  修法：补 4 条词条（着陆规划器即时装载 / 点对点单位通信 / 真实指挥链 / 助推-滑翔武器的燃尽速度可变，
+  术语跟随既有 exact：`Realistic Order Chain Enabled`→「已启用真实指挥链」、`助推-滑翔`（6 条 vs `助推-滑行` 1 条）），
+  实机复验 17/17 全中文、0 残留（`shots/r29_realism_features_fixed.png`）。
+- **仍需跟进**：`Ghosted` 与 `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**。
 - **同类残余风险（未修，记录在案）**：凡是「值 = 中文 (英文字典键)」的词条（全词典 1370 条），一旦该文本再次走
   `TranslateString` 的括注通道（`TranslateBracketSegments`）就会被叠译——本轮 A/B 已确认 TabPage 文本会走这条路。
   实机捕获里还有两条同形可见文本：`节 (Knots)`、`自动暂停 (Auto-Pause)`（都是下拉项，当前只翻译一次故不叠；
   若将来引擎重扫下拉项，它们会像 Tacview 页签一样叠）。修法同上（值去掉括号英名 + 自愈项）。
 - **回归测试点**：`live` 的 `L-ui-residuals`（打开「推演选项」后必须出现「三维态势联动」，且不得出现
-  「三维态势联动 (Tacview)」与双层形态）；`static` 的 `R24-static-dict-reproducible`（重建字节一致，自愈项与幂等值不会在重建后丢失）。
+  「三维态势联动 (Tacview)」与双层形态；同一用例再用 `WPF_DUMP` 断言「想定特性与设置」≥10 条特性全中文、
+  4 条源串不再出现）；`static` 的 `R24-static-dict-reproducible`（重建字节一致，自愈项与幂等值不会在重建后丢失）。
 - **附带产出**：新增只读探针 `DUMP_LISTS`（导出 ListBox / CheckedListBox / ListView 的条目）——
   本轮那个对话框不是 WinForms 列表（所以没命中），但事件编辑器/参考点管理器这类窗口后续可直接用它查。
 
