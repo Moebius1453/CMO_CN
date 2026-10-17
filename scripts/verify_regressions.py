@@ -407,6 +407,9 @@ def run_live(r: Runner) -> None:
     # L5：界面英文残留抽样（R27——天气/快捷键/控制台等窗口）
     _ui_residual_probe(H, r, pid)
 
+    # L6：条令下拉项全中文 + 无新增写拉锯熔断（R28）
+    _doctrine_probe(H, r, pid)
+
 
 def _bounds_rect(bounds: str) -> tuple[int, int, int, int]:
     m = re.search(r"X=(-?\d+),Y=(-?\d+),Width=(-?\d+),Height=(-?\d+)", bounds or "")
@@ -614,6 +617,54 @@ def _ui_residual_probe(H, r: Runner, pid: int | None) -> None:
              + (f"（{residual[:4]}）" if residual else "")
              + (f"；已知盲区跳过富文本 {rich_skipped} 处" if rich_skipped else "")
              + (f"；缺失: {missing}" if missing else ""),
+             "evidence/live/scan")
+
+
+def _doctrine_probe(H, r: Runner, pid: int | None) -> None:
+    """R28 实机探针：条令/交战规则窗口的下拉项必须已汉化，且不得产生新的写拉锯熔断。
+
+    两件历史事故：① 选项值靠术语映射翻译，缺词条就中英混杂（已补 8 条，12/12 全中文）；
+    ② `TranslateComboItems` 曾在入口无条件调 `AllowWrite`，把「一次都没写入」的组合框
+    也永久静音（日志里 269~311 次假熔断），这是下拉项大面积英文的元凶之一。
+    该窗口需先真正进入想定（否则活跃单位为 0、菜单项静默无操作），所以这里自己跑一遍
+    加载想定 → 进入想定 → 选中单位。
+    """
+    name = "L-doctrine-combo"
+    title = "R28 条令下拉项全中文且无新增写拉锯熔断"
+    log = H.GAME / "CMOLocalizer.log"
+    before = _log_tail(log).count("WRITE LOOP BLOCKED")
+    H.send("CLOSE_FORM ALL", timeout=20)
+    time.sleep(1.2)
+    H.send("CLICK_MENU TSMI_LoadScenario", timeout=20)
+    time.sleep(8.0)
+    H.send("SCEN_EXPAND_ALL", timeout=25)
+    time.sleep(2.0)
+    H.send("SCEN_SELECT Shamal", timeout=25)
+    time.sleep(2.0)
+    H.send("SCEN_LOAD", timeout=25)
+    time.sleep(18.0)
+    H.send("CLICK_BUTTON 进入想定", timeout=25)
+    time.sleep(25.0)
+    H.send("CLOSE_FORM ALL", timeout=20)
+    H.send("CLICK_MENU TSMI_SelectNextUnit", timeout=20)
+    time.sleep(2.0)
+    if H.send("CLICK_MENU DoctrineROEEMCONToolStripMenuItem", timeout=20).get("status") != "ok":
+        r.record(name, title, False, "条令窗口打不开（想定未进入或未选中单位）")
+        return
+    time.sleep(4.5)
+    nodes = H.send("CTRL_TREE", timeout=25).get("nodes", [])
+    vals = sorted({(c.get("text") or "").strip()
+                   for c in nodes if c.get("n") == "Combo_StateSelection"})
+    vals = [v for v in vals if v]
+    ascii_only = [v for v in vals if not any("\u4e00" <= ch <= "\u9fff" for ch in v)]
+    after = _log_tail(log).count("WRITE LOOP BLOCKED")
+    H.send("CLOSE_FORM ALL", timeout=20)
+    ok = bool(vals) and not ascii_only and after <= before
+    r.record(name, title, ok,
+             f"下拉项 {len(vals)} 个去重值，纯英文 {len(ascii_only)} 个"
+             + (f"（{ascii_only[:3]}）" if ascii_only else "（全中文）")
+             + f"；写拉锯熔断 {before}→{after}"
+             + ("" if after <= before else "（新增熔断 = 假熔断回归）"),
              "evidence/live/scan")
 
 
