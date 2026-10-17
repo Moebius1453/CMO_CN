@@ -369,5 +369,8 @@
   "Reset affected units (inherit from above EMCON)": "重置受影响单位（继承上方 EMCON）",
   "Reset affected units (inherit from above WRA)": "重置受影响单位（继承上方 WRA）",
   "Reset affected missions (inherit from above EMCON)": "重置受影响任务（继承上方 EMCON）",
-  "Reset affected missions (inherit from above WRA)": "重置受影响任务（继承上方 WRA）"
+  "Reset affected missions (inherit from above WRA)": "重置受影响任务（继承上方 WRA）",
+  "Tacview": "三维态势联动",
+  "三维态势联动 (Tacview)": "三维态势联动",
+  "三维态势联动 (三维态势联动 (Tacview))": "三维态势联动"
 }

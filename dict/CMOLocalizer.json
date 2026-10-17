@@ -4,7 +4,7 @@
   "version": "4.1.7",
   "counts": {
    "n_offsets": 3523,
-   "n_exact": 46116,
+   "n_exact": 46118,
    "n_partial": 0,
    "n_words": 0
   }
@@ -36993,7 +36993,7 @@
   "Tactics displayed so far have been primarily defensive in nature although numerous artillery shellings have occurred within the last few weeks. We do expect these assets to be active once we cross the ROE threshold.": "到目前为止对方表现出的战术以防御为主，不过最近几周已发生多次炮击。一旦我们跨过交战规则 (RoE) 门槛，预计这些兵力将会活跃起来。",
   "Tactics displayed so far have been primarily defensive in nature in support of local exercises and missile firings. There has been considerable hostile rhetoric about what happens if US forces cross into the straits again so you can assume defensive movements at the very least.": "迄今表现出的战术主要属防御性质，用于配合当地演习与导弹试射。关于美军若再次进入海峡会发生什么，已有相当多的敌对言论，因此你至少可以假定会有防御性调动。",
   "Tactics for approaching surface contacts": "接近表面接触的策略",
-  "Tacview": "三维态势联动 (Tacview)",
+  "Tacview": "三维态势联动",
   "Tacview 1.x": "Tacview 1.x 战术三维回放",
   "Tacview 2.x": "Tacview 2.x 战术三维回放",
   "Tacview 2.x Exporter (Monte Carlo) Thread": "Tacview 2.x 导出器 (蒙特卡洛) 线程",
@@ -49596,6 +49596,8 @@
   "• RFA Tidereach [AOR]": "•英舰RFA Tidereach [AOR]",
   "▲  Up": "▲ 向上",
   "▼  Down": "▼ 向下",
+  "三维态势联动 (Tacview)": "三维态势联动",
+  "三维态势联动 (三维态势联动 (Tacview))": "三维态势联动",
   "事件想定编辑": "事件编辑器",
   "任务区域/航线": "任务区域/航线",
   "任务想定编辑": "任务编辑器",

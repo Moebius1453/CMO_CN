@@ -571,7 +571,11 @@ def _ui_residual_probe(H, r: Runner, pid: int | None) -> None:
                ("MapSettingsToolStripMenuItem1", "地图设置窗口")]
     fixed = {"WeatherToolStripMenuItem": [("Calm", "无风"), ("Hurricane", "飓风"), ("Level 0", "层级 0")],
              "HotkeysToolStripMenuItem": [("Own Units", "己方单位")],
-             "TSMI_ScriptingConsole": [("Insert", "插入"), ("RUN", "运行")]}
+             "TSMI_ScriptingConsole": [("Insert", "插入"), ("RUN", "运行")],
+             # R29：推演选项的 Tacview 页签曾因词条非幂等叠成「三维态势联动 (三维态势联动 (Tacview))」；
+             # 未选中的页签也在控件树里，所以这里钉住显示形态（页签是否可见不影响断言）。
+             "OptionsToolStripMenuItem1": [("三维态势联动 (Tacview)", "三维态势联动"),
+                                           ("三维态势联动 (三维态势联动 (Tacview))", "三维态势联动")]}
     try:
         exact = json.loads(DICT.read_text(encoding="utf-8")).get("exact", {})
     except Exception:

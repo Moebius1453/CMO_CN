@@ -523,7 +523,10 @@
   `Show on cursor`→在光标处显示、`Select...`→选择…、四色警戒等级（蓝/黄/橙/红）、
   `Minor`/`Servere`→轻微/较严重、四条「重置受影响单位/任务（继承上方 EMCON/WRA）」、
   动态规则 `Every N seconds`→每 N 秒、`Weapons for <单位>`→「武器：<单位>」；
-  并把 `Green` 的旧值「绿色 (Green)」改成「绿」，与其它三色统一（实机：AlertLevel 项 = 橙/红/绿/蓝/黄）。
+  并把 `Green` 的旧值「绿色 (Green)」改成「绿」，与其它三色统一（实机：AlertLevel 项 = 橙/红/绿/蓝/黄）；
+  **`Tacview` 页签叠译**——词条值由「三维态势联动 (Tacview)」改为幂等的「三维态势联动」，并补两条自愈项
+  （`三维态势联动 (Tacview)`、叠译后的双层形态 →「三维态势联动」）。实机同词典 A/B（`evidence/team-review-20261016/shots/r29_tacview_tab.png`）：
+  旧词典（46116 exact）该页签显示「三维态势联动 (三维态势联动 (Tacview))」，新词典（46118 exact）显示「三维态势联动」。
 - **有意不修（附理由）**：`All`/`Normal`/`Major` 属多义词（`Major` 在别处是军衔「少校」），
   全局 exact 条目会在其它界面误译；`CB_OSMstyle` 的一串地图样式名（`Bright`/`Dark Matter`/`Fiord Color`/
   `Toner`/`Positron`/`OSM OpenMapTiles`）是 OSM 样式专有名，与既有 `Sentinel-2 卫星影像` 同类保留；
@@ -536,8 +539,13 @@
   不在视觉树里 → 引擎的 WPF 通道碰不到 → 滚到那一屏被实现（realize）后才可能翻译。要真正确认必须把列表滚到底
   （本轮的自动化无法可靠滚动 WPF 列表），故标注为「待确认」，**不是「整片英文」**。
 - **仍需跟进**：① 上述 WPF 列表离屏项（需滚动验证；若确认未译，考虑在 realize 后补一轮 WPF 翻译）；
-  ② `Ghosted` 与 `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**；
-  ③ 一处叠译 `三维态势联动（三维态势联动 (Tacview))`（同 R20 的工坊类非幂等模式）。
+  ② `Ghosted` 与 `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**。
+- **同类残余风险（未修，记录在案）**：凡是「值 = 中文 (英文字典键)」的词条（全词典 1370 条），一旦该文本再次走
+  `TranslateString` 的括注通道（`TranslateBracketSegments`）就会被叠译——本轮 A/B 已确认 TabPage 文本会走这条路。
+  实机捕获里还有两条同形可见文本：`节 (Knots)`、`自动暂停 (Auto-Pause)`（都是下拉项，当前只翻译一次故不叠；
+  若将来引擎重扫下拉项，它们会像 Tacview 页签一样叠）。修法同上（值去掉括号英名 + 自愈项）。
+- **回归测试点**：`live` 的 `L-ui-residuals`（打开「推演选项」后必须出现「三维态势联动」，且不得出现
+  「三维态势联动 (Tacview)」与双层形态）；`static` 的 `R24-static-dict-reproducible`（重建字节一致，自愈项与幂等值不会在重建后丢失）。
 - **附带产出**：新增只读探针 `DUMP_LISTS`（导出 ListBox / CheckedListBox / ListView 的条目）——
   本轮那个对话框不是 WinForms 列表（所以没命中），但事件编辑器/参考点管理器这类窗口后续可直接用它查。
 

@@ -134,7 +134,7 @@
 | Game Options | 推演选项 |
 | Generate Delta Template | 生成增量模板 |
 | Generate Template | 生成模板 |
-| Ghosted | 虚影显示 |
+| Ghosted | 虚影 |
 | Global Minimap | 全局小地图 |
 | God's Eye view (See All) | 上帝视界 (全知视角) |
 | Group Operations | 编队操作 |
