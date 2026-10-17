@@ -1697,6 +1697,19 @@ namespace CMOLocalizer
             }
         }
 
+        /// <summary>递归找窗口里的 WebView2 控件（控件类名含 WebView2）。</summary>
+        private static Control FindWebView2In(Control root)
+        {
+            if (root == null) return null;
+            if ((root.GetType().FullName ?? "").IndexOf("WebView2", StringComparison.OrdinalIgnoreCase) >= 0) return root;
+            foreach (Control c in root.Controls)
+            {
+                Control found = FindWebView2In(c);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
         private static void CollectControlTree(Control ctrl, int depth, StringBuilder sb, ref bool first)
         {
             if (ctrl == null || depth > 12) return;
@@ -5292,6 +5305,72 @@ namespace CMOLocalizer
                     }
                 });
                 return "{\"status\":\"ok\",\"action\":\"DB_DOM_DUMP\",\"file\":\"CMOLocalizer_DBDOM.json\"}";
+            }
+
+            // 只读探针：导出任意窗口里 WebView2 的文本 / 执行一段 JS（默认只读）。
+            // 为什么需要它：阵营选择面板（ChooseSide）的「进入想定」按钮是 WebView2 里的 HTML 元素，
+            // CTRL_TREE / WPF_DUMP 都看不到它，也没有 Win32 几何信息可供按坐标点击；
+            // 引擎本身就在游戏进程里，直接在进程内操控该 WebView2 才是最可靠的路径。
+            if (cmd == "WEBVIEW_TEXT" || cmd == "WEBVIEW_JS")
+            {
+                string[] wparts = arg.Split(new char[] { ' ' }, 2);
+                string wfilter = wparts.Length > 0 ? wparts[0].Trim() : "";
+                string wscript = cmd == "WEBVIEW_TEXT"
+                    ? "document.body ? document.body.innerText : ''"
+                    : (wparts.Length > 1 ? wparts[1] : "");
+                if (wscript.Length == 0) return "{\"status\":\"error\",\"message\":\"no script\"}";
+                Form whost = null;
+                FormCollection wforms = Application.OpenForms;
+                if (wforms != null)
+                {
+                    foreach (Form f in wforms)
+                    {
+                        if (f == null || f.IsDisposed) continue;
+                        if (wfilter.Length > 0
+                            && (f.Text ?? "").IndexOf(wfilter, StringComparison.OrdinalIgnoreCase) < 0
+                            && (f.Name ?? "").IndexOf(wfilter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        whost = f;
+                        break;
+                    }
+                }
+                // 注意：这里只选窗体（读 Form.Text/Name 在后台线程是被容的）；
+                // WebView2 控件本身的搜索也必须放到 UI 线程（见下），
+                // 否则在后台读它的 Controls 同样会抛 TargetInvocationException。
+                if (whost == null) return "{\"status\":\"error\",\"message\":\"form not found\"}";
+                // WebView2 的控件属性与 ExecuteScriptAsync 都必须在 UI 线程上碰；
+                // 在后台线程读 CoreWebView2 会抛 TargetInvocationException（已实测），
+                // 所以整段（找子控件 / 取 CoreWebView2 / 发起脚本）都放进 BeginInvoke，
+                // 只在后台等 Task 结果（UI 线程在跑消息泵，所以不会死锁）。
+                object started = null;
+                string werr = null;
+                whost.BeginInvoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        Control wvv = FindWebView2In(whost);
+                        if (wvv == null) { werr = "WebView2 not found in form"; return; }
+                        PropertyInfo pc = wvv.GetType().GetProperty("CoreWebView2");
+                        object cr = pc != null ? pc.GetValue(wvv, null) : null;
+                        if (cr == null) { werr = "CoreWebView2 null"; return; }
+                        MethodInfo me = wvv.GetType().GetMethod("ExecuteScriptAsync", new Type[] { typeof(string) });
+                        if (me == null) me = cr.GetType().GetMethod("ExecuteScriptAsync", new Type[] { typeof(string) });
+                        if (me == null) { werr = "ExecuteScriptAsync not found"; return; }
+                        object tg = me.DeclaringType.IsAssignableFrom(wvv.GetType()) ? (object)wvv : cr;
+                        started = me.Invoke(tg, new object[] { wscript });
+                    }
+                    catch (Exception ex) { werr = ex.GetBaseException().Message; }
+                });
+                for (int wi = 0; wi < 100 && started == null && werr == null; wi++) System.Threading.Thread.Sleep(50);
+                if (werr != null) return "{\"status\":\"error\",\"message\":\"" + JsonEsc(werr) + "\"}";
+                System.Threading.Tasks.Task<string> wtask = started as System.Threading.Tasks.Task<string>;
+                if (wtask == null) return "{\"status\":\"error\",\"message\":\"ExecuteScriptAsync did not start\"}";
+                try { wtask.Wait(8000); } catch { }
+                if (wtask.Status != System.Threading.Tasks.TaskStatus.RanToCompletion)
+                    return "{\"status\":\"error\",\"message\":\"script failed or timed out\"}";
+                string wres = wtask.Result ?? "";
+                if (wres.Length > 20000) wres = wres.Substring(0, 20000);
+                return "{\"status\":\"ok\",\"action\":\"" + cmd + "\",\"form\":\"" + JsonEsc(whost.Name)
+                    + "\",\"result\":\"" + JsonEsc(wres) + "\"}";
             }
 
             if (cmd == "DB_CTRL_TREE")

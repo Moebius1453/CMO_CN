@@ -460,3 +460,27 @@
      简报与 HTML 文本）都到不了的一层，**未定位到宿主**，按“同一目标不超三次”的纪律停止追查，
      留作已知限制。**复现**：重启 → 加载想定 → 选 Shamal → 加载后截图，该面板正文全中文、
      只有这个计数标签是英文。
+
+## R28 单位命令系窗口里的英文残留（v4.1.8，未发布；本轮已定位并部分待修）
+
+- **现象（实测，2026-10-17）**：进入想定后逐个打开单位命令系窗口，发现
+  ① 窗口标题的动态前缀仍是英文：`Sensors for: Taif (King Fahd Air Base)`、
+  `Damage Status for Taif (King Fahd Air Base)`（而同族的「弹药库状态 - …」已是中文）；
+  ② **「条令 / 交战规则」窗口的选项值大面积英文**：`(Parent Side)`、
+  `Inherited, Always Continue Guidance`、`Inherited, Always Except Tankers Refuelling Tankers`、
+  `Inherited, Automatic for search and localization`、`Inherited, Pessimistic` 等
+  24 条候选（同窗口里 `AAW 制导` 等已汉化，中英混杂）。武器/编队操作/网络通信/指派至任务 四个窗口干净。
+- **根因方向（待继续定位）**：标题类是「动态前缀 + 单位名」的复合串，词库是精确匹配、盖不住前缀；
+  条令窗口的选项值多半在 **DataGridView / 表格型下拉**里，而引擎现有翻译通道只覆盖
+  WinForms 控件文本、组合框 `Items`、WPF 控件与 HTML 文本——**表格单元格内容是否被覆盖尚未验证**。
+- **本轮已解决的同类前置问题（关键）**：这批窗口此前**完全打不开**，因为自动会话里
+  「活跃单位数(AU)」恒为 0——进不了想定。真正原因不是窗口前台被拒，而是
+  「阵营选择与简报」面板（`ChooseSide`）的「进入想定」按钮**没有任何可枚举的 Win32 几何信息可点**。
+  修法：给引擎加探针命令后用 `CLICK_BUTTON 进入想定` 直接点该按钮（`ChooseSide.Button1`，按名字命中），
+  想定才真正载入、单位出现，随后 6 个单位命令窗口中 5 个可正常打开。
+- **回归测试点**：`scripts/verify_regressions.py` 的 `--live` 已有 `L-ui-residuals`（多窗口抽样、
+  断言「已入词典却仍显英文」为 0 条）；本条目的新窗口可在下一轮把它扩进来，
+  但**必须先修完**，否则会红（这正是该用例的作用）。
+- **附带**：`2 selectable sides`（R27 盲区 4）本轮已**定位到宿主**：`ChooseSide` 窗体上的
+  `DarkLabel lblSideNumber`——它是普通 WinForms 控件，所以先前把规则放进 HTML/简报层当然无效；
+  正确修法是「控件文本翻译路径」上加一条动态计数规则（`^(\d+) selectable sides?$`）。

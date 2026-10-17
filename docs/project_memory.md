@@ -374,3 +374,16 @@
    所以每一段交互前都要先 `restart_game`，不要在 live 跑完后接着做对话式探查。
 6. **`2 selectable sides` 属未定位盲区**：不在 WinForms 控件树、不在 WPF 控件树、也不在简报文本层
    （三条路都试过），按“同一目标不超三次”的纪律停止追查，别再重复试。
+7. **想定进不去就会让一大批窗口「假死」**：`CLICK_MENU` 对单位命令系菜单项返回 `ok` 但什么都不发生，
+   根因是活跃单位数为 0（没进想定）。可靠的进入方式是 `CLICK_BUTTON 进入想定`
+   （命中 `ChooseSide.Button1`），**不要**靠鼠标点像素——那个按钮没有可枚举的 Win32 几何信息，
+   截图目测坐标点不中。
+8. **本轮新增探针命令**（产品代码，已随引擎部署）：
+   - `CTRL_TREE [窗体过滤]`：导出控件树（`d/t/n/v/b/text`），找控件名与文本用；
+   - `WEBVIEW_TEXT <窗体过滤>`：读该窗体 WebView2 的 `document.body.innerText`；
+   - `WEBVIEW_JS <窗体过滤> <js>`：在 UI 线程上 `ExecuteScriptAsync` 并返回结果。
+   注意：**WebView2 的控件属性与脚本调用必须在 UI 线程上碰**，在后台线程读 `CoreWebView2`
+   会抛 `TargetInvocationException`（已实测，命令已按此实现）。
+9. **界面文本可能有多种宿主，定位顺序建议**：先 `CTRL_TREE` 找控件名（多数标签/按钮在这里，
+   例如 `DarkLabel lblSideNumber` 承载 `2 selectable sides`）→ 再看 `WPF_DUMP` →
+   最后才是 `WEBVIEW_TEXT/WEBVIEW_JS`。**先定位宿主再改规则**，否则规则会加在错的层（我踩过）。
