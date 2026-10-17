@@ -363,3 +363,11 @@
 
 配套工具：`evidence/team-review-20261016/sweep.py`（WinForms 窗口扫描）、`sweep_units.py`（单位命令系，
 当前被第 1 条挡住）、产物在 `evidence/team-review-20261016/sweep/`。
+4. **游戏窗口无法被工具提到前台**：`GuiDriver focus <hwnd> max` 返回 `Focus result: False`
+   （Windows 拒绝 SetForegroundWindow），于是合成鼠标落不进游戏的 WPF/地图层
+   （`按键被吞`、地图内对话框按钮点不动）；**WinForms 对话框仍然可点**——这正是
+   `CTRL_TREE` 能扫到 30 个窗口的原因。要驱动地图/阵营选择这类界面，需真人点一次。
+5. **live 套件收尾会关掉全部窗口，之后游戏会自行正常退出**（无崩溃日志、事件日志无错误）：
+   所以每一段交互前都要先 `restart_game`，不要在 live 跑完后接着做对话式探查。
+6. **`2 selectable sides` 属未定位盲区**：不在 WinForms 控件树、不在 WPF 控件树、也不在简报文本层
+   （三条路都试过），按“同一目标不超三次”的纪律停止追查，别再重复试。
