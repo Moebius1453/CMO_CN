@@ -484,3 +484,17 @@
 - **附带**：`2 selectable sides`（R27 盲区 4）本轮已**定位到宿主**：`ChooseSide` 窗体上的
   `DarkLabel lblSideNumber`——它是普通 WinForms 控件，所以先前把规则放进 HTML/简报层当然无效；
   正确修法是「控件文本翻译路径」上加一条动态计数规则（`^(\d+) selectable sides?$`）。
+- **本轮已修（实机验证通过，2026-10-17）**：
+  ① `2 selectable sides` → 「可选择 N 个阵营」（`TranslateControlTextInner` 的非 Form 控件动态规则，
+  宿主是 `DarkLabel lblSideNumber`）；② 标题前缀 `Sensors for: ` → 「传感器：」、
+  `Damage Status for ` → 「损伤与系统状态 - 」（与既有的 `Air Ops - `/`Docking Ops - ` 同一范式）；
+  ③ 条令窗口的 `Inherited From Doctrine:` → 「继承自条令：」、`(Parent Side)` → 「（上级阵营）」。
+  实机验证：ChooseSide 面板显示「可选择 2 个阵营」且旧英文消失；休眠窗口标题为
+  「传感器： 吉达 (阿卜杜勒·阿齐兹国王机场)」；损伤窗口标题为「损伤与系统状态 - …」；
+  条令窗口出现「继承自条令：」与「（上级阵营）」。
+- **仍未修（有意，含安全约束）**：条令窗口 `Combo_StateSelection` 的**选项值**（`Inherited, Pessimistic`、
+  `Inherited, Always Continue Guidance` 等 24 条）仍在英文。原因：它们是**下拉框的当前值/项**，
+  而 R8 的教训是「按文本分派的下拉框禁止改写 `.Text`」（改写会破坏 `SelectedIndex` 与游戏逻辑）。
+  可行的下一步（需功能验证，不是纯文本改动）：先确认游戏是否按 `SelectedIndex` 取值——
+  若是，则可安全翻译 `Items`（下拉列表）并保持 `.Text` 语义；若否，则只能放弃或改用显示层方案。
+

@@ -3743,6 +3743,18 @@ namespace CMOLocalizer
                                          .Replace(" at ", " @ ");
                         return;
                     }
+                    // 单位命令系窗口的标题是「英文前缀 + 单位名」，词库是精确匹配、盖不住：
+                    // 实测 Sensors for: Taif (King Fahd Air Base) / Damage Status for Taif (…)。
+                    if (fText.StartsWith("Sensors for: "))
+                    {
+                        ctrl.Text = "传感器：" + fText.Substring("Sensors for: ".Length);
+                        return;
+                    }
+                    if (fText.StartsWith("Damage Status for "))
+                    {
+                        ctrl.Text = "损伤与系统状态 - " + fText.Substring("Damage Status for ".Length);
+                        return;
+                    }
                     string trTitle = TranslateTitleText(fText);
                     if (!string.IsNullOrEmpty(trTitle) && trTitle != fText)
                     {
@@ -3796,6 +3808,35 @@ namespace CMOLocalizer
             {
                 ctrl.Text = "清除";
                 return;
+            }
+
+            // 动态计数串与条款控件的固定英文（均位于标签/按钮等非分派控件上，改写安全）：
+            // 「2 selectable sides」是 ChooseSide 面板上的 DarkLabel（宿主已用 CTRL_TREE 定位：
+            // lblSideNumber）；Inherited From Doctrine: / (Parent Side) 同理属标签/按钮。
+            // 注意：**不碰组合框**——同一窗口里 Combo_StateSelection 的英文值属「按文本分派」的
+            // 下拉框（R8 教训：改写 .Text 会破坏 SelectedIndex 与游戏逻辑）。
+            if (!(ctrl is ComboBox || ctrl is ListControl || ctrl is UpDownBase))
+            {
+                string ctext = ctrl.Text;
+                if (!string.IsNullOrEmpty(ctext))
+                {
+                    Match mSel = Regex.Match(ctext, @"^(\d+)\s+selectable sides?$");
+                    if (mSel.Success)
+                    {
+                        ctrl.Text = "可选择 " + mSel.Groups[1].Value + " 个阵营";
+                        return;
+                    }
+                    if (ctext == "Inherited From Doctrine:")
+                    {
+                        ctrl.Text = "继承自条令：";
+                        return;
+                    }
+                    if (ctext == "(Parent Side)" || ctext == "(Parent Side) ")
+                    {
+                        ctrl.Text = "（上级阵营）";
+                        return;
+                    }
+                }
             }
 
             string t = ctrl.Text;
