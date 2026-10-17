@@ -90,12 +90,20 @@ def main():
     m = re.search(r"## v" + re.escape(version) + r"\s+([^\n]*)\n(.*?)(?=\n## v|\Z)", changelog, re.S)
     notes = m.group(0).strip() if m else f"## v{version}\n\n《现代行动：指挥》汉化更新包发布。"
 
+    # 发版说明必须与我们的版本号并列写清「适配的游戏内部版本」（构建号），
+    # 与 README / 安装器标题 / 更新助手保持同一单一来源（仓库根 GAME_BUILD）。
+    game_build = ""
+    _gb = ROOT / "GAME_BUILD"
+    if _gb.is_file():
+        game_build = _gb.read_text(encoding="utf-8").strip()
+
     # CHANGELOG 小标题自带破折号（"## v4.1.8 — 引擎性能与门禁加固"）时，
     # 不能再拼一个：否则发布标题会变成 "v4.1.8 — — 引擎性能与门禁加固"
     # （历史 v4.1.5/v4.1.7 就带着这个双破折号）。
     subtitle = re.sub(r"^[—–\-]\s*", "", m.group(1).strip()) if m else ""
     title = f"v{version} — {subtitle}" if subtitle else f"v{version}"
-    body = f"""{notes}
+    build_line = f"> **适配游戏内部版本：{game_build}**（游戏标题里的 Build 号；不一致说明游戏已更新，请等对应版本的补丁）\n\n" if game_build else ""
+    body = f"""{build_line}{notes}
 
 ### 安装方式
 

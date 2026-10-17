@@ -28,6 +28,12 @@ namespace CMOShared
     public static class ReleaseConstants
     {
         public const string Version = "4.1.8";
+        /// <summary>
+        /// 本汉化适配的游戏内部版本（构建号，例如 1900.23）。它与 Version 一起必须出现在
+        /// 安装器标题、更新助手提示、发版说明与 README 里；游戏更新（构建号变化）时我们的
+        /// Version 加 0.1。单一来源：仓库根目录 GAME_BUILD（verify_all 校验两者一致）。
+        /// </summary>
+        public const string GameBuild = "1900.23";
         public const string RegPath = @"Software\CMOChinese";
         public const string RunKeyName = "CMOChineseUpdater";
         public const string RepoApi = "https://api.github.com/repos/mj8724/CMO_CN/releases/latest";
@@ -399,6 +405,8 @@ namespace CMOShared
     public sealed class InstallManifest
     {
         public string Version = "";
+        /// <summary>安装时本汉化适配的游戏内部版本（构建号）；引擎启动时拿它与游戏实际构建号比对。</summary>
+        public string GameBuild = "";
         public string InstalledAt = "";
         public string Source = "";
         public readonly Dictionary<string, string> Files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -436,6 +444,7 @@ namespace CMOShared
                 sb.Append("{\n");
                 sb.Append("  \"schema\": 1,\n");
                 sb.Append("  \"version\": \"").Append(FlatJson.Escape(version ?? "")).Append("\",\n");
+                sb.Append("  \"game_build\": \"").Append(FlatJson.Escape(ReleaseConstants.GameBuild)).Append("\",\n");
                 sb.Append("  \"installed_at\": \"").Append(DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)).Append("\",\n");
                 sb.Append("  \"source\": \"").Append(FlatJson.Escape(source ?? "")).Append("\",\n");
                 sb.Append("  \"files\": {\n");
@@ -465,6 +474,7 @@ namespace CMOShared
                 string json = File.ReadAllText(p, Encoding.UTF8);
                 InstallManifest m = new InstallManifest();
                 m.Version = FlatJson.GetString(json, "version", "");
+                m.GameBuild = FlatJson.GetString(json, "game_build", "");
                 m.InstalledAt = FlatJson.GetString(json, "installed_at", "");
                 m.Source = FlatJson.GetString(json, "source", "");
                 int i = json.IndexOf("\"files\"", StringComparison.Ordinal);

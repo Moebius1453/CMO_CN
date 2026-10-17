@@ -691,7 +691,7 @@ namespace CMOUpdater
             if (!hasNew && !offerRollback)
             {
                 if (manual)
-                    MessageBox.Show("当前已是最新版本 v" + Cfg.InstalledVersion + "。\n\n上次检查：" + Cfg.LastCheckText() +
+                    MessageBox.Show("当前已是最新版本 v" + Cfg.InstalledVersion + "（适配游戏内部版本 " + ReleaseConstants.GameBuild + "）。\n\n上次检查：" + Cfg.LastCheckText() +
                         "\n下次自动检查：" + Cfg.NextCheckText(), "CMO 汉化更新助手", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -937,6 +937,7 @@ namespace CMOUpdater
             sub.Text = rollback
                 ? ("发布日期 " + SafeDate(r.PublishedAt) + "　·　当前版本 v" + Cfg.InstalledVersion + "　·　用本地缓存的安装包回退")
                 : ("发布日期 " + SafeDate(r.PublishedAt) + "　·　安装包 " + SizeText(r.SetupSize) + "　·　当前版本 v" + Cfg.InstalledVersion);
+            sub.Text += "\n适配游戏内部版本 " + ReleaseConstants.GameBuild + "（游戏标题里的 Build 号）";
             sub.ForeColor = Color.DimGray;
             sub.AutoSize = true;
             sub.Location = new Point(22, 52);

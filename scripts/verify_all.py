@@ -198,9 +198,28 @@ def gate_version() -> None:
     mismatch = {k: v for k, v in places.items() if v != ver}
     engine_ok = f"v{major}.0 Engine" in engine or f"v{ver} Engine" in engine
     refs_ok = inst_ref and upd_ref
-    ok = not mismatch and engine_ok and refs_ok
+
+    # 游戏内部版本（构建号，例如 1900.23）：与我们的版本号一起必须写清（安装器标题 / 更新助手 /
+    # 发版说明 / README）。单一来源 GAME_BUILD ↔ CMOShared.ReleaseConstants.GameBuild。
+    # R31 事故：游戏构建号从 1900.20 跳到 1900.23，汉化整批失效而我们此前根本没记录构建号。
+    gb_file = ROOT / "GAME_BUILD"
+    game_build = gb_file.read_text(encoding="utf-8").strip() if gb_file.is_file() else None
+    shared_build = find(r'class\s+ReleaseConstants[\s\S]*?GameBuild\s*=\s*"([0-9.]+)"', shared_src)
+    inst_build_ref = ("适配游戏内部版本" in inst) and ("ReleaseConstants.GameBuild" in inst)
+    try:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        readme = ""
+    readme_ok = bool(game_build) and game_build in readme
+    build_ok = bool(game_build) and shared_build == game_build and inst_build_ref and readme_ok
+
+    ok = not mismatch and engine_ok and refs_ok and build_ok
     detail = ", ".join(f"{k}={v}" for k, v in places.items()) + f", engine={'ok' if engine_ok else 'MISMATCH'}"
     detail += f", installer/updater 引用共享常量={refs_ok}"
+    detail += f", 游戏内部版本={game_build}"
+    if not build_ok:
+        detail += (f" [构建号不一致: 共享常量={shared_build}, 安装器引用={inst_build_ref},"
+                   f" README含构建号={readme_ok}]")
     if mismatch:
         detail += f" → 与 VERSION={ver} 不一致: {sorted(mismatch)}"
     if not refs_ok:

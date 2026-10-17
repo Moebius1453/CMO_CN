@@ -42,7 +42,7 @@ namespace CMOLocalizerInstaller
 
         public InstallerForm(string initialPath)
         {
-            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.8";
+            this.Text = "Command: Modern Operations (CMO) 完整中文汉化一键安装工具 v4.1.8（适配游戏内部版本 " + ReleaseConstants.GameBuild + "）";
             this.Size = new Size(700, 770);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -59,6 +59,7 @@ namespace CMOLocalizerInstaller
 
             Label lblSub = new Label();
             lblSub.Text = "采用 CLR AppDomainManager 零侵入内存级双重本地化引擎 | 不修改原版 EXE | 支持一键还原";
+            lblSub.Text += "\n适配游戏内部版本 " + ReleaseConstants.GameBuild + "（游戏标题里的 Build 号；游戏更新后需等待对应版本的补丁）";
             lblSub.ForeColor = Color.DimGray;
             lblSub.AutoSize = true;
             lblSub.Location = new Point(22, 50);
