@@ -528,9 +528,16 @@
   全局 exact 条目会在其它界面误译；`CB_OSMstyle` 的一串地图样式名（`Bright`/`Dark Matter`/`Fiord Color`/
   `Toner`/`Positron`/`OSM OpenMapTiles`）是 OSM 样式专有名，与既有 `Sentinel-2 卫星影像` 同类保留；
   `(c) Matrix Games 2013-2026` 是版权行；`AutoSideID`/`AutoSideAndUnitID` 疑似内部枚举标识。
-- **仍需跟进**：① 「想定特性与设置」里的特性列表整片英文（截图可见
-  `Allow instant loading for landing planner`、`Point To Point Unit Communication`、`Realistic Order Chain`、
-  `Variable burnout speed on boost-coast weapons` 等，约 15-20 条待齐套）；② `Ghosted` 与
-  `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**；
+- **已澄清（本轮修正，避免误判）**：「想定特性与设置」这个对话框是 **WPF 窗口**
+  （`WPF_DUMP` 里标题为 `Scenario Features + Realism Settings`，含 38 条文本），而它**可见的条目已经全是中文**
+  （详细火炮火控 / 机场与海军基地弹药库无限制 / 战机战损 / 真实潜艇通信 / 地形类型影响 / 地形类型影响 - 高级…）。
+  截图里看到的那几条英文（`Allow instant loading for landing planner`、`Point To Point Unit Communication`、
+  `Realistic Order Chain`、`Variable burnout speed on boost-coast weapons`）判断为 **WPF 虚拟化的离屏项**：
+  不在视觉树里 → 引擎的 WPF 通道碰不到 → 滚到那一屏被实现（realize）后才可能翻译。要真正确认必须把列表滚到底
+  （本轮的自动化无法可靠滚动 WPF 列表），故标注为「待确认」，**不是「整片英文」**。
+- **仍需跟进**：① 上述 WPF 列表离屏项（需滚动验证；若确认未译，考虑在 realize 后补一轮 WPF 翻译）；
+  ② `Ghosted` 与 `Every N seconds` 位于「地图显示设置」页签，本轮只覆盖当前页签、**未目视确认**；
   ③ 一处叠译 `三维态势联动（三维态势联动 (Tacview))`（同 R20 的工坊类非幂等模式）。
+- **附带产出**：新增只读探针 `DUMP_LISTS`（导出 ListBox / CheckedListBox / ListView 的条目）——
+  本轮那个对话框不是 WinForms 列表（所以没命中），但事件编辑器/参考点管理器这类窗口后续可直接用它查。
 

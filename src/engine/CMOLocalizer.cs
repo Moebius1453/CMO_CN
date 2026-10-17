@@ -5729,6 +5729,27 @@ namespace CMOLocalizer
                     return jb.ToString();
                 }
 
+                // DUMP_LISTS：导出所有 ListBox / CheckedListBox / ListView 的条目（只读）。
+                // 为什么需要：DUMP_COMBOS 只盖下拉框，而「想定特性与设置」的特性列表、事件编辑器、
+                // 参考点管理器等是列表控件；它们的条目不在控件 .Text 里，不导出就会漏查。
+                if (cmd == "DUMP_LISTS")
+                {
+                    StringBuilder lb2 = new StringBuilder();
+                    lb2.Append("{\"status\":\"ok\",\"lists\":[");
+                    bool lbFirst = true;
+                    FormCollection lfc = Application.OpenForms;
+                    if (lfc != null)
+                    {
+                        foreach (Form lf in lfc)
+                        {
+                            if (lf == null || lf.IsDisposed) continue;
+                            try { CollectLists(lf, lb2, ref lbFirst); } catch { }
+                        }
+                    }
+                    lb2.Append("]}");
+                    return lb2.ToString();
+                }
+
                 // WPF_DUMP: visual tree of every WPF window owned by this process.
                 StringBuilder wpfJson = new StringBuilder();
                 wpfJson.Append("{\"status\":\"ok\",\"windows\":[");
@@ -5862,6 +5883,49 @@ namespace CMOLocalizer
                 sb.Append("]}");
             }
             foreach (Control child in root.Controls) CollectCombos(child, sb, ref first);
+        }
+
+        /// <summary>导出 ListBox / CheckedListBox / ListView 的条目（只读，供回归扫描用）。</summary>
+        private static void CollectLists(Control root, StringBuilder sb, ref bool first)
+        {
+            if (root == null || root.IsDisposed) return;
+            Form owner = null;
+            try { owner = root.FindForm(); } catch { }
+            string formName = owner != null ? owner.GetType().Name : "";
+            ListBox lb = root as ListBox;
+            if (lb != null)
+            {
+                if (!first) sb.Append(",");
+                first = false;
+                sb.Append("{\"form\":\"").Append(JsonEsc(formName))
+                  .Append("\",\"name\":\"").Append(JsonEsc(lb.Name))
+                  .Append("\",\"type\":\"").Append(JsonEsc(lb.GetType().Name))
+                  .Append("\",\"sel\":").Append(lb.SelectedIndex)
+                  .Append(",\"items\":[");
+                for (int i = 0; i < lb.Items.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    sb.Append("\"").Append(JsonEsc(Convert.ToString(lb.Items[i]))).Append("\"");
+                }
+                sb.Append("]}");
+            }
+            ListView lv = root as ListView;
+            if (lv != null)
+            {
+                if (!first) sb.Append(",");
+                first = false;
+                sb.Append("{\"form\":\"").Append(JsonEsc(formName))
+                  .Append("\",\"name\":\"").Append(JsonEsc(lv.Name))
+                  .Append("\",\"type\":\"ListView\",\"sel\":").Append(lv.SelectedIndices.Count > 0 ? lv.SelectedIndices[0] : -1)
+                  .Append(",\"items\":[");
+                for (int i = 0; i < lv.Items.Count; i++)
+                {
+                    if (i > 0) sb.Append(",");
+                    sb.Append("\"").Append(JsonEsc(lv.Items[i].Text ?? "")).Append("\"");
+                }
+                sb.Append("]}");
+            }
+            foreach (Control child in root.Controls) CollectLists(child, sb, ref first);
         }
 
         private static string GetWpfElementName(System.Windows.DependencyObject dep)
