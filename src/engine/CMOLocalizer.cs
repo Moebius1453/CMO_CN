@@ -5053,7 +5053,9 @@ namespace CMOLocalizer
 
             if (cmd.StartsWith("CTRL_TREE"))
             {
-                return HandleCtrlTree(cmd);
+                // 必须传原始命令：过滤词在第二个 token 里，而 cmd 只有首 token（大写）——
+                // 传 cmd 会让 filter 永远是空串，「CTRL_TREE <窗体过滤>」静默退化成全量导出。
+                return HandleCtrlTree(rawCmd);
             }
 
             if (cmd == "CLOSE_FORM")

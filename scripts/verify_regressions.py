@@ -386,18 +386,45 @@ def run_live(r: Runner) -> None:
     ok = token in OBJECT_TYPE_TOKENS
     r.record("R1-live-token", "R1 CB_ObjectType 保持游戏原生 token", ok, f"text={token!r}")
 
-    # L3：无频闪（同一稳定态两帧截图一致）
+    # L3：无频闪（同一稳定态“文本状态”一致）
+    # 为什么不再比截图 md5：游戏暗色窗口是半透明的，GuiDriver 用屏幕抓图（CopyFromScreen），
+    # 窗口背后的动态地图会被一起抓进来——地图一动画两帧 md5 必不同，属于用例自身假红
+    # （2026-10-17 打包候选实测：两帧 UI 文本逐字相同、差异全在窗口背后的地图上）。
+    # 频闪的本质是“界面文本被来回改写”，所以直接比文本状态；截图仍保留供人复核。
+    def _flicker_state() -> tuple:
+        nodes = H.send("CTRL_TREE InternalDBViewer", timeout=25).get("nodes", [])
+        texts = tuple(sorted({(c.get("text") or "").strip()
+                              for c in nodes if (c.get("text") or "").strip()}))
+        ins = H.send("DB_INSPECT", timeout=15)
+        combos = tuple(sorted((c.get("name") or "", tuple(c.get("items") or []))
+                              for c in H.send("DUMP_COMBOS", timeout=30).get("combos", [])
+                              if c.get("form") == "InternalDBViewer"))
+        return texts, (ins.get("id"), ins.get("sot"), ins.get("html_len"),
+                       (ins.get("html_sample") or "")[:200]), combos
+
     if hwnd:
+        a_state = _flicker_state()
         a = _shot(H, "flicker_a", hwnd)
         time.sleep(2.5)
+        b_state = _flicker_state()
         b = _shot(H, "flicker_b", hwnd)
-        if a.is_file() and b.is_file():
-            ha = hashlib.md5(a.read_bytes()).hexdigest()
-            hb = hashlib.md5(b.read_bytes()).hexdigest()
-            r.record("R4-live-flicker", "R4 界面无中英频闪（两帧一致）", ha == hb,
-                     f"md5 {ha[:10]} vs {hb[:10]}", str(a.relative_to(ROOT)))
+        if a_state == b_state:
+            r.record("R4-live-flicker", "R4 界面文本无频闪（两帧文本状态一致）", True,
+                     f"查看器控件文本 {len(a_state[0])} 条 + 下拉 {len(a_state[2])} 组 + "
+                     f"详情页 {a_state[1][2]} 字 HTML 两帧一致",
+                     str(a.relative_to(ROOT)))
         else:
-            r.record("R4-live-flicker", "R4 界面无中英频闪", False, "截图失败")
+            diff = []
+            if a_state[0] != b_state[0]:
+                gone = sorted(set(a_state[0]) - set(b_state[0]))[:3]
+                new = sorted(set(b_state[0]) - set(a_state[0]))[:3]
+                diff.append(f"控件文本 '{gone}'→'{new}'")
+            if a_state[1] != b_state[1]:
+                diff.append(f"详情页 {a_state[1]}→{b_state[1]}")
+            if a_state[2] != b_state[2]:
+                diff.append(f"下拉项变化 {len(a_state[2])}→{len(b_state[2])} 组")
+            r.record("R4-live-flicker", "R4 界面文本无频闪（两帧文本状态一致）", False,
+                     "；".join(diff), str(a.relative_to(ROOT)))
     else:
         r.record("R4-live-flicker", "R4 界面无中英频闪", False, "未找到查看器窗口句柄")
 

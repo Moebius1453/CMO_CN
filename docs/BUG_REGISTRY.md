@@ -558,11 +558,18 @@
   「三维态势联动 (Tacview)」与双层形态；同一用例再用 `WPF_DUMP` 断言「想定特性与设置」≥10 条特性全中文、
   4 条源串不再出现）；`static` 的 `R24-static-dict-reproducible`（重建字节一致，自愈项与幂等值不会在重建后丢失）。
 - **附带产出**：新增只读探针 `DUMP_LISTS`（导出 ListBox / CheckedListBox / ListView 的条目）。
-- **探针自身缺陷（R29-3 发现并修复）**：`DUMP_LISTS` 一直**不可达**——它被写在
+- **探针/用例自身缺陷（R29-3 发现并修复）**：① `DUMP_LISTS` 一直**不可达**——它被写在
   `if (cmd == "WPF_DUMP" || cmd == "DUMP_COMBOS" || cmd == "XLATE_BATCH")` 块里，调用只会得到
   `Unknown command`（此前「那个对话框不是 WinForms 列表（所以没命中）」的结论实为命令没执行）。
   现已加入外层条件，并改为**逐控件兜异常 + 单独登记非 WinForms 列表控件的基类**：实测
   「区域与参考点数管理器」的 4 个 `DarkListView` 都是 `DarkScrollView` 自绘控件
   （`kind=非 WinForms 列表（基类 DarkScrollView）`）→ 它们没有可读的 WinForms `Items`，
   **以后看到 `items: []` 必须结合 `kind` 判读**，别再当成「窗口里没有列表」。
+  ② `CTRL_TREE <窗体过滤>` 的过滤词**永远为空**：调度传的是大写首 token（`HandleCtrlTree(cmd)`），
+  `Substring` 取不到第二个 token → 带过滤的调用静默退化成全量导出（本轮实测：
+  `CTRL_TREE InternalDBViewer` 修复后 23 节点/单窗体，修复前 40 节点/2 窗体）。现改为传原始命令。
+  ③ live `R4-live-flicker` 原来比**窗口截图 md5**：GuiDriver 是屏幕抓图（`CopyFromScreen`），
+  游戏暗色窗口半透明，窗口背后的**动态地图**会被一起抓进去 → 地图一动画两帧必不同，属用例假红
+  （2026-10-17 打包候选实测：两帧 UI 文本逐字相同、差异全在窗口背后的地图上）。
+  现改为比**文本状态**（查看器控件文本 + 下拉项 + 详情页 HTML 长度/前 200 字；截图仍保留供人复核）。
 
