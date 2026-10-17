@@ -538,72 +538,247 @@ namespace CMOLocalizer
         {
             try
             {
-                Assembly[] asms = AppDomain.CurrentDomain.GetAssemblies();
-                foreach (Assembly asm in asms)
+                Type tDecrypt;
+                FieldInfo fStrings, fOffsets, fBuf;
+                byte[] buf;
+                string note;
+                if (!TryFindPool(out tDecrypt, out fStrings, out fOffsets, out buf, out fBuf, out note))
                 {
-                    if (asm.GetName().Name == "Command" || asm.GetName().Name.StartsWith("Command"))
+                    Log("CoreDecryption: string pool not available on this game build — offset injection disabled. " + note);
+                    return false;
+                }
+
+                BindingFlags bf = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+                FieldInfo fDebug = tDecrypt.GetField("gTbYFnJa7EN", bf);   // 旧构建字段名（新构建已改）
+                if (fDebug != null)
+                {
+                    fDebug.SetValue(null, 100);
+                    Log("Set gTbYFnJa7EN anti-debug flag to 100.");
+                }
+                else
+                {
+                    Log("CoreDecryption: anti-debug flag field renamed by this build — skipped（不参与注入）.");
+                }
+
+                List<string> strList = (List<string>)fStrings.GetValue(null);
+                List<int> offList = (List<int>)fOffsets.GetValue(null);
+                if (strList == null || offList == null || offsetMap.Count == 0)
+                {
+                    Log(string.Format("CoreDecryption: pool not ready (strList={0} offList={1} offsetMap={2}) — offset injection skipped.",
+                        strList != null, offList != null, offsetMap.Count));
+                    return false;
+                }
+
+                Log("CoreDecryption: " + note);
+
+                int count = 0;
+                int outOfRange = 0;
+                lock (strList)
+                {
+                    foreach (KeyValuePair<int, string> kvp in offsetMap)
                     {
-                        Type tDecrypt = asm.GetType("AoIBWWlDJbaf7LijnA.oMu6jVbdhHEH79DDhU", false);
-                        if (tDecrypt != null)
+                        int off = kvp.Key;
+                        string translated = kvp.Value;
+                        if (IsForbiddenCodeOrEnum(translated))
                         {
-                            BindingFlags bf = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
-                            FieldInfo fDebug = tDecrypt.GetField("gTbYFnJa7EN", bf);
-                            FieldInfo fStrings = tDecrypt.GetField("OVoYFvH0GRf", bf);
-                            FieldInfo fOffsets = tDecrypt.GetField("vWjYFIwuiK7", bf);
-                            FieldInfo fBuf = tDecrypt.GetField("ad6YFOZX46s", bf);
-
-                            if (fDebug != null)
-                            {
-                                fDebug.SetValue(null, 100);
-                                Log("Set gTbYFnJa7EN anti-debug flag to 100.");
-                            }
-
-                            if (fStrings != null && fOffsets != null && fBuf != null)
-                            {
-                                List<string> strList = (List<string>)fStrings.GetValue(null);
-                                List<int> offList = (List<int>)fOffsets.GetValue(null);
-                                byte[] buf = (byte[])fBuf.GetValue(null);
-
-                                if (strList != null && offList != null && buf != null && offsetMap.Count > 0)
-                                {
-                                    int count = 0;
-                                    lock (strList)
-                                    {
-                                        foreach (KeyValuePair<int, string> kvp in offsetMap)
-                                        {
-                                            int off = kvp.Key;
-                                            string translated = kvp.Value;
-                                            if (IsForbiddenCodeOrEnum(translated))
-                                            {
-                                                continue;
-                                            }
-                                            if (off >= 0 && off + 4 <= buf.Length)
-                                            {
-                                                int newIdx = strList.Count;
-                                                strList.Add(translated);
-                                                offList.Add(off);
-
-                                                buf[off] = (byte)newIdx;
-                                                buf[off + 1] = (byte)(newIdx >> 8);
-                                                buf[off + 2] = (byte)(newIdx >> 16);
-                                                buf[off + 3] = (byte)(newIdx >> 24);
-                                                count++;
-                                            }
-                                        }
-                                    }
-                                    Log(string.Format("Successfully pre-populated {0} translated strings into AoIBWWlDJbaf7LijnA string pool!", count));
-                                    return true;
-                                }
-                            }
+                            continue;
                         }
+                        if (off < 0 || off + 4 > buf.Length)
+                        {
+                            outOfRange++;
+                            continue;
+                        }
+                        int newIdx = strList.Count;
+                        strList.Add(translated);
+                        offList.Add(off);
+
+                        buf[off] = (byte)newIdx;
+                        buf[off + 1] = (byte)(newIdx >> 8);
+                        buf[off + 2] = (byte)(newIdx >> 16);
+                        buf[off + 3] = (byte)(newIdx >> 24);
+                        count++;
                     }
                 }
+                Log(string.Format("Successfully pre-populated {0} translated strings into {1} string pool! (offsets out of range: {2})",
+                    count, tDecrypt.Name, outOfRange));
+                return true;
             }
             catch (Exception ex)
             {
                 Log("TryInjectCoreDecryption Exception: " + ex.ToString());
             }
             return false;
+        }
+
+        /// <summary>
+        /// 定位游戏解密字符串池：混淆类/字段名随游戏更新变化（R31：1900.20 → 1900.23 字段名全变），
+        /// 所以名字优先、结构特征（静态 List&lt;string&gt; + List&lt;int&gt; + byte[]）兜底。
+        /// </summary>
+        private static bool TryFindPool(out Type tDecrypt, out FieldInfo fStrings, out FieldInfo fOffsets, out byte[] buf, out FieldInfo fBuf, out string note)
+        {
+            tDecrypt = null;
+            fStrings = null;
+            fOffsets = null;
+            buf = null;
+            fBuf = null;
+            note = "";
+
+            Assembly host = null;
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                string an = asm.GetName().Name;
+                if (an == "Command" || an.StartsWith("Command"))
+                {
+                    host = asm;
+                    break;
+                }
+            }
+            if (host == null)
+            {
+                note = "Command assembly not found.";
+                return false;
+            }
+
+            Type byName = host.GetType("AoIBWWlDJbaf7LijnA.oMu6jVbdhHEH79DDhU", false);
+            if (byName != null && HasPoolShape(byName))
+            {
+                tDecrypt = byName;
+            }
+            else
+            {
+                Type[] types = null;
+                try { types = host.GetTypes(); }
+                catch (ReflectionTypeLoadException rtle) { types = rtle.Types; }
+                catch (Exception ex) { note = "type scan failed: " + ex.Message; }
+                if (types != null)
+                {
+                    foreach (Type t in types)
+                    {
+                        if (t != null && t != byName && HasPoolShape(t))
+                        {
+                            tDecrypt = t;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (tDecrypt == null)
+            {
+                note = "pool class not found（游戏更新后需重做注入点探测，见 docs/BUG_REGISTRY.md R31）.";
+                return false;
+            }
+
+            BindingFlags bf = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+            List<FieldInfo> bufFields = new List<FieldInfo>();
+            foreach (FieldInfo fi in tDecrypt.GetFields(bf))
+            {
+                Type ft = fi.FieldType;
+                if (fStrings == null && ft == typeof(List<string>)) fStrings = fi;
+                else if (fOffsets == null && ft == typeof(List<int>)) fOffsets = fi;
+                else if (ft == typeof(byte[])) bufFields.Add(fi);
+            }
+            if (fStrings == null || fOffsets == null || bufFields.Count == 0)
+            {
+                note = string.Format("pool fields incomplete in {0} (strings={1} offsets={2} byte[]={3}).",
+                    tDecrypt.FullName, fStrings != null, fOffsets != null, bufFields.Count);
+                return false;
+            }
+
+            string candidates = "";
+            foreach (FieldInfo fi in bufFields)
+            {
+                byte[] b = null;
+                try { b = (byte[])fi.GetValue(null); }
+                catch (Exception) { }
+                if (b == null) continue;
+                candidates += (candidates.Length > 0 ? ", " : "") + fi.Name + "=" + b.Length;
+                if (buf == null || b.Length > buf.Length)
+                {
+                    buf = b;
+                    fBuf = fi;
+                }
+            }
+            if (buf == null)
+            {
+                note = "pool buffer not initialised (byte[]: " + candidates + ").";
+                return false;
+            }
+
+            note = string.Format("pool class {0}; strings={1} buffer={2} ({3} B; byte[] candidates: {4})",
+                tDecrypt.FullName, fStrings.Name, fBuf.Name, buf.Length, candidates);
+            return true;
+        }
+
+        /// <summary>
+        /// 只读探针：导出本构建的「偏移 → 当前字符串」全表，供离线核对/重采偏移
+        /// （对照 dict/strings_pool.json 里的英文源串）。
+        /// </summary>
+        private static string HandlePoolDump()
+        {
+            try
+            {
+                Type tDecrypt;
+                FieldInfo fStrings, fOffsets, fBuf;
+                byte[] buf;
+                string note;
+                if (!TryFindPool(out tDecrypt, out fStrings, out fOffsets, out buf, out fBuf, out note))
+                {
+                    return "{\"status\":\"error\",\"message\":\"" + JsonEsc(note) + "\"}";
+                }
+
+                List<string> strList = (List<string>)fStrings.GetValue(null);
+                List<int> offList = (List<int>)fOffsets.GetValue(null);
+                if (strList == null || offList == null)
+                {
+                    return "{\"status\":\"error\",\"message\":\"pool lists null\"}";
+                }
+
+                StringBuilder sb = new StringBuilder();
+                int pairs = 0;
+                lock (strList)
+                {
+                    int n = Math.Min(strList.Count, offList.Count);
+                    for (int i = 0; i < n; i++)
+                    {
+                        string text = strList[i];
+                        if (text == null) continue;
+                        sb.Append(offList[i]).Append('\t').Append(text.Replace("\r", "\\r").Replace("\n", "\\n")).Append('\n');
+                        pairs++;
+                    }
+                }
+
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CMOLocalizer_PoolDump.tsv");
+                File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+                Log(string.Format("POOL_DUMP: {0} pairs -> {1} ({2})", pairs, path, note));
+                return "{\"status\":\"ok\",\"pairs\":" + pairs + ",\"strList\":" + strList.Count + ",\"offList\":" + offList.Count
+                     + ",\"buffer\":" + (buf != null ? buf.Length : 0) + ",\"file\":\"" + JsonEsc(path) + "\"}";
+            }
+            catch (Exception ex)
+            {
+                return "{\"status\":\"error\",\"message\":\"" + JsonEsc(ex.Message) + "\"}";
+            }
+        }
+
+        /// <summary>
+        /// 结构判据：混淆类名/字段名会随游戏更新变化，但「静态 List&lt;string&gt; +
+        /// 静态 List&lt;int&gt; + 静态 byte[]」这一组合是解密字符串池的稳定特征。
+        /// </summary>
+        private static bool HasPoolShape(Type t)
+        {
+            try
+            {
+                if (t == null || t.IsGenericTypeDefinition) return false;
+                bool hasStrings = false, hasOffsets = false, hasBuf = false;
+                foreach (FieldInfo fi in t.GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public))
+                {
+                    Type ft = fi.FieldType;
+                    if (ft == typeof(List<string>)) hasStrings = true;
+                    else if (ft == typeof(List<int>)) hasOffsets = true;
+                    else if (ft == typeof(byte[])) hasBuf = true;
+                }
+                return hasStrings && hasOffsets && hasBuf;
+            }
+            catch { return false; }
         }
 
         private static void StartUIWatcher()
@@ -3676,7 +3851,8 @@ namespace CMOLocalizer
             {
                 string head = fText.Substring(0, cut).Trim().TrimEnd('-').Trim();
                 string trHead = TranslateString(head);
-                return trHead + " - 现代行动：指挥 v1.10 - 内部版本 1900.20";
+                // 构建号每次游戏更新都会变（1900.20 → 1900.23），交给规则处理，不再写死。
+                return trHead + " - " + TranslateString(fText.Substring(cut + 2).Trim());
             }
             if (fText.StartsWith("Command: Modern Operations"))
             {
@@ -4032,6 +4208,17 @@ namespace CMOLocalizer
             {
                 return "使用数据库: " + raw.Substring(6).Trim();
             }
+            // 主标题/大厅标题带构建号，构建号每次游戏更新都会变（1900.20 → 1900.23 …）。
+            // 用规则处理而不是再写死一个版本串（见 docs/BUG_REGISTRY.md R31）。
+            if (raw.StartsWith("Command: Modern Operations", StringComparison.OrdinalIgnoreCase) || raw.StartsWith("Modern Operations v1.10"))
+            {
+                Match mTitle = Regex.Match(raw, @"^(?:Command:\s*)?Modern Operations\s+v(\d+\.\d+)\s*-\s*Build\s+([0-9][0-9.]*)$");
+                if (mTitle.Success)
+                {
+                    NoteGameBuild(raw);
+                    return "现代行动：指挥 v" + mTitle.Groups[1].Value + " - 内部版本 " + mTitle.Groups[2].Value;
+                }
+            }
 
             // 如果文本中已经含有中文，说明已经被翻译过或者是中文字符串，坚决避免重复翻译与递归替换！
             if (ContainsChinese(raw))
@@ -4190,6 +4377,42 @@ namespace CMOLocalizer
             return null;
         }
 
+        /// <summary>
+        /// 游戏内部版本哨兵：从标题串（"Command: Modern Operations v1.10 - Build 1900.23"）读实际
+        /// 构建号，与安装清单里「本汉化适配的构建号」比对；不一致即说明游戏已更新，汉化可能大面积
+        /// 失效（R31 事故：构建号 1900.20→1900.23 跳变，界面与注入同时失灵而无人知晓）。
+        /// </summary>
+        private static void NoteGameBuild(string raw)
+        {
+            if (gameBuildChecked) return;
+            Match m = Regex.Match(raw, @"Build\s+([0-9]+\.[0-9]+)");
+            if (!m.Success) return;
+            gameBuildChecked = true;
+            detectedGameBuild = m.Groups[1].Value;
+            try
+            {
+                Log("GameBuild: detected game internal build " + detectedGameBuild);
+                string manifest = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CMOChinese_Installed.json");
+                if (!File.Exists(manifest)) return;
+                string json = File.ReadAllText(manifest, Encoding.UTF8);
+                Match tm = Regex.Match(json, "\"game_build\"\\s*:\\s*\"([0-9.]+)\"");
+                string target = tm.Success ? tm.Groups[1].Value : "";
+                if (target.Length == 0)
+                {
+                    Log("GameBuild: 安装清单未记录适配构建号（旧版安装包）——无法比对。");
+                }
+                else if (target != detectedGameBuild)
+                {
+                    Log("GameBuild: 警告！游戏已更新到 " + detectedGameBuild + "，本汉化适配的是 " + target
+                        + " —— 部分界面可能退回英文或行为异常，请等待对应版本的汉化补丁。");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("GameBuild check failed: " + ex.Message);
+            }
+        }
+
         private static string DoTranslate(string raw)
         {
             if (IsForbiddenCodeOrEnum(raw)) return raw;
@@ -4216,6 +4439,74 @@ namespace CMOLocalizer
             if (normExactMap.ContainsKey(normRaw))
             {
                 return normExactMap[normRaw];
+            }
+
+            // 2.2 动态组合串：游戏运行时拼装，词典无法枚举穷尽（R31 实测：条令值 / 出动架次 / 燃油罐行）。
+            //      位置在全部“整串查表”之后 —— 已有词条的整串永远优先，规则只处理未知形态。
+            if (!ContainsChinese(raw))
+            {
+                // 条令值：“Inherited, Always Fire” / “Inherited, Bingo 60%” / “Inherited, 5%”
+                if (normRaw.StartsWith("Inherited, ", StringComparison.Ordinal))
+                {
+                    string tailPart = normRaw.Substring(11).Trim();
+                    string trTail = LookupPiece(tailPart);
+                    if (trTail == null && Regex.IsMatch(tailPart, @"^[\d.,%]+$"))
+                    {
+                        trTail = tailPart;   // 纯数字/百分比值直接沿用
+                    }
+                    if (trTail == null)
+                    {
+                        int lastSp = tailPart.LastIndexOf(' ');
+                        if (lastSp > 0)
+                        {
+                            string headPart = tailPart.Substring(0, lastSp).Trim();
+                            string numPart = tailPart.Substring(lastSp + 1).Trim();
+                            string trHead = LookupPiece(headPart);
+                            if (trHead != null && Regex.IsMatch(numPart, @"^[\d.,%]+$")) trTail = trHead + " " + numPart;
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(trTail)) return "继承自上级，" + trTail;
+                }
+
+                // 出动架次：“2 Sorties (Maximum)” / “3 Sorties”
+                Match mSorties = Regex.Match(normRaw, @"^(\d+)\s+Sorties?\s*(?:\(([^()]+)\))?$");
+                if (mSorties.Success)
+                {
+                    string sub = "";
+                    if (mSorties.Groups[2].Success)
+                    {
+                        string trSub = LookupPiece(mSorties.Groups[2].Value.Trim());
+                        sub = trSub != null ? "（" + trSub + "）" : " (" + mSorties.Groups[2].Value + ")";
+                    }
+                    return mSorties.Groups[1].Value + " 架次" + sub;
+                }
+
+                // 燃油罐行：“AvGas (200k Liter Underground Tank)”
+                Match mFuel = Regex.Match(normRaw, @"^([A-Za-z][A-Za-z0-9 .\-]{1,24}?)\s*\((\d+(?:\.\d+)?k?)\s+Liters?\s+([^()]{2,40})\)$");
+                if (mFuel.Success)
+                {
+                    string trKind = LookupPiece(mFuel.Groups[1].Value.Trim());
+                    string trTank = LookupPiece(mFuel.Groups[3].Value.Trim());
+                    if (trKind != null && trTank != null)
+                    {
+                        return trKind + "（" + mFuel.Groups[2].Value + " 升 " + trTank + "）";
+                    }
+                }
+
+                // 通用「前缀 (正文)」组合：两侧都有整串词条且都不含中文时才组译（防误译/叠译）。
+                Match mPair = Regex.Match(normRaw, @"^([^()\r\n]{2,60}?)\s*\(([^()\r\n]{2,60})\)$");
+                if (mPair.Success)
+                {
+                    string left = mPair.Groups[1].Value.Trim();
+                    string right = mPair.Groups[2].Value.Trim();
+                    string trLeft = LookupPiece(left);
+                    string trRight = LookupPiece(right);
+                    if (trLeft != null && trRight != null
+                        && !IsForbiddenCodeOrEnum(trLeft) && !IsForbiddenCodeOrEnum(trRight))
+                    {
+                        return trLeft + "（" + trRight + "）";
+                    }
+                }
             }
 
             // 2.12 多行消息（消息日志/教程弹窗按行组织）：逐行查表后重新拼装。
@@ -4648,6 +4939,9 @@ namespace CMOLocalizer
         private static readonly HashSet<string> liveAuditSeen = new HashSet<string>(StringComparer.Ordinal);
         private static readonly object auditLock = new object();
         private static string auditLogPath = "";
+        // 游戏内部版本哨兵（见 NoteGameBuild）：只在首次拿到标题串时比对一次。
+        private static string detectedGameBuild = "";
+        private static bool gameBuildChecked = false;
 
         private static void AuditUntranslatedLive(string raw)
         {
@@ -5252,7 +5546,24 @@ namespace CMOLocalizer
                 FieldInfo fHtml = dbForm.GetType().GetField("RenderedHTMLString", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 FieldInfo fId = dbForm.GetType().GetField("SelectedObjectID", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 FieldInfo fName = dbForm.GetType().GetField("SelectedObjectName", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                // 混淆字段名每次游戏更新都会变（R31）：名字查不到时按「带 SelectedIndices 的控件字段」结构兜底。
                 FieldInfo fList = dbForm.GetType().GetField("dXkHcikCGK6", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (fList == null)
+                {
+                    foreach (FieldInfo fi in dbForm.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                    {
+                        if (!typeof(Control).IsAssignableFrom(fi.FieldType)) continue;
+                        object ctlVal = null;
+                        try { ctlVal = fi.GetValue(dbForm); }
+                        catch (Exception) { }
+                        if (ctlVal != null && ctlVal.GetType().GetProperty("SelectedIndices") != null)
+                        {
+                            fList = fi;
+                            break;
+                        }
+                    }
+                    Log("DB_SELECT_ROW: list field by name not found; structural fallback -> " + (fList != null ? fList.Name : "(none)"));
+                }
                 PropertyInfo piSOT = dbForm.GetType().GetProperty("SelectedObjectType", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 string sotVal = piSOT != null ? piSOT.GetValue(dbForm, null) as string : "(null)";
                 MethodInfo mDisplay = dbForm.GetType().GetMethod("DisplaySelection", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
@@ -5718,6 +6029,11 @@ namespace CMOLocalizer
                 }
                 return "{\"status\":\"ok\",\"action\":\"DROP_DOWN\",\"form\":\"" + JsonEsc(ownerName)
                     + "\",\"combo\":\"" + JsonEsc(target.Name) + "\",\"text\":\"" + JsonEsc(target.Text) + "\"}";
+            }
+
+            if (cmd == "POOL_DUMP")
+            {
+                return HandlePoolDump();
             }
 
             if (cmd == "WPF_DUMP" || cmd == "DUMP_COMBOS" || cmd == "DUMP_LISTS" || cmd == "XLATE_BATCH")
