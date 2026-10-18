@@ -643,7 +643,9 @@
   含「`GAME_BUILD` ↔ `ReleaseConstants.GameBuild` ↔ 安装器引用 ↔ README」四项一致性。
   实测（2026-10-17）：verify_all **10/10**、`--static --installer` **25/25**、`--live` **16/16**（新用例：注入 ok、
   构建号哨兵 ok、池内中文 12/12、日志模板 3/3）；故意把 `GAME_BUILD` 声明成 1900.20 时 `version` 门禁立即 FAIL（已还原）。
-- **状态**：已修并验证（2026-10-17）；用户截图存于 `…/Tencent Files/3622024135/nt_qq/nt_data/Pic/2026-10/Ori/`；
-  随 **v4.2.0** 发版准备完成：五处版本号=4.2.0、CHANGELOG 顶部段（首行写明适配游戏内部版本 1900.23）、
-  门禁实测 `verify_all` 10/10、`--static --installer` 25/25、`--live` 16/16（报告 version=4.2.0 modes=['live'] 16 用例）、
-  `release_check --pre` 13/13；**打包/发布待用户授权**。
+- **状态**：已修并验证（2026-10-17）；用户截图存于 `…/Tencent Files/3622024135/nt_qq/nt_data/Pic/2026-10/Ori/`。
+  **已随 v4.2.0 打包并正式发布（2026-10-18，经用户授权）**：Release `https://github.com/mj8724/CMO_CN/releases/tag/v4.2.0`
+  （tag → `1e01ce3`，4 个资产：Setup 14,735,360 B sha256 `c34c9010…` / Pack 7,158,031 B sha256 `46b2c724…` + 各自 `.sha256`）。
+  发布后自检 4/4：latest=v4.2.0 且非 draft/pre、下载包 sha256 与本地构建及同目录 `.sha256` 三处一致、
+  真实实装 rc=0（清单 version=4.2.0 + game_build=1900.23，dll/json 与仓库逐字节一致）、
+  升级链弹窗显示「发现新版本 v4.2.0」且带「适配游戏内部版本：1900.23」。
