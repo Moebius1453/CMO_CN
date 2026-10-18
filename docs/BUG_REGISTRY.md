@@ -720,3 +720,27 @@
   `group_status_residual.png`（09:16 编队状态）、`mission_editor_dropdown_residual.png`（09:19 任务编辑器下拉）、
   `wpf_textlog_20261018_0920.json`（`WPF_TEXTLOG` 400 条原始记录，含 93/92/59 次重写与叠译实例）；
   现场日志：游戏目录 `CMOLocalizer.log`、`CMOLocalizer_LiveAudit.log`。
+- **现象 F（悬停介绍/帮助文本整段英文，09:2x）**：把鼠标放在「作战阶段」上弹出的帮助框是整段英文：
+  `The current phase of the mission in the Operation Planner` / `Waiting for trigger:`（含 `The mission has not yet started, the multi-mission units assigned to the mission, which aren't mobilized won't execute the mission.`）
+  / `Satisfied:` / `Triggered:` 四段。查证：词典 `exact` **全部无**、`LiveAudit` 0 命中、`WPF_TEXTLOG` 0 命中
+  ⇒ 属「悬停帮助/提示文本通道未覆盖」（不是写回覆盖，也不是已译被覆盖）。
+- **现象 G（任务编辑器指派列表行的括号内英文，09:22）**：行形如 `Radar AN/FPS-89 (HP) 哈尔德 (Radar (AN/FPS-89 HP))`，
+  红框处均为**括号内的英文片段**（`Radar` / `HP` / `AEW` / `CAEW`），其中 `Radar`（中文名「雷达」）**不是缩写**，
+  与我方口径「有意保留英文只限 OSM 样式名/KPH/MPH/控件内部名/纯图片页」不一致 ⇒ 应译未译。
+  查证：`Radar`（孤立词）不在 `exact`；`Airfield` 也不在（但 `Veteran`/`Loiter`/`Unassigned` **在**）。
+- **【逐串归类（2026-10-18 实测，供修复时直接分派）】**：
+
+| 串（用户截图中看到的英文） | 词典 `exact` | `LiveAudit`（未译） | `WPF_TEXTLOG`（已译） | 归类 |
+|---|---|---|---|---|
+| `Veteran`（截图里英文） | 有（`老手`） | 69 | ✓ 反复译入 | **已译但被游戏写回覆盖**（现象 C）|
+| `Loiter` | 有（`盘旋待机`） | 24 | ✓ 59 次 | 同上 |
+| `Fire:` / `Kills 0` | 有 | 0 | ✓ 93 次 | 同上 |
+| `Unassigned`（状态行） | **有** | 0 | **✗** | **词典有但通道没送达**（孤例：需查该值走的是哪条路径）|
+| `Airfield`（编队状态） | **无** | 26 | ✗ | **真缺词条** |
+| `Active radar from Initial Point (IP) to Winchester` | **无** | 3 | ✗ | 真缺词条（下拉选项）|
+| `Waiting for trigger:` / `Satisfied:` / `Triggered:` / `The current phase of the mission…` | **无** | 0 | ✗ | 真缺词条（悬停帮助长句）|
+| `Radar`（列表行括号内） | **无** | — | ✗ | 真缺词条（非缩写）|
+
+  结论：“有中文名却没译”的用户疑问，实际上是**三类不同原因**：① 已译但被写回覆盖；② 词典有但通道未送达；③ 词典真没有——
+  不能用同一条“补词条”去处理，必须按上表分派。
+- **证据（追加）**：`hover_tooltip_english.png`（悬停帮助整段英文）、`assign_list_paren_english.png`（指派列表括号内英文）。
