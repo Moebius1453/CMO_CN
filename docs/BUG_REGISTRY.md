@@ -666,6 +666,8 @@
   （`快速周转出动: Inherited, 战斗机与反潜战机`、`航空出动强度/节奏: Inherited, 最大出动强度 (Su…)`，以及武器状态/水下战/燃料等格）——
   即 R31 只修了 `Inherited, <值>` 里 `<值>` 的翻译，**`Inherited` 这个词本身在这几格里仍是英文**。
 - **现象 C（频闪）**：用户口述「又在频闪」，未指明具体控件；静态截图无法体现。
+  → **说明**：本节为首次登记时的表述；用户随后补充了复现条件（须在游戏运行中动态选择条目），
+  已于下方「现象 C【频闪】已实测复现」小节重写并附实测证据。
 - **已核验（只读证据，本次运行 2026-10-18 09:06 起）**：
   1. **注入通道正常**：`CoreDecryption: pool class AoIBWWlDJbaf7LijnA.oMu6jVbdhHEH79DDhU; strings=yjAvaHkPKAG buffer=P30vaKD9Eao (2044466 B…)`
      与 `Successfully pre-populated 3525 translated strings … (offsets out of range: 0)`；无 `offset injection disabled`。
@@ -683,10 +685,38 @@
   3. `SupportMission`：疑为任务**内部标识名**（枚举名，可能应有意保留）；需确认游戏是否把它当可译文本再决定。
   4. 频闪：写回熔断为 0 ⇒ 假设为「游戏每次选择/刷新重设控件文本 ↔ 引擎重译」交替（因不是 7 次相同写入故不触发熔断）；
      采样方式同 R4（同屏两帧截图 md5 对比）。
+- **现象 D（编队状态面板，09:16，红框）**：① `Airfield (98 units)` / `Airfield`（机场/基地与数量未译）；
+  ② `160000 fuel units remaining (AviationFuel)`（油量/单位/油料类型名未译；上方 6 行「航空燃油 (200k 升 地下油罐)」已是中文）；
+  ③ EMCON 警告行 `(Manual edit disabled)` 英文；④ `状态: Unassigned` 英文。
+- **现象 E（任务编辑器 · 对地打击/空中截击页签，09:19，红框）**：
+  ① 下拉选项值 `Active radar from Initial Point (IP) to Winchester`（英文选项）；② 按钮 `CREATE or UPDATE flightplans`；
+  ③ `状态: 主动 (Active)` 半截英文；④ 同一个 `作战阶段:` 值被标签覆盖（`itting for trigger`，与现象 B③ 相同）；
+  ⑤ 雷达使用/最小打击半径两行的下拉框里「中文选项 + 英文选项」叠在同一格内（截图可见文字重影）。
+- **现象 C【频闪】已实测复现（2026-10-18 09:13–09:19，引擎只读探针 `WPF_TEXTLOG`）**：
+  游戏处于**推演运行中**（教程想定「空空作战教程 4」，pid 44020）时，右侧 WPF 面板的同一批 ContentControl 被**反复重写**：
+  5.5 分钟内（400 条环形缓冲，09:13:18→09:18:42）`Veteran ==> 老手` **93 次**、`Kills 0 ==> 战果击杀: 0` **93 次**、
+  `Fire: ==> 起火:` **93 次**、航速/地速行 **58 次**、`Israel` 17 次、`Loiter ==> 盘旋待机` **59 次**。
+  即：**游戏约每 1.5–3.5 秒把英文原串写回去，引擎随即再译成中文——这就是肉眼中的中英频闪**；
+  而同一会话 `WRITE LOOP BLOCKED` 仍为 **0 条** ⇒ 熔断守卫（“同一控件 7 次相同写入”）**抓不到这种交替写入**
+  （每次写入内容与上一次不同），这正是 R31 修完注入后仍能频闪的原因。
+  旁证：用户截图里显示为英文的 `Veteran` / `Loiter`，在本日志里都有大量 `==> 老手` / `==> 盘旋待机` 译入记录
+  ⇒ 它们**不是缺词条**（词典有），而是**写回被游戏覆盖**。
+- **叠译实测（与 R29 已知残余同源）**：航速行 `航速: … 地速(Gnd) 192 节 (自动: Loiter)` 被译成
+  `航速: … 地速(  地速(Gnd) ) 192 节 (自动: Loiter)`——即 `地速` 被叠加进已含中文的值里，
+  5.5 分钟内同一形态出现 **92 次**；行内 `(自动: Loiter)` 的 `Loiter` 单独仍走原文（同帧日志里另有 `Loiter ==> 盘旋待机`）
+  ⇒ 同一行内不同片段走了不同通道，疑似“整串查表未命中 → 回退到括注/词级通道”所致（待验证）。
+- **复现条件（用户说明，已实测一致）**：**必须在游戏运行（推演）中动态选择条目/切换单位**；
+  游戏未运行、或只看静态截图，面板不刷新 ⇒ 观察不到。本文所有频闪证据均来自“游戏运行 + 反复切换选择”下的采样。
 - **影响面**：已装 v4.2.0 的用户可见；现有 `--live` 用例（`L-doctrine-combo` / `L-ui-residuals`）断言的是抽样项的取值必须中文，
-  **未覆盖**这些残英文形态与「标签覆盖」形态。
-- **状态**：**仅登记，未修**（用户 2026-10-18 明确「先记录，不要做」）；按台账规则应在修复时补：① 回归用例
-  （`static` 词条存在性 + `live` 单位状态/条令窗口文本断言、覆盖形态几何断言）；② `CHANGELOG` 对应版本段；③ 视现象归属决定
-  是否为「真缺词条」（补 `dict/src/*.json` + `build_dict.py`）还是「控件截断/覆盖」（引擎渲染时机）。
-- **证据**：`evidence/R32/unit_status_residual.png`（09:10）、`evidence/R32/doctrine_editor_residual.png`（09:12）、
-  游戏目录 `CMOLocalizer.log`、`CMOLocalizer_LiveAudit.log`（两者均为现场只读副本来源，不入库）。
+  **未覆盖**这些残英文形态、「标签覆盖」形态，也**无法发现写回交替**（它们只在静止状态读一遍文本）。
+- **状态**：**仅登记，未修**（用户 2026-10-18 明确「先记录，不要做」）。本轮只做了**只读观测**：
+  `DUMP_OPEN_FORMS` / `WPF_DUMP` / `WPF_TEXTLOG` / `CTRL_TREE` + `CMOLocalizer.log` / `CMOLocalizer_LiveAudit.log` 采样，
+  未改任何代码、词典、配置，未重建、未打包、未重发。
+  按台账规则应在（经授权的）修复时补：① 回归用例
+  （`static` 词条存在性；`live` 单位状态/编队状态/条令窗口文本断言 + 覆盖形态几何断言 + **写回交替检测**——
+  可复用 `WPF_TEXTLOG`：同一源串在未来 N 秒内的重写次数必须为 0/低值）；② `CHANGELOG` 对应版本段；
+  ③ 视归属决定是「真缺词条」（补 `dict/src/*.json` + `build_dict.py`）还是「写回时机/控件宽度」（引擎侧）。
+- **证据（均存 `evidence/R32/`，不入库）**：`unit_status_residual.png`（09:10 单位状态）、`doctrine_editor_residual.png`（09:12 条令）、
+  `group_status_residual.png`（09:16 编队状态）、`mission_editor_dropdown_residual.png`（09:19 任务编辑器下拉）、
+  `wpf_textlog_20261018_0920.json`（`WPF_TEXTLOG` 400 条原始记录，含 93/92/59 次重写与叠译实例）；
+  现场日志：游戏目录 `CMOLocalizer.log`、`CMOLocalizer_LiveAudit.log`。
