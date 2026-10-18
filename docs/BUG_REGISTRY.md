@@ -649,3 +649,44 @@
   发布后自检 4/4：latest=v4.2.0 且非 draft/pre、下载包 sha256 与本地构建及同目录 `.sha256` 三处一致、
   真实实装 rc=0（清单 version=4.2.0 + game_build=1900.23，dll/json 与仓库逐字节一致）、
   升级链弹窗显示「发现新版本 v4.2.0」且带「适配游戏内部版本：1900.23」。
+
+---
+
+## R32 v4.2.0 实装后仍有残留英文 + 频闪复发（v4.2.0，2026-10-18 用户实测，**仅登记未修**）
+
+- **触发**：用户 2026-10-18 报「又在频闪」，并给两张截图：09:10 单位状态面板、09:12 任务编辑器条令窗口；
+  此时游戏目录已实装 **v4.2.0**（清单 `version=4.2.0`/`game_build=1900.23`，安装于 08:27，游戏 09:06 启动）。
+  用户明确要求：**先记录，不要修**。
+- **现象 A（单位状态面板，红框）**：① 经验等级 `Veteran`；② 机型类别 `Airborne Early Warning (AEW)`；
+  ③ 挂载方案名 `Conformal Airborne Early Warning (CAEW)`（同一行其余为中文：「挂载方案: … 已启用快速出动周转。0 / 2 架次」）；
+  ④ 航向行 `地速(Gnd) 220 节（自动: Loiter）` 的 `Loiter`；⑤ 面板底部「乘员海拔 / 乘员高度」行字符被裁切、重叠。
+- **现象 B（任务编辑器 · 条令/武器使用授权窗口，红框）**：① 任务标识名 `SupportMission`；
+  ② 状态值半截英文 `主动 (Active)`；③ `作战阶段:` 的值原文是 `Waiting for trigger`，**左侧标签 `作战阶段:` 压在值上面**，
+  前两字符被覆盖（截图里读作 `itting for trigger`）；④ 值列多处 `Inherited` 前缀本身未译
+  （`快速周转出动: Inherited, 战斗机与反潜战机`、`航空出动强度/节奏: Inherited, 最大出动强度 (Su…)`，以及武器状态/水下战/燃料等格）——
+  即 R31 只修了 `Inherited, <值>` 里 `<值>` 的翻译，**`Inherited` 这个词本身在这几格里仍是英文**。
+- **现象 C（频闪）**：用户口述「又在频闪」，未指明具体控件；静态截图无法体现。
+- **已核验（只读证据，本次运行 2026-10-18 09:06 起）**：
+  1. **注入通道正常**：`CoreDecryption: pool class AoIBWWlDJbaf7LijnA.oMu6jVbdhHEH79DDhU; strings=yjAvaHkPKAG buffer=P30vaKD9Eao (2044466 B…)`
+     与 `Successfully pre-populated 3525 translated strings … (offsets out of range: 0)`；无 `offset injection disabled`。
+  2. **构建号一致**：`GameBuild: detected game internal build 1900.23` == 仓库 `GAME_BUILD`，无告警。
+  3. **本次运行 `WRITE LOOP BLOCKED` = 0 条**（`CMOLocalizer.log` 历史累计 407 条均属更早会话）
+     ⇒ **当前频闪不是 R31 的写回熔断机制**，与 R31 结论（“注入失效 ⇒ 互搏”）不是同一回事。
+  4. 引擎自记「未译英文清单」`CMOLocalizer_LiveAudit.log`（本次运行 56456 行）确认这些串**被判为英文但没译出**：
+     `Veteran` 69 次、`CAEW` 38、`Loiter` 24、`Conformal Airborne Early Warning` 4、`Airborne Early Warning (AEW)` 3
+     ⇒ 性质是「查表未覆盖 / 形态未识别 / 控件值被重建」，**不是注入失效**。
+- **待验证假设（供今后动手时用；本轮全部未验证、未修改任何代码/词典）**：
+  1. `Inherited` 单前缀未译：疑该格控件按宽度**截断**（只显示前缀）或该格取值是拼接串、整串不在表中；
+     判别方式：`CTRL_TREE` / `WPF_DUMP` 取控件真实 `.Text` + `XLATE` 实测。
+  2. `itting for trigger`：`作战阶段:` 的值发生**标签覆盖**（与 R31 的 `ALERT:` 遮挡同类，疑控件宽度/绘制顺序）；
+     判别方式：`CTRL_TREE` 看几何与文本。
+  3. `SupportMission`：疑为任务**内部标识名**（枚举名，可能应有意保留）；需确认游戏是否把它当可译文本再决定。
+  4. 频闪：写回熔断为 0 ⇒ 假设为「游戏每次选择/刷新重设控件文本 ↔ 引擎重译」交替（因不是 7 次相同写入故不触发熔断）；
+     采样方式同 R4（同屏两帧截图 md5 对比）。
+- **影响面**：已装 v4.2.0 的用户可见；现有 `--live` 用例（`L-doctrine-combo` / `L-ui-residuals`）断言的是抽样项的取值必须中文，
+  **未覆盖**这些残英文形态与「标签覆盖」形态。
+- **状态**：**仅登记，未修**（用户 2026-10-18 明确「先记录，不要做」）；按台账规则应在修复时补：① 回归用例
+  （`static` 词条存在性 + `live` 单位状态/条令窗口文本断言、覆盖形态几何断言）；② `CHANGELOG` 对应版本段；③ 视现象归属决定
+  是否为「真缺词条」（补 `dict/src/*.json` + `build_dict.py`）还是「控件截断/覆盖」（引擎渲染时机）。
+- **证据**：`evidence/R32/unit_status_residual.png`（09:10）、`evidence/R32/doctrine_editor_residual.png`（09:12）、
+  游戏目录 `CMOLocalizer.log`、`CMOLocalizer_LiveAudit.log`（两者均为现场只读副本来源，不入库）。
