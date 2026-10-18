@@ -281,7 +281,25 @@ namespace CMOLocalizer
         }
 
         private static readonly List<MapPlaceEntry> mapPlaces = new List<MapPlaceEntry>();
+        private sealed class TileClient
+        {
+            public readonly TcpClient Client;
+            public readonly long AcceptedAt;
+
+            public TileClient(TcpClient client)
+            {
+                Client = client;
+                AcceptedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+        }
+
         private static TcpListener tileListener = null;
+        private const int TILE_CLIENT_TIMEOUT_MS = 1500;
+        private const int TILE_WORKERS = 4;
+        private const int TILE_QUEUE_CAPACITY = 64;
+        private const int TILE_REQUEST_LOG_LIMIT = 16;
+        private static readonly object tileRequestLogLock = new object();
+        private static int tileRequestLogCount;
 
         private static void StartLocalTileServer(string baseDir)
         {
@@ -323,19 +341,39 @@ namespace CMOLocalizer
                 offsetMap[62636] = "zh-CN";
                 Log("LocalTileServer started on " + localUrl + " with " + mapPlaces.Count + " Chinese landmarks.");
 
+                // Game downloads also use the CLR pool. Keep both accepting and
+                // serving independent, with bounded workers and queued sockets.
+                var requests = new System.Collections.Concurrent.BlockingCollection<TileClient>(TILE_QUEUE_CAPACITY);
+                for (int i = 0; i < TILE_WORKERS; i++)
+                {
+                    Thread worker = new Thread(() =>
+                    {
+                        foreach (TileClient request in requests.GetConsumingEnumerable()) HandleTileClient(request);
+                    });
+                    worker.IsBackground = true;
+                    worker.Name = "CMO Chinese map tile worker " + i;
+                    worker.Start();
+                }
+
                 Thread serverThread = new Thread(() =>
                 {
-                    while (true)
+                    try
                     {
-                        try
+                        while (true)
                         {
-                            TcpClient client = tileListener.AcceptTcpClient();
-                            ThreadPool.QueueUserWorkItem(_ => HandleTileClient(client, baseDir));
+                            TileClient request = new TileClient(tileListener.AcceptTcpClient());
+                            if (!requests.TryAdd(request))
+                            {
+                                request.Client.Close();
+                                LogTileRequest("queue full; client closed");
+                            }
                         }
-                        catch { break; }
                     }
+                    catch (Exception ex) { LogTileRequest("accept stopped: " + ex.Message); }
+                    finally { requests.CompleteAdding(); }
                 });
                 serverThread.IsBackground = true;
+                serverThread.Name = "CMO Chinese map tiles";
                 serverThread.Start();
             }
             catch (Exception ex)
@@ -344,41 +382,74 @@ namespace CMOLocalizer
             }
         }
 
-        private static void HandleTileClient(TcpClient client, string baseDir)
+        private static void LogTileRequest(string message)
+        {
+            if (Interlocked.Increment(ref tileRequestLogCount) <= TILE_REQUEST_LOG_LIMIT)
+                lock (tileRequestLogLock) Log("LocalTile " + message);
+        }
+
+        private static string ReadTileRequestLine(StreamReader reader, NetworkStream stream, long acceptedAt)
+        {
+            long deadline = acceptedAt + TILE_CLIENT_TIMEOUT_MS * System.Diagnostics.Stopwatch.Frequency / 1000;
+            StringBuilder line = new StringBuilder();
+            while (true)
+            {
+                long remaining = deadline - System.Diagnostics.Stopwatch.GetTimestamp();
+                if (remaining <= 0) throw new TimeoutException("first request line exceeded 1500ms from accept");
+                stream.ReadTimeout = Math.Max(1, (int)Math.Ceiling(remaining * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
+                int next = reader.Read();
+                if (System.Diagnostics.Stopwatch.GetTimestamp() >= deadline)
+                    throw new TimeoutException("first request line exceeded 1500ms from accept");
+                if (next < 0) return null;
+                if (next == '\n') return line.ToString().TrimEnd('\r');
+                if (line.Length >= 1024) throw new InvalidDataException("request line exceeds 1024 bytes");
+                line.Append((char)next);
+            }
+        }
+
+        private static void HandleTileClient(TileClient request)
         {
             try
             {
-                using (client)
-                using (NetworkStream ns = client.GetStream())
+                using (request.Client)
+                using (NetworkStream ns = request.Client.GetStream())
                 using (StreamReader sr = new StreamReader(ns, Encoding.ASCII))
                 using (BinaryWriter bw = new BinaryWriter(ns))
                 {
-                    string reqLine = sr.ReadLine();
+                    ns.WriteTimeout = TILE_CLIENT_TIMEOUT_MS;
+                    string reqLine = ReadTileRequestLine(sr, ns, request.AcceptedAt);
                     if (string.IsNullOrEmpty(reqLine)) return;
 
                     // Parse "GET /MapTiles/Labels/{z}/{x}/{y}.png HTTP/1.1"
-                    int z = 3, x = 0, y = 0;
-                    Match m = Regex.Match(reqLine, @"/(\d+)/(\d+)/(\d+)\.png");
-                    if (m.Success)
+                    int z, x, y;
+                    Match m = Regex.Match(reqLine, @"^GET /MapTiles/Labels/([0-9]{1,2})/([0-9]{1,7})/([0-9]{1,7})\.png HTTP/1\.[01]$");
+                    if (!m.Success || !int.TryParse(m.Groups[1].Value, out z) || z > 22
+                        || !int.TryParse(m.Groups[2].Value, out x) || x >= (1 << z)
+                        || !int.TryParse(m.Groups[3].Value, out y) || y >= (1 << z))
                     {
-                        int.TryParse(m.Groups[1].Value, out z);
-                        int.TryParse(m.Groups[2].Value, out x);
-                        int.TryParse(m.Groups[3].Value, out y);
+                        LogTileRequest("rejected " + reqLine);
+                        bw.Write(Encoding.ASCII.GetBytes("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+                        bw.Flush();
+                        return;
                     }
 
-                    byte[] pngBytes = RenderChineseTileBytes(z, x, y);
+                    int candidates, rendered;
+                    System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+                    byte[] pngBytes = RenderChineseTileBytes(z, x, y, out candidates, out rendered);
                     string header = string.Format(
                         "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {0}\r\nConnection: close\r\n\r\n",
                         pngBytes.Length);
                     bw.Write(Encoding.ASCII.GetBytes(header));
                     bw.Write(pngBytes);
                     bw.Flush();
+                    LogTileRequest(string.Format("z={0} x={1} y={2} candidates={3} rendered={4} bytes={5} ms={6}",
+                        z, x, y, candidates, rendered, pngBytes.Length, elapsed.ElapsedMilliseconds));
                 }
             }
-            catch { }
+            catch (Exception ex) { LogTileRequest("error " + ex.GetType().Name + ": " + ex.Message); }
         }
 
-        private static byte[] RenderChineseTileBytes(int z, int x, int y)
+        private static byte[] RenderChineseTileBytes(int z, int x, int y, out int candidates, out int rendered)
         {
             double n = Math.Pow(2.0, z);
             double minLon = x / n * 360.0 - 180.0;
@@ -397,6 +468,8 @@ namespace CMOLocalizer
                 }
             }
 
+            candidates = inTile.Count;
+            rendered = 0;
             using (Bitmap bmp = new Bitmap(256, 256, PixelFormat.Format32bppArgb))
             {
                 using (Graphics g = Graphics.FromImage(bmp))
@@ -456,6 +529,7 @@ namespace CMOLocalizer
                                     {
                                         g.FillPath(br, gp);
                                     }
+                                    rendered++;
                                 }
                             }
                         }
