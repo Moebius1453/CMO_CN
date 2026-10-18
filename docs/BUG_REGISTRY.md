@@ -765,3 +765,22 @@
   ⇒ **通道能碰到它们**，不涉写回覆盖，补词条即可望生效（与本轮写回覆盖类问题分开处理）。
 - **证据（追加 2）**：`ato_buttons_english.png`（ATO 按钮）、`dialog_body_english.png`（弹窗正文）、
   `facility_rows_english.png`（设施行）。
+- **现象 K（“会失效原来的中文”，09:34）**：用户反馈——原本已显示中文的文本会**退回英文**（中文失效）；
+  本次截图红框为 `Airborne Early Warning (AEW)`（同一面板的 `Veteran`、`Gulfstream G550 AEW [Nahshon-Eitam, CAEW]`、
+  `所属阵营: Israel`、行内 `(自动: Cruise)` 等也呈英文）。查证：`Airborne Early Warning (AEW)` **词典 exact 有**、
+  但本次运行 `WPF_TEXTLOG` **译入 0 次**、`LiveAudit` 3 命中 ⇒ 属归类表第②类（词典有但通道没送达），
+  与 `Unassigned` 同类；而 `Veteran`/`AEW`/`Cruise` 均在词典中且有大量译入记录 ⇒ 同屏内两类问题共存。
+- **现象 L（频闪持续，第二段采样 09:32:40–09:39:07）**：`WPF_TEXTLOG` 又一窗口 400 条，同一批控件继续被重写：
+  `Israel` **77 次**、`Veteran` **67 次**、`Kills 0` **67 次**、`Fire:` **64 次**、`航速: 350.0 节 (马赫 0.61) (Loiter)` 11 次
+  （该变体里 `Loiter` 仍为英文）。⇒ 两个独立时间窗（09:13–09:18 / 09:32–09:39）均复现，与用户「又在频闪」一致；
+  同一会话 `WRITE LOOP BLOCKED` 仍为 0。
+- **归类表追加（第②类实例）**：
+
+| 串 | 词典 `exact` | `LiveAudit` | `WPF_TEXTLOG` 译入 | 归类 |
+|---|---|---|---|---|
+| `Airborne Early Warning (AEW)` | **有** | 3 | **0** | 词典有但通道没送达（同 `Unassigned`）|
+| `Unassigned` | 有 | 0 | 0 | 同上 |
+| `Airborne Early Warning`（不带括号）| 无 | 7 | 0 | 真缺词条（变体形态）|
+| `Gulfstream G550 AEW`（前缀）| 无 | 35 | 0 | 真缺词条（型号名可选用保留，需人工定口径）|
+| `Cruise` / `AEW` / `Veteran` | 有 | 0–93 命中不等 | 有译入 | 已译但被写回覆盖（第①类）|
+- **证据（追加 3）**：`unit_status_flicker_0934.png`（09:34 用户截图，红框 `Airborne Early Warning (AEW)`）。
