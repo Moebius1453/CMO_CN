@@ -250,6 +250,7 @@ namespace CMOLocalizerInstaller
         private void Log(string msg)
         {
             txtLog.AppendText("[" + DateTime.Now.ToString("HH:mm:ss") + "] " + msg + "\r\n");
+            InstallerCore.WriteLog(msg);   // 同时落盘：报障时能看到界面日志框以外的上下文
         }
 
         private void OnBrowseClick(object sender, EventArgs e)
@@ -453,29 +454,57 @@ namespace CMOLocalizerInstaller
             string err;
             bool ok = InstallerCore.Install(gp, out err);
 
-            // 游戏运行中会占住 CMOLocalizer.dll（已加载映像无法被任何文件操作替换），
-            // 安装会失败。此时只有用户自己关掉游戏才行——先征得同意再关，绝不静默杀进程。
-            if (!ok && InstallerCore.IsGameRunning())
+            // 失败后优先分辨原因：① 目录不可写（Steam 装在 C:\Program Files 的典型情形，需提权）
+            // ② 目标文件被运行中的游戏占用（需先关游戏）。两者的处置完全不同，必须分开给指引。
+            if (!ok)
             {
-                DialogResult dr = MessageBox.Show(
-                    "安装失败：目标文件正被运行中的游戏占用。\n\n" + err +
-                    "\n\n是否现在关闭游戏并重试安装？\n（游戏通常有自动存档；未保存的推演进度会丢失）",
-                    "游戏正在运行", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (dr == DialogResult.Yes)
+                string why;
+                if (!InstallerCore.CanWriteToDir(gp, out why))
                 {
-                    Log("目标文件被游戏占用，用户同意关闭游戏后重试安装。");
-                    if (InstallerCore.CloseGame(30))
+                    DialogResult dr = MessageBox.Show(
+                        "安装失败：游戏目录当前不可写（普通权限）。\n\n目录：" + gp +
+                        "\n原因：" + why +
+                        "\n\n游戏装在 C:\\Program Files 下时（Steam 默认位置）需要管理员权限。\n" +
+                        "是否现在以管理员身份重新启动安装器？",
+                        "需要管理员权限", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (dr == DialogResult.Yes)
                     {
-                        ok = InstallerCore.Install(gp, out err);
+                        Log("目录不可写，尝试以管理员身份重启安装器。");
+                        if (InstallerCore.RelaunchElevated())
+                        {
+                            Close();
+                            return;
+                        }
+                        MessageBox.Show("提权启动失败，请手动右键安装器选「以管理员身份运行」。",
+                            "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     else
                     {
-                        err = "无法关闭游戏进程，请手动退出游戏后重试。";
+                        Log("[取消] 目录不可写，用户拒绝提权重试。");
                     }
                 }
-                else
+                else if (InstallerCore.IsGameRunning())
                 {
-                    Log("[取消] 游戏正在运行，用户选择不关闭游戏，安装中止。");
+                    DialogResult dr = MessageBox.Show(
+                        "安装失败：目标文件正被运行中的游戏占用。\n\n" + err +
+                        "\n\n是否现在关闭游戏并重试安装？\n（游戏通常有自动存档；未保存的推演进度会丢失）",
+                        "游戏正在运行", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (dr == DialogResult.Yes)
+                    {
+                        Log("目标文件被游戏占用，用户同意关闭游戏后重试安装。");
+                        if (InstallerCore.CloseGame(30))
+                        {
+                            ok = InstallerCore.Install(gp, out err);
+                        }
+                        else
+                        {
+                            err = "无法关闭游戏进程，请手动退出游戏后重试。";
+                        }
+                    }
+                    else
+                    {
+                        Log("[取消] 游戏正在运行，用户选择不关闭游戏，安装中止。");
+                    }
                 }
             }
 
@@ -682,6 +711,79 @@ namespace CMOLocalizerInstaller
             catch { return false; }
         }
 
+        /// <summary>
+        /// 目标目录是否可写。Steam 默认装在 C:\Program Files 下，普通权限写不进去；
+        /// 旧实现把写入失败吞成「资源缺失」，用户只能看到莫名报错，所以先探测一次。
+        /// </summary>
+        public static bool CanWriteToDir(string dir, out string reason)
+        {
+            reason = "";
+            try
+            {
+                string probe = Path.Combine(dir, ".cmo_write_test.tmp");
+                using (FileStream fs = new FileStream(probe, FileMode.Create, FileAccess.Write))
+                {
+                    fs.WriteByte(0);
+                }
+                File.Delete(probe);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reason = ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 以管理员身份重新启动本安装器（保留原命令行参数）。
+        /// 游戏装在 C:\Program Files 下时只能靠提权写入，这是用户侧最常见的堵点。
+        /// </summary>
+        public static bool RelaunchElevated()
+        {
+            try
+            {
+                string exe = Application.ExecutablePath;
+                string[] argv = Environment.GetCommandLineArgs();
+                StringBuilder sb = new StringBuilder();
+                for (int i = 1; i < argv.Length; i++)
+                {
+                    sb.Append('"').Append(argv[i].Replace("\"", "")).Append('"').Append(' ');
+                }
+                ProcessStartInfo psi = new ProcessStartInfo(exe, sb.ToString().Trim());
+                psi.UseShellExecute = true;
+                psi.Verb = "runas";
+                Process.Start(psi);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteLog("提权重启失败: " + ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 落盘日志（尽力而为）。旧实现只往界面日志框写文本、异常又全被吞，
+        /// 用户报障时拿不到任何可分析的信息（2026-10-18 排查就卡在这里）。
+        /// </summary>
+        public static void WriteLog(string msg)
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CMOChinese");
+                Directory.CreateDirectory(dir);
+                string file = Path.Combine(dir, "installer.log");
+                if (File.Exists(file) && new FileInfo(file).Length > 512 * 1024)
+                {
+                    File.WriteAllText(file, "", Encoding.UTF8);
+                }
+                File.AppendAllText(file, "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    + "] [v" + ReleaseConstants.Version + "] " + msg + "\r\n", Encoding.UTF8);
+            }
+            catch { }
+        }
+
         public static string DetectGamePath()
         {
             // 1. 如果安装程序直接放在游戏根目录下运行
@@ -851,6 +953,20 @@ namespace CMOLocalizerInstaller
                 dllSrc = Path.Combine(curDir, "patch_files", "CMOLocalizer.dll");
                 jsonSrc = Path.Combine(curDir, "patch_files", "CMOLocalizer.json");
             }
+
+            // 先探测目标目录可写性：Steam 默认装在 C:\Program Files 下，普通权限写不进去，
+            // 而这正是「在别的电脑上、没开游戏也装不上」的首要原因。直接探针比事后猜靠谱。
+            string writeReason;
+            if (!CanWriteToDir(gamePath, out writeReason))
+            {
+                errorMsg = "游戏目录不可写: " + gamePath + "\n原因: " + writeReason
+                    + "\n\n游戏装在 C:\\Program Files 下时（Steam 默认位置）需要管理员权限："
+                    + "请右键安装器选「以管理员身份运行」后重试，或把游戏移到用户可写目录。";
+                WriteLog("安装中止：目录不可写 " + gamePath + " -> " + writeReason);
+                return false;
+            }
+            WriteLog("安装开始：游戏目录=" + gamePath + "；安装包目录=" + curDir
+                + "；用磁盘 DLL=" + File.Exists(dllSrc));
 
             try
             {
@@ -1926,6 +2042,7 @@ namespace CMOLocalizerInstaller
                 {
                     bool ok = Install(gp, out err);
                     Console.WriteLine(ok ? "[SUCCESS] Installed to " + gp : "[ERROR] " + err);
+                    WriteLog(ok ? "[SUCCESS] install " + gp : "[ERROR] install " + gp + " -> " + err);
                     if (ok && restartUpdater) StartUpdater(gp);
                     return ok ? 0 : 1;
                 }

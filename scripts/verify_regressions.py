@@ -1134,6 +1134,69 @@ def run_installer(r: Runner) -> None:
         r.record("R35-locked-error", "R35 目标被占用时如实报写入失败（不得误报资源缺失）",
                  locked_rc != 0 and accurate, f"rc={locked_rc} 文案={locked_out[:110]}",
                  "安装包内嵌资源 + 独占句柄")
+
+        # R36：安装包必须真的把东西打进去（用户 2026-10-18 报「是不是忘记打包」）。
+        # 断言两件事：① 预期资源名单齐全；② 关键载荷逐字节等于本次构建产物。
+        ps1 = tmp / "dump-res.ps1"
+        ps1.write_text(
+            "param([string]$path)\n"
+            "$asm = [System.Reflection.Assembly]::LoadFile($path)\n"
+            "$sha = [System.Security.Cryptography.SHA256]::Create()\n"
+            "foreach ($n in $asm.GetManifestResourceNames()) {\n"
+            "  $s = $asm.GetManifestResourceStream($n)\n"
+            "  $b = New-Object byte[] $s.Length\n"
+            "  $s.Read($b, 0, $b.Length) | Out-Null\n"
+            "  $h = [System.BitConverter]::ToString($sha.ComputeHash($b)).Replace('-','').ToLower()\n"
+            "  Write-Output ($n + '|' + $s.Length + '|' + $h)\n"
+            "}\n", encoding="utf-8")
+        probe = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                                "-File", str(ps1), str(setup)],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=300)
+        res = {}
+        for line in (probe.stdout or "").splitlines():
+            parts = line.strip().split("|")
+            if len(parts) == 3:
+                res[parts[0]] = (int(parts[1]), parts[2])
+
+        def res_hash(name: str) -> str:
+            hit = [h for k, (_, h) in res.items() if k.endswith(name)]
+            return hit[0] if hit else ""
+
+        exp_names = ["CMOLocalizer.dll", "CMOLocalizer.json", "UPDATER_EXE", "PLACE_SYNOPTIC",
+                     "PLACE_CITIES", "LAUNCHER_ZH", "SYMBOLS_MENU_ZIP", "SCEN_HTML_ZIP",
+                     "QR_WeChat", "QR_Alipay"]
+        exp_names += ["TPL_" + p.name for p in sorted((ROOT / "assets/db_templates").glob("*.html"))]
+        missing = [n for n in exp_names if res_hash(n) == ""]
+        file_hash = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()  # noqa: E731
+        payload = {
+            "引擎 DLL": ("CMOLocalizer.dll", ROOT / "build/CMOLocalizer.dll"),
+            "词典 JSON": ("CMOLocalizer.json", ROOT / "dict/CMOLocalizer.json"),
+            "更新助手": ("UPDATER_EXE", ROOT / "build/CMO_Updater.exe"),
+            "地名集 Synoptic": ("PLACE_SYNOPTIC", ROOT / "assets/placenames/Synoptic.wwp"),
+            "地名集 Cities": ("PLACE_CITIES", ROOT / "assets/placenames/Cities.wwp"),
+        }
+        wrong = [k for k, (n, src) in payload.items()
+                 if not src.is_file() or res_hash(n) != file_hash(src)]
+        r.record("R36-installer-payload", "R36 安装包内嵌载荷齐全且与构建产物逐字节一致",
+                 not missing and not wrong and len(res) >= len(exp_names),
+                 f"资源={len(res)} 缺失={missing[:4]} 不一致={wrong}",
+                 "powershell 反射导出安装包资源")
+
+        # R37：游戏目录不可写（Steam 装在 C:\Program Files、未提权的典型情形）时，
+        # 文案必须指向权限，而不是误报资源缺失——这是「别的电脑、没开游戏也装不上」的首要原因。
+        user = os.environ.get("USERNAME", "")
+        game3 = _mk_game(tmp / "r37")
+        subprocess.run(["icacls", str(game3), "/deny", f"{user}:(W)"], capture_output=True)
+        try:
+            p = subprocess.run([str(dist_setup), "--install", str(game3), "--silent"],
+                               capture_output=True, timeout=300)
+            msg = (_decode(p.stdout or b"") + _decode(p.stderr or b"")).strip()
+            r.record("R37-dir-not-writable", "R37 目录不可写时文案指向权限（不得误报资源缺失）",
+                     p.returncode != 0 and "不可写" in msg and "管理员" in msg and "未找到" not in msg,
+                     f"rc={p.returncode} 文案={msg[:110]}", "icacls deny (W)")
+        finally:
+            subprocess.run(["icacls", str(game3), "/remove:d", user], capture_output=True)
     finally:
         if saved_settings is None:
             if settings.exists():
