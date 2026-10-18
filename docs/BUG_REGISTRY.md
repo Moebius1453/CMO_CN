@@ -744,3 +744,24 @@
   结论：“有中文名却没译”的用户疑问，实际上是**三类不同原因**：① 已译但被写回覆盖；② 词典有但通道未送达；③ 词典真没有——
   不能用同一条“补词条”去处理，必须按上表分派。
 - **证据（追加）**：`hover_tooltip_english.png`（悬停帮助整段英文）、`assign_list_paren_english.png`（指派列表括号内英文）。
+- **现象 H（空中出动计划 ATO 工具栏按钮，09:25）**：`Create Flight` / `Delete Flight` 两个按钮英文（同一排其余按钮
+  「复制飞行编队 / 编辑飞行计划 / 更改机型与挂载方案 / 更改起飞时间 / 修改到达目标时间 / 清除时间」均为中文）。
+- **现象 I（对话框正文英文，09:26）**：弹窗标题「缺少任务或编队」是中文，**正文却是英文**
+  `select a Mission and create at least one flight`（按钮「确定」中文）——同一弹窗内中英混杂。
+- **现象 J（可用列表设施行，09:27）**：`A/C Hardened Aircraft Shelter (1x Large Aircraft)`、
+  `A/C Weather Shelter (1x Medium Aircraft)` 等行完整英文（相邻行却是中文：「航空汽油 (200k 升 地下油罐)」「弹药库 (水面)」）。
+- **归类表追加（均实测于 2026-10-18）**：
+
+| 串 | 词典 `exact` | `LiveAudit`（引擎看到但未译） | 归类 |
+|---|---|---|---|
+| `Create Flight` | 无 | 3 | 真缺词条（按钮文本）|
+| `Delete Flight` | 无 | 3 | 真缺词条（按钮文本）|
+| `select a Mission and create at least one flight` | 无 | 1 | 真缺词条（对话框正文）|
+| `A/C Hardened Aircraft Shelter` | 无 | 13 | 真缺词条（设施名）|
+| `A/C Weather Shelter` | 无 | 5 | 真缺词条（设施名）|
+| `(1x Large Aircraft)` | 无 | 6 | 真缺词条（部件，需与设施名拼接后整串或分段处理）|
+
+  注：本次三张截图的英文全部属**第③类（词典真缺）**，且 `LiveAudit` 均有命中
+  ⇒ **通道能碰到它们**，不涉写回覆盖，补词条即可望生效（与本轮写回覆盖类问题分开处理）。
+- **证据（追加 2）**：`ato_buttons_english.png`（ATO 按钮）、`dialog_body_english.png`（弹窗正文）、
+  `facility_rows_english.png`（设施行）。
