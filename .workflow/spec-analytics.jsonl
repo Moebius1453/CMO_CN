@@ -10,3 +10,4 @@
 {"type":"cli","id":"CLI-1792022130357-1","timestamp":"2026-10-14T23:55:30.357Z","command":"load","args":{"type":"knowhow","id":"knowhow-dcs-20261014-github-releases"}}
 {"type":"cli","id":"CLI-1792157441399-1","timestamp":"2026-10-16T13:30:41.399Z","command":"spec load","args":{"category":"review","stdin":false}}
 {"type":"cli","id":"CLI-1792241514278-1","timestamp":"2026-10-17T12:51:54.278Z","command":"load","args":{"type":"issue","list":true}}
+{"type":"cli","id":"CLI-1792324989947-1","timestamp":"2026-10-18T12:03:09.947Z","command":"load","args":{"type":"knowhow","id":"knowhow-TIP-20261018-c1f17e6455a064d3-001"}}

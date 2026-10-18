@@ -1080,6 +1080,60 @@ def run_installer(r: Runner) -> None:
         r.record("R15-rollback-requires-cache", "R15 无缓存包时拒绝回退（清单不变+报错）",
                  rc != 0 and unchanged and "9.9.9" in out,
                  f"rc={rc} manifest_unchanged={unchanged} out={out[:80]}")
+
+        # R35：内嵌资源释放路径 + 失败文案准确性。
+        # 为何要单测：R13–R17 全部从 build/ 运行安装器，而那里躺着 CMOLocalizer.dll，
+        # 于是永远走「从磁盘复制」分支，内嵌资源分支从未被测到。2026-10-18 21:02 用户
+        # 在**游戏运行中**安装（exe 在下载目录、旁边没有 dll），报「安装包内未找到
+        # CMOLocalizer.dll 资源文件」——真实原因是覆盖被占用文件抛异常、旧实现把异常
+        # 吞成「资源缺失」。下面两个用例分别锁住资源释放与错误文案。
+        dist = tmp / "dist-only-exe"
+        dist.mkdir()
+        shutil.copyfile(setup, dist / setup.name)
+        game2 = _mk_game(tmp / "r35")
+        dist_setup = dist / setup.name
+        p = subprocess.run([str(dist_setup), "--install", str(game2), "--silent"],
+                           capture_output=True, timeout=600)
+        out = (_decode(p.stdout or b"") + _decode(p.stderr or b"")).strip()
+        dll2 = game2 / "CMOLocalizer.dll"
+        json2 = game2 / "CMOLocalizer.json"
+        src_json = ROOT / "dict/CMOLocalizer.json"
+        leftovers = [q.name for q in game2.glob("*.cmo_new")]
+        released = (dll2.is_file() and built_dll.is_file()
+                    and hashlib.sha256(dll2.read_bytes()).hexdigest()
+                    == hashlib.sha256(built_dll.read_bytes()).hexdigest())
+        released_json = (json2.is_file()
+                         and hashlib.sha256(json2.read_bytes()).hexdigest()
+                         == hashlib.sha256(src_json.read_bytes()).hexdigest())
+        r.record("R35-resource-release", "R35 从「只有 exe」的目录安装：内嵌资源释放且逐字节一致",
+                 p.returncode == 0 and released and released_json and not leftovers,
+                 f"rc={p.returncode} dll一致={released} json一致={released_json} 残留={leftovers}",
+                 out[:80])
+
+        # 独占锁住目标 DLL（模拟游戏已加载它）：必须如实报「写入失败」，且不得再误报资源缺失。
+        import ctypes  # noqa: PLC0415
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateFileW.restype = ctypes.c_void_p
+        k32.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_uint,
+                                    ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p]
+        handle = k32.CreateFileW(str(dll2), 0x80000000, 0, None, 3, 0, None)
+        locked_rc, locked_out = -1, "独占句柄未建立"
+        try:
+            if handle in (None, -1, 0xFFFFFFFFFFFFFFFF):
+                raise OSError(f"CreateFileW 失败 err={ctypes.get_last_error()}")
+            p = subprocess.run([str(dist_setup), "--install", str(game2), "--silent"],
+                               capture_output=True, timeout=600)
+            locked_rc = p.returncode
+            locked_out = (_decode(p.stdout or b"") + _decode(p.stderr or b"")).strip()
+        except OSError as exc:
+            locked_rc, locked_out = -1, str(exc)
+        finally:
+            if handle not in (None, -1, 0xFFFFFFFFFFFFFFFF):
+                k32.CloseHandle(ctypes.c_void_p(handle))
+        accurate = ("写入" in locked_out and "失败" in locked_out and "未找到" not in locked_out)
+        r.record("R35-locked-error", "R35 目标被占用时如实报写入失败（不得误报资源缺失）",
+                 locked_rc != 0 and accurate, f"rc={locked_rc} 文案={locked_out[:110]}",
+                 "安装包内嵌资源 + 独占句柄")
     finally:
         if saved_settings is None:
             if settings.exists():

@@ -8,6 +8,7 @@ using System.Drawing.Text;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -450,7 +451,35 @@ namespace CMOLocalizerInstaller
         {
             string gp = txtPath.Text.Trim();
             string err;
-            if (InstallerCore.Install(gp, out err))
+            bool ok = InstallerCore.Install(gp, out err);
+
+            // 游戏运行中会占住 CMOLocalizer.dll（已加载映像无法被任何文件操作替换），
+            // 安装会失败。此时只有用户自己关掉游戏才行——先征得同意再关，绝不静默杀进程。
+            if (!ok && InstallerCore.IsGameRunning())
+            {
+                DialogResult dr = MessageBox.Show(
+                    "安装失败：目标文件正被运行中的游戏占用。\n\n" + err +
+                    "\n\n是否现在关闭游戏并重试安装？\n（游戏通常有自动存档；未保存的推演进度会丢失）",
+                    "游戏正在运行", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (dr == DialogResult.Yes)
+                {
+                    Log("目标文件被游戏占用，用户同意关闭游戏后重试安装。");
+                    if (InstallerCore.CloseGame(30))
+                    {
+                        ok = InstallerCore.Install(gp, out err);
+                    }
+                    else
+                    {
+                        err = "无法关闭游戏进程，请手动退出游戏后重试。";
+                    }
+                }
+                else
+                {
+                    Log("[取消] 游戏正在运行，用户选择不关闭游戏，安装中止。");
+                }
+            }
+
+            if (ok)
             {
                 Log("Successfully Installed! 已成功复制 CMOLocalizer.dll 与 CMOLocalizer.json。");
                 Log("已自动备份原版配置为 Command.exe.config.cmo_bak 并启用本地化引擎。");
@@ -606,6 +635,53 @@ namespace CMOLocalizerInstaller
 
     public static class InstallerCore
     {
+        /// <summary>
+        /// 游戏是否正在运行（Command.exe）。用于判断安装失败是否由“目标 DLL 被
+        /// 已加载映像占用”造成——那种情况下只能让用户先关游戏。
+        /// </summary>
+        public static bool IsGameRunning()
+        {
+            try
+            {
+                Process[] ps = Process.GetProcessesByName("Command");
+                bool any = ps != null && ps.Length > 0;
+                if (ps != null) foreach (Process p in ps) { try { p.Dispose(); } catch { } }
+                return any;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// 关闭游戏：先礼貌关闭主窗口，超时再强制结束。返回是否已退出。
+        /// 只在用户明确同意后调用（GUI 会弹窗确认）。
+        /// </summary>
+        public static bool CloseGame(int waitSeconds)
+        {
+            try
+            {
+                foreach (Process p in Process.GetProcessesByName("Command"))
+                {
+                    try { if (p.MainWindowHandle != IntPtr.Zero) p.CloseMainWindow(); } catch { }
+                    try { p.Dispose(); } catch { }
+                }
+                int waited = 0;
+                while (waited < waitSeconds * 1000)
+                {
+                    if (!IsGameRunning()) return true;
+                    System.Threading.Thread.Sleep(500);
+                    waited += 500;
+                }
+                foreach (Process p in Process.GetProcessesByName("Command"))
+                {
+                    try { p.Kill(); } catch { }
+                    try { p.Dispose(); } catch { }
+                }
+                System.Threading.Thread.Sleep(1500);
+                return !IsGameRunning();
+            }
+            catch { return false; }
+        }
+
         public static string DetectGamePath()
         {
             // 1. 如果安装程序直接放在游戏根目录下运行
@@ -780,37 +856,40 @@ namespace CMOLocalizerInstaller
             {
                 string dllDest = Path.Combine(gamePath, "CMOLocalizer.dll");
                 string jsonDest = Path.Combine(gamePath, "CMOLocalizer.json");
+                string writeErr;
 
+                // 运行中的游戏会占住 CMOLocalizer.dll（已加载映像）：直接 File.Copy 覆盖会被
+                // 共享冲突拒绝，而旧实现把这个异常吞掉、只能报「未找到资源」——用户实测
+                // 2026-10-18 21:02 在游戏运行时安装拿到的完全不着边际的报错就是这个。
+                // 统一走「写同目录临时文件 + MoveFileEx 原子替换」：重命名不受文件占用影响。
                 if (File.Exists(dllSrc))
                 {
-                    if (!string.Equals(Path.GetFullPath(dllSrc), Path.GetFullPath(dllDest), StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(Path.GetFullPath(dllSrc), Path.GetFullPath(dllDest), StringComparison.OrdinalIgnoreCase)
+                        && !CopyFileAtomic(dllSrc, dllDest, out writeErr))
                     {
-                        File.Copy(dllSrc, dllDest, true);
-                    }
-                }
-                else
-                {
-                    if (!ExtractEmbeddedResource("CMOLocalizer.dll", dllDest))
-                    {
-                        errorMsg = "安装包内未找到 CMOLocalizer.dll 资源文件！";
+                        errorMsg = writeErr;
                         return false;
                     }
+                }
+                else if (!ExtractEmbeddedResource("CMOLocalizer.dll", dllDest, out writeErr))
+                {
+                    errorMsg = writeErr;
+                    return false;
                 }
 
                 if (File.Exists(jsonSrc))
                 {
-                    if (!string.Equals(Path.GetFullPath(jsonSrc), Path.GetFullPath(jsonDest), StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(Path.GetFullPath(jsonSrc), Path.GetFullPath(jsonDest), StringComparison.OrdinalIgnoreCase)
+                        && !CopyFileAtomic(jsonSrc, jsonDest, out writeErr))
                     {
-                        File.Copy(jsonSrc, jsonDest, true);
-                    }
-                }
-                else
-                {
-                    if (!ExtractEmbeddedResource("CMOLocalizer.json", jsonDest))
-                    {
-                        errorMsg = "安装包内未找到 CMOLocalizer.json 资源文件！";
+                        errorMsg = writeErr;
                         return false;
                     }
+                }
+                else if (!ExtractEmbeddedResource("CMOLocalizer.json", jsonDest, out writeErr))
+                {
+                    errorMsg = writeErr;
+                    return false;
                 }
 
                 string cfgPath = Path.Combine(gamePath, "Command.exe.config");
@@ -1347,8 +1426,59 @@ namespace CMOLocalizerInstaller
             catch { }
         }
 
+        // ── 原子替换：目标文件可能正被运行中的游戏占用 ──────────────────────────
+        // 重命名（MoveFileEx REPLACE_EXISTING）不受「文件被占用」影响：运行中的进程继续
+        // 用旧映像，磁盘上换成新文件，游戏下次启动即生效；而按内容覆盖写会被共享冲突拒绝。
+        private const uint MOVEFILE_REPLACE_EXISTING = 0x00000001;
+        private const uint MOVEFILE_WRITE_THROUGH = 0x00000008;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, uint dwFlags);
+
+        private static void ReplaceFileAtomic(string tempPath, string destPath)
+        {
+            if (!MoveFileEx(tempPath, destPath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                int code = Marshal.GetLastWin32Error();
+                throw new IOException("替换被拒绝 (Win32 " + code + "): "
+                    + new System.ComponentModel.Win32Exception(code).Message);
+            }
+        }
+
+        private static bool CopyFileAtomic(string srcPath, string destPath, out string error)
+        {
+            error = "";
+            string temp = destPath + ".cmo_new";
+            try
+            {
+                File.Copy(srcPath, temp, true);
+                ReplaceFileAtomic(temp, destPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+                error = "写入 " + destPath + " 失败: " + ex.Message
+                    + "（若游戏正在运行，先关闭游戏后重试；此项失败通常是目标文件被占用）";
+                return false;
+            }
+        }
+
         private static bool ExtractEmbeddedResource(string resName, string destPath)
         {
+            string ignored;
+            return ExtractEmbeddedResource(resName, destPath, out ignored);
+        }
+
+        /// <summary>
+        /// 释放内嵌资源到目标路径。error 区分「资源缺失」与「写入失败」——
+        /// 旧实现把两类失败都返回 false，调用方只能报「安装包内未找到 XX 资源文件」，
+        /// 于是在游戏运行时安装会看到与真实原因无关的报错（2026-10-18 用户实测）。
+        /// </summary>
+        private static bool ExtractEmbeddedResource(string resName, string destPath, out string error)
+        {
+            error = "";
+            string temp = destPath + ".cmo_new";
             try
             {
                 Assembly asm = Assembly.GetExecutingAssembly();
@@ -1362,20 +1492,32 @@ namespace CMOLocalizerInstaller
                         break;
                     }
                 }
-                if (match == null) return false;
+                if (match == null)
+                {
+                    error = "安装包内未找到 " + resName + " 资源文件！";
+                    return false;
+                }
 
                 using (Stream stream = asm.GetManifestResourceStream(match))
                 {
-                    if (stream == null) return false;
-                    using (FileStream fs = new FileStream(destPath, FileMode.Create, FileAccess.Write))
+                    if (stream == null)
+                    {
+                        error = "安装包内未找到 " + resName + " 资源文件！";
+                        return false;
+                    }
+                    using (FileStream fs = new FileStream(temp, FileMode.Create, FileAccess.Write))
                     {
                         stream.CopyTo(fs);
                     }
                 }
+                ReplaceFileAtomic(temp, destPath);
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+                error = "写入 " + destPath + " 失败: " + ex.Message
+                    + "（若游戏正在运行，先关闭游戏后重试；此项失败通常是目标文件被占用）";
                 return false;
             }
         }
