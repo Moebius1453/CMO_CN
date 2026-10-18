@@ -828,3 +828,22 @@
   4. **UI 补全**：`dict/src/ui_cleanup_terms.json` 扩充 29 条 UI 按钮与悬停长句；
   5. **门禁加固**：新增 `R33-static-db-records` 硬门禁，`gate_db_templates` 断言描述完整性；C# 独立单测 `build/test_db_translation.exe` 实测 6 个目标串全部 100% 翻译成功；`exact` 词典规模从 46,127 突破至 57,051。
 - **状态**：已修并验证（2026-10-18）。
+
+---
+
+## R34 中文地名瓦片加载停滞：瓦片服务占用游戏共用线程池（v4.2.2，外部 PR#1 合并）
+
+- **来源**：外部贡献 PR#1（@penguin-madagascar，`fix/chinese-map-tile-starvation`），2026-10-18 经独立复现与实机验证后完全合并（squash `371d98c`）。
+- **现象**：中文地名标签加载停滞——地图瓦片下载繁忙时本地标签请求长时间不返回（表现为标签不出现）。该缺陷同时会**反向拖慢游戏自身**（占用宿主的线程池）。
+- **根因（旧 `StartLocalTileServer` / `HandleTileClient` 三处）**：
+  1. `ThreadPool.QueueUserWorkItem(_ => HandleTileClient(...))` 把标签请求排进**游戏共用的 CLR 线程池**——⑨ pool worker 被地图下载占满时本地请求根本不执行（实测：池占满后请求 1.5s 超时、拿不到瓦片）；
+  2. 请求行用 `StreamReader.ReadLine()` 读取且**没有总截止时间**——客户端每 250ms 发 1 个字节即可无限刷新单次读超时，一个半开连接**永久占住一个池 worker**（slowloris 式占用）；
+  3. **连接数无任何上限**——96 个空闲连接可占掉游戏 96 个线程池 worker（实测进程线程数与连接数同步增长），直接损害宿主游戏。
+- **修复**：`src/engine/CMOLocalizer.cs` 地图服务段（归一化行尾后 178 行）——1 个专用接受线程 + 4 个专用工作线程 + 最多 64 项 `BlockingCollection` 队列，**不再触碰共享池**；首行 1500ms 总预算（从接受时刻起算、含排队时间）、首行上限 1024 字符、按剩余预算设置读超时；响应写超时 1500ms；严格校验 `GET /MapTiles/Labels/z/x/y.png HTTP/1.x`（z≤22、x/y 越界拒绝，非法请求 400）；请求/拒绝/错误共采样前 16 条诊断日志。
+- **用户可见验收**：清空标签缓存后游戏自身请求全部被正常服务且瓦片非空，地图标签中文正常显示、缩放正常。
+- **回归测试点**：`static` `R34-static-tile-contract`（并发契约：脱离共享池/有界队列/专用线程/总预算/拒绝非法请求/诊断上限）；`R34-static-tile-harness`（独立编译后真跑 7 模式：starvation / protocol / idle / batch / multi-idle / trickle / pressure，宿主 `src/tests/MapTileServerTests.cs` 反射启动真实引擎，不加载游戏）；`static` `R0` 部署标记新增 `ReadTileRequestLine` / `tileRequestLogLock`（防旧包把无修复引擎盖回去）。
+- **实测证据（2026-10-18）**：
+  - 独立复现（同一测试宿主分别对旧/新引擎各跑 7 模式）：旧实现 `starvation` 请求超时、`trickle` 连接一直不关、`pressure` 96 个空闲连接不受限；新实现 7/7 通过（`POOL max=16 entered=16 available=0` 仍返回有效 PNG；`TRICKLE ... closed ms=1513`；`PRESSURE clients=96 closedEarly=28 closedTotal=96 threadsBefore=13 threadsDuring=13`）。
+  - 实机（Steam BuildID 25865381 / 游戏 Build 1900.23）：移走中文标签缓存后启动游戏，引擎日志 16 条 `LocalTile z=3 ... rendered=1..17 bytes=... ms=0..17`，**`rejected` 计数为 0**（新的严格请求行校验完全接受游戏真实请求），游戏新抓取 40 张 z=3 瓦片，地球标签中文正常。
+- **已知取舍**：过载时允许拒绝（队列满或预算耗尽即关闭连接），不保证任意负载下全部请求成功；游戏会在后续加载中重新请求。
+- **状态**：已合并并验证（v4.2.2）。

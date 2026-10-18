@@ -1,0 +1,9 @@
+# 大规模格式化/行尾归一化提交：这些提交不含逻辑改动，只是重写了整文件。
+# 查询历史时用 `git blame --ignore-revs-file .git-blame-ignore-revs`，
+# 或在本仓库执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`；
+# GitHub 的 blame 页面会自动读取本文件。
+#
+# 371d98c：squash 合并外部 PR#1（地图瓦片服务线程池隔离）。该 PR 的功能改动只有 178 行，
+#          但其首个提交把 src/engine/CMOLocalizer.cs（6752 行）从 CRLF 归一化为 LF，
+#          在 diff 上表现为整文件重写，故整条记录在此忽略。
+371d98c7b0e4c41bd841ad4cd947931ac0eda13f

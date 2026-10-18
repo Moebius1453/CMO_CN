@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -58,7 +59,74 @@ class Runner:
 # 不用整文件哈希：csc 每次编译都产生不同 MVID/时间戳，重新 build 后哈希必变，
 # 但“旧包覆盖回不含修复的引擎”会被标记缺失抓住。
 DEPLOY_MARKERS = ["IsProtectedDBViewerCombo", "FindDBViewerForm", "IsTextInputControl", "InstallCrashGuard",
-                  "FindLoadScenarioForm", "propertyCache", "MemberKey", "AddPageGrams"]  # 注：标记必须是元数据标识符（字符串字面量在 #US 堆是 UTF-16，ASCII 搜不到）
+                  "FindLoadScenarioForm", "propertyCache", "MemberKey", "AddPageGrams",
+                  # R34（PR#1）：瓦片服务脱离共享线程池后的新增标识符，用于抓“旧包覆盖回无修复引擎”
+                  # （不能用 TileClient：旧实现里的 HandleTileClient 含同名子串，会假绿）
+                  "ReadTileRequestLine", "tileRequestLogLock"]  # 注：标记必须是元数据标识符（字符串字面量在 #US 堆是 UTF-16，ASCII 搜不到）
+
+
+# ── R34 地图瓦片服务：独立编译 + 7 模式反射回归 ────────────────────────────────
+# 背景（PR#1，2026-10-18 实机与独立测试双重确认的旧实现缺陷）：标签请求被排进游戏
+# 共用的 CLR ThreadPool，且请求行读取没有总截止时间 ⇒ ① 池被占满时标签请求根本不执行；
+# ② 每 250ms 发一个字节即可永久占住一个池 worker；③ 连接数无上限，96 个空闲连接可
+# 占掉游戏 96 个池 worker（反过来拖慢游戏自身）。
+# 测试宿主来自贡献者（src/tests/MapTileServerTests.cs）：用反射对真实 CMOLocalizer.dll
+# 启动地图服务，不加载游戏、不跑安装器。为什么必须真跑而不是只查源码：三种失败中两种
+# 只在并发时序下暴露（trickle 刷新读超时、pressure 连接无上限）。
+TILE_CSC = Path("C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe")
+TILE_WPF = Path("C:/Windows/Microsoft.NET/Framework64/v4.0.30319/WPF")
+TILE_XAML = Path("C:/Windows/Microsoft.NET/Framework64/v4.0.30319/System.Xaml.dll")
+TILE_MODES = ["starvation", "protocol", "idle", "batch", "multi-idle", "trickle", "pressure"]
+
+
+def _tile_harness(r: Runner, work: Path) -> None:
+    """编译引擎与测试宿主，对当前源码跑 7 模式并发回归。"""
+    dll, exe = work / "CMOLocalizer.dll", work / "MapTileServerTests.exe"
+    refs = [f"-reference:{x}" for x in ("System.dll", "System.Core.dll", "System.Data.dll",
+                                        "System.Windows.Forms.dll", "System.Drawing.dll",
+                                        "System.Xml.dll", "System.Xml.Linq.dll")]
+    refs += [f"-reference:{p}" for p in (TILE_WPF / "WindowsBase.dll",
+                                         TILE_WPF / "PresentationCore.dll",
+                                         TILE_WPF / "PresentationFramework.dll", TILE_XAML)]
+    builds = [
+        subprocess.run([str(TILE_CSC), "-nologo", "-target:library", "-platform:anycpu",
+                        "-optimize+", f"-out:{dll}", *refs, str(ENGINE),
+                        str(ROOT / "src/engine/Reflect.cs")],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180),
+        subprocess.run([str(TILE_CSC), "-nologo", "-target:exe", "-platform:anycpu",
+                        f"-out:{exe}", "-reference:System.dll", "-reference:System.Drawing.dll",
+                        str(ROOT / "src/tests/MapTileServerTests.cs")],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180),
+    ]
+    if any(b.returncode for b in builds):
+        r.record("R34-static-tile-harness", "R34 瓦片服务 7 模式并发回归", False,
+                 "编译失败: " + (builds[0].stderr or builds[1].stderr or "").strip()[:160].replace("\n", " "),
+                 "src/tests/MapTileServerTests.cs")
+        return
+
+    passed, evidence = [], []
+    for mode in TILE_MODES:
+        status = "FAIL"
+        for attempt in (1, 2):
+            fx = work / f"fx-{mode}"
+            # 重跑也要全新 fixture：BATCH 断言服务日志恰为 16 条，旧日志会让它变成 32 条
+            shutil.rmtree(fx, ignore_errors=True)
+            for set_name in ("Synoptic", "Cities"):
+                dst = fx / "WW/PlacenameSets" / set_name
+                dst.mkdir(parents=True)
+                shutil.copyfile(ROOT / "assets/placenames" / f"{set_name}.wwp", dst / "0000_0000.wwp")
+            run = subprocess.run([str(exe), str(dll), str(fx), mode], capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace", timeout=60)
+            if run.returncode == 0:
+                status = "ok" + ("(重试)" if attempt == 2 else "")
+                mark = [l for l in run.stdout.splitlines()
+                        if l.startswith(("POOL ", "MULTI_IDLE", "TRICKLE", "PRESSURE", "BATCH", "RECOVERY"))]
+                evidence.append(f"{mode}: " + (mark[0][:90] if mark else "PASS"))
+                break
+        passed.append(status.startswith("ok"))
+    r.record("R34-static-tile-harness", "R34 瓦片服务 7 模式并发回归",
+             all(passed), f"{sum(passed)}/{len(TILE_MODES)} 模式通过",
+             " || ".join(evidence) or "无输出")
 
 
 def run_static(r: Runner) -> None:
@@ -332,6 +400,29 @@ def run_static(r: Runner) -> None:
              r33_ok,
              f"desc={len(s_desc)} enums={len(s_enum)} records={len(s_rec)} probes={len(r33_probes)-len(r33_miss)}/{len(r33_probes)} rules={r33_rules}",
              "dict/src/{db_descriptions,db_enums_extra,db_record_names}.json + src/engine/CMOLocalizer.cs")
+
+    # R34：地图瓦片服务（并发契约 + 真跑的 7 模式回归）
+    tile_contract = {
+        "脱离共享池": "ThreadPool.QueueUserWorkItem(_ => HandleTileClient" not in src,
+        "有界队列": "BlockingCollection<TileClient>" in src and "TILE_QUEUE_CAPACITY" in src,
+        "专用工作线程": "TILE_WORKERS" in src,
+        "首行总预算": "TILE_CLIENT_TIMEOUT_MS" in src and "ReadTileRequestLine" in src,
+        "拒绝非法请求": "400 Bad Request" in src,
+        "诊断采样上限": "TILE_REQUEST_LOG_LIMIT" in src,
+    }
+    r.record("R34-static-tile-contract", "R34 瓦片服务并发契约（不占用宿主线程池/有界队列/总预算）",
+             all(tile_contract.values()),
+             "；".join(f"{k}={'ok' if v else 'FAIL'}" for k, v in tile_contract.items()),
+             str(ENGINE.relative_to(ROOT)))
+    import tempfile  # noqa: PLC0415
+    _tile_work = Path(tempfile.mkdtemp(prefix="cmo-r34-"))
+    try:
+        _tile_harness(r, _tile_work)
+    except Exception as exc:  # noqa: BLE001
+        r.record("R34-static-tile-harness", "R34 瓦片服务 7 模式并发回归", False,
+                 f"异常: {type(exc).__name__}: {exc}", "src/tests/MapTileServerTests.cs")
+    finally:
+        shutil.rmtree(_tile_work, ignore_errors=True)
 
 
 # ── live：需要在运行中的游戏里实测 ──────────────────────────────────────────
