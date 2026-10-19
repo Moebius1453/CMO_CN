@@ -51,7 +51,14 @@ class Runner:
                evidence: str = "") -> None:
         self.results.append({"id": cid, "name": name, "status": "pass" if ok else "fail",
                              "detail": detail, "evidence": evidence})
-        print(f"  [{'PASS' if ok else 'FAIL'}] {cid} {name} — {detail}", flush=True)
+        line = f"  [{'PASS' if ok else 'FAIL'}] {cid} {name} — {detail}"
+        try:
+            print(line, flush=True)
+        except UnicodeEncodeError:
+            # 控制台是 GBK：任何一个不可编码字符（例如解码失败产生的 U+FFFD）
+            # 都会把整轮回归带崩（2026-10-19 实测：package.sh 里直接中止）。
+            enc = sys.stdout.encoding or "utf-8"
+            print(line.encode(enc, errors="replace").decode(enc, errors="replace"), flush=True)
 
 
 # ── static：源码/资产/词库断言（防止保护被删、资产漏发） ────────────────────
@@ -401,6 +408,87 @@ def run_static(r: Runner) -> None:
              f"desc={len(s_desc)} enums={len(s_enum)} records={len(s_rec)} probes={len(r33_probes)-len(r33_miss)}/{len(r33_probes)} rules={r33_rules}",
              "dict/src/{db_descriptions,db_enums_extra,db_record_names}.json + src/engine/CMOLocalizer.cs")
 
+    # R38：池级注入的形状安全（自绘面板的汉化通道 + 不得改坏游戏内部串）。
+    # 背景：目标状态等**自绘面板**不经控件/WPF/WebView 通道，只读游戏字符串池，
+    # 所以库值/枚举值必须池级注入；但注入到 SQL 片段/格式串/控件名上会当场改坏
+    # 游戏（实例：`LongName ASC` 是 ORDER BY 片段）。
+    r38 = {}
+    try:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from inject_filter import injection_safe as _safe   # noqa: PLC0415
+        _bd = (ROOT / "scripts/build_dict.py").read_text(encoding="utf-8")
+        r38["新源已放行"] = all(n in _bd for n in ("pool_display_inject.json", "db_enum_displays.json"))
+        _pool = json.loads((ROOT / "dict/strings_pool.json").read_text(encoding="utf-8"))
+        _off_of = {v: int(k) for k, v in _pool.items() if isinstance(v, str)}
+        _built = json.loads(DICT.read_text(encoding="utf-8"))["offsets"]
+        _need = ["Aircraft - High manouverability fighter (F-14, F-15, F-16, MiG-29, Su-27)",
+                 "Aircraft - Unspecified", "Multirole (Fighter/Attack)"]
+        _injected = [s for s in _need if _off_of.get(s) is not None and str(_off_of[s]) in _built]
+        r38["面板串已注入"] = len(_injected) == len(_need)
+        _forbidden = ["LongName ASC", "Description ASC", "FULLNAME ASC", "{0} seconds",
+                      'Get-AuthenticodeSignature "', "e.Message: {0}", "Aircraft", "Ground Unit"]
+        _leaked = [s for s in _forbidden if _off_of.get(s) is not None and str(_off_of[s]) in _built]
+        r38["危险串未注入"] = not _leaked
+        # 反向不变量：不能把合法的界面标签（含单位缩写）误杀——窄口径剪枝的预防针
+        r38["合法标签未被误杀"] = (_off_of.get("Acoustic (1-10 kHz)") is not None
+                              and str(_off_of["Acoustic (1-10 kHz)"]) in _built)
+        _chk = subprocess.run([sys.executable, str(ROOT / "build/gen_pool_display_inject.py"), "--check"],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        r38["生成器与池一致"] = _chk.returncode == 0
+        _d38 = (f"放行={r38['新源已放行']} 面板串={len(_injected)}/{len(_need)} "
+                f"泄漏={_leaked} 误杀={not r38['合法标签未被误杀']} 生成器={(_chk.stdout or '').strip()[:40]}")
+    except Exception as exc:  # noqa: BLE001
+        r38["异常"] = False
+        _d38 = f"异常: {type(exc).__name__}: {exc}"
+    r.record("R38-static-pool-inject", "R38 池级注入：自绘面板串已注入且无危险形状",
+             all(r38.values()), _d38,
+             "scripts/{build_dict,inject_filter}.py + build/gen_pool_display_inject.py")
+
+    # R39：引擎翻译行为（混合前缀 + 库枚举值），用真引擎 DLL 跑 C# 宿主。
+    # 背景：游戏把 "Inherited, " 与**已汉化**的值拼在一起，旧实现因「整串含中文」
+    # 跳过整串，英文前缀就留在条令下拉框里（用户 2026-10-18 实测）。
+    _eng_src = ENGINE.read_text(encoding="utf-8")
+    r39 = {
+        "helper": "FixMixedEnglishPrefix" in _eng_src,
+        "字符串路径": "mixedPrefix = FixMixedEnglishPrefix(raw)" in _eng_src,
+        "下拉项路径": "mixedItem = FixMixedEnglishPrefix(t)" in _eng_src,
+    }
+    import tempfile as _tempfile  # noqa: PLC0415
+    _w39 = Path(_tempfile.mkdtemp(prefix="cmo-r39-"))
+    try:
+        _dll39, _exe39 = _w39 / "CMOLocalizer.dll", _w39 / "t.exe"
+        _refs39 = [f"-reference:{x}" for x in ("System.dll", "System.Core.dll", "System.Data.dll",
+                                               "System.Windows.Forms.dll", "System.Drawing.dll",
+                                               "System.Xml.dll", "System.Xml.Linq.dll")]
+        _refs39 += [f"-reference:{p}" for p in (TILE_WPF / "WindowsBase.dll",
+                                                TILE_WPF / "PresentationCore.dll",
+                                                TILE_WPF / "PresentationFramework.dll", TILE_XAML)]
+        _b1 = subprocess.run([str(TILE_CSC), "-nologo", "-target:library", "-platform:anycpu",
+                              "-optimize+", f"-out:{_dll39}", *_refs39, str(ENGINE),
+                              str(ROOT / "src/engine/Reflect.cs")],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+        _b2 = subprocess.run([str(TILE_CSC), "-nologo", "-target:exe", "-platform:anycpu",
+                              f"-out:{_exe39}", str(ROOT / "build/test_db_translation.cs")],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+        if _b1.returncode or _b2.returncode:
+            r39["编译"] = False
+            _d39 = "编译失败: " + (_b1.stderr or _b2.stderr or "")[:120].replace("\n", " ")
+        else:
+            r39["编译"] = True
+            # 宿主输出是控制台编码（中文 Windows 为 GBK），按 _decode 回落链解码，
+            # 否则会拿到 U+FFFD 并污染报告。
+            _run39 = subprocess.run([str(_exe39), str(ROOT)], capture_output=True, timeout=180)
+            _out39 = _decode(_run39.stdout or b"") + _decode(_run39.stderr or b"")
+            r39["行为"] = _run39.returncode == 0
+            _d39 = f"rc={_run39.returncode} 用例通过={_out39.count('--> OK')} {r39}"
+    except Exception as exc:  # noqa: BLE001
+        r39["异常"] = False
+        _d39 = f"异常: {type(exc).__name__}: {exc}"
+    finally:
+        shutil.rmtree(_w39, ignore_errors=True)
+    r.record("R39-static-mixed-prefix", "R39 混合串前缀修复（真引擎行为）",
+             all(r39.values()), _d39, "build/test_db_translation.cs + src/engine/CMOLocalizer.cs")
+
     # R34：地图瓦片服务（并发契约 + 真跑的 7 模式回归）
     tile_contract = {
         "脱离共享池": "ThreadPool.QueueUserWorkItem(_ => HandleTileClient" not in src,
@@ -454,6 +542,50 @@ def _shot(H, name: str, hwnd: int) -> Path:
     return out
 
 
+def _close_cpe_banner(H) -> None:
+    """关掉启动后定时弹出的 CPE 宣传窗。
+
+    它是个独立 WinForms 窗体（CPEBannerForm），会盖住数据库查看器的列表区：
+    坐标点击会落在它上面（2026-10-19 实测：8 个 R1 用例全红而真实原因是被遮挡）。
+    """
+    try:
+        H.send("CLOSE_FORM CPEBannerForm", timeout=15)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _viewer_list_items(H) -> int:
+    r = H.send("DUMP_LISTS", timeout=25)
+    for l in r.get("lists", []):
+        if l.get("name") == "ListBox1":
+            return len(l.get("items", []))
+    return -1
+
+
+def _wait_viewer_ready(H, r: Runner, timeout: float = 180.0) -> int:
+    """等数据库查看器真正就绪再驱动它 —— 用**功能性探针**而不是控件计数。
+
+    为何不用 ListBox1.Items.Count：那个列表是 DarkListView，可能是虚拟列表，
+    行能正常绘制但 Items.Count 恒为 0（2026-10-19 实测：列表已可见、计数仍为 0）。
+    改用 DB_NAVIGATE_ID：能直接取到某条库记录的详情 HTML，就证明“库读 + 详情管线”
+    已就绪，之后再用坐标点行才靠谱。
+    背景：冷启动时查看器的筛选框/列表是异步填充的，旧实现固定 sleep 就点行，
+    于是八个 R1 用例假红（而 DB_NAVIGATE_ID 当时已经正常）。
+    """
+    t0 = time.time()
+    last = 0
+    while time.time() - t0 < timeout:
+        H.send("DB_NAVIGATE_ID 1", timeout=20)
+        time.sleep(1.5)
+        ins = H.send("DB_INSPECT", timeout=20)
+        last = int(ins.get("html_len") or 0)
+        if last > 0:
+            return last
+        _close_cpe_banner(H)
+        time.sleep(2)
+    return last
+
+
 def run_live(r: Runner) -> None:
     print("== live 用例（实机）==", flush=True)
     import live_harness as H  # noqa: PLC0415
@@ -465,7 +597,10 @@ def run_live(r: Runner) -> None:
     if not _open_viewer(H):
         r.record("L0-viewer", "L0 打开数据库查看器", False, "CLICK_MENU 数据库查看器 失败")
         return
-    r.record("L0-viewer", "L0 打开数据库查看器", True, "DB_CTRL_TREE 可解析")
+    _close_cpe_banner(H)
+    ready = _wait_viewer_ready(H, r)
+    r.record("L0-viewer", "L0 打开数据库查看器", ready > 0,
+             f"DB_CTRL_TREE 可解析；就绪探针 html_len={ready}")
 
     tree = _ctrl_tree(H)
     form = tree.get("InternalDBViewer")
@@ -482,14 +617,22 @@ def run_live(r: Runner) -> None:
     # L1：八类对象逐个切换 + 真实点击首行 → 详情页必须生成
     for t in OBJECT_TYPE_TOKENS:
         probe = t.split()[0]              # "Ground Unit" 含空格，DB_SET_FILTER 按空格切分
-        H.send("DB_SET_FILTER CB_ObjectType " + probe, timeout=15)
-        time.sleep(2.0)
-        if hwnd:
-            subprocess.run([str(ROOT / "build/GuiDriver.exe"), "focus", str(hwnd)], capture_output=True)
-        H.click(x + FIRST_ROW_OFFSET[0], y + FIRST_ROW_OFFSET[1])
-        time.sleep(2.5)
-        ins = H.send("DB_INSPECT", timeout=15)
-        got = int(ins.get("html_len") or 0)
+        got = 0
+        # 允许一次重试：冷启动时筛选框/列表是异步填充的，坐标点击会落空
+        # （2026-10-19 实测八个用例假红，DB_NAVIGATE_ID 却正常）。真实破坏两次都失败。
+        for attempt in (1, 2):
+            H.send("DB_SET_FILTER CB_ObjectType " + probe, timeout=15)
+            time.sleep(2.0)
+            _wait_viewer_ready(H, r, timeout=120)
+            if hwnd:
+                subprocess.run([str(ROOT / "build/GuiDriver.exe"), "focus", str(hwnd)], capture_output=True)
+            H.click(x + FIRST_ROW_OFFSET[0], y + FIRST_ROW_OFFSET[1])
+            time.sleep(2.5)
+            ins = H.send("DB_INSPECT", timeout=15)
+            got = int(ins.get("html_len") or 0)
+            if got > 0:
+                break
+            _close_cpe_banner(H)
         need = MIN_HTML_LEN.get(t, DEFAULT_MIN_HTML_LEN)
         r.record(f"R1-live-{t.replace(' ', '')}", f"R1 {t} 详情页渲染",
                  got >= need, f"html_len={got} (>= {need})")

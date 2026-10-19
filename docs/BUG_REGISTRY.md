@@ -886,3 +886,49 @@
   `R36-installer-payload`（安装包内嵌载荷齐全，引擎 DLL/词典 JSON/更新助手/地名集与构建产物逐字节一致）；
   `R37-dir-not-writable`（icacls 拒写当前用户 → 文案含「不可写/管理员」、不含「未找到」）。
 - **状态**：已修并验证（2026-10-18）。
+
+---
+
+## R38 自绘面板残留英文：池级注入覆盖不足（v4.2.2）
+
+- **来源**：用户 2026-10-18 截图「目标状态」面板：`WRA: Aircraft - High manouverability fighter (…)`、
+  `Multirole (Fighter/Attack)` 等**库值/枚举值**一直是英文（同一面板的标签却是中文）。
+- **根因**：这类面板是**自绘面板**，不经我们的控件 / WPF / WebView 通道，直接从游戏**字符串池**取串绘制；
+  而池级注入表（`dict.offsets`）只覆盖 3,522 条精选偏移。实测「池里存在且已有译文」的显示串有 8,000+ 条
+  从未注入，`Aircraft - High manouverability fighter (F-14, …)` 正在其中（offset 1279828）。
+- **修复**：
+  1. 新增 `dict/src/pool_display_inject.json`（6,187 条，`build/gen_pool_display_inject.py` 生成）与
+     `dict/src/db_enum_displays.json`（150 条数据库枚举显示值），加入 `build_dict.py` 的 `offset_safe_sources`；
+     `offsets` 3,522 → **8,735**；
+  2. **安全护栏（本轮最关键的教训）**：池注入是在游戏内存里改串，注入到 SQL 片段/格式串/控件名会当场改坏游戏。
+     新增 `scripts/inject_filter.py` 作为单一事实源：
+     - `injection_safe()`（严格）：机器生成的注入源必须过形状判定（多词短语、无花括号/反斜杠/占位符、
+       非 SQL 片段、非短 CamelCase 标识符、非派发 token、非 IDs/blacklist）；
+     - `harmful_shape()`（窄口径）：只用它剪**基座词典**里明显危险的形状，绝不能顺手剪掉
+       `Options` / `General` / `Unit System` / `Acoustic (1-10 kHz)` 这类既有界面标签
+       （2026-10-19 实测：用宽口径剪枝会让快捷键窗口退回英文）；
+     - 人工白名单 `force_offsets.json` 的注入不受剪枝影响（如 `7916` → 创意工坊）。
+- **回归**：`R38-static-pool-inject` —— ① 自绘面板串必须已注入；② `LongName ASC` / `Description ASC` /
+  `FULLNAME ASC` / `{0} seconds` / `Get-AuthenticodeSignature "` / `e.Message: {0}` / `Aircraft` / `Ground Unit`
+  等危险串必须**未**注入；③ 合法标签（`Acoustic (1-10 kHz)`）不得被误杀；④ 生成器与字符串池不漂移。
+- **实测证据**：实机 `POOL_DUMP` —— offset 1279828 在游戏池里已是「飞机 - 高机动性战斗机 (F-14, F-15, F-16, MiG-29, Su-27)」，
+  1185394 已是「多用途 (战斗机与攻击机)」；`Aircraft`（单词 token）保持英文；`DB_NAVIGATE_ID 1` 详情页 45,189 字正常。
+- **附带加固（实机用例）**：R1 系列曾因「查看器异步初始化 + CPE 宣传窗遮挡」假红。已加
+  `_close_cpe_banner()`（`CLOSE_FORM CPEBannerForm`）、功能性就绪探针（`DB_NAVIGATE_ID` 能取到详情才算就绪，
+  不再用 `DarkListView.Items.Count`——虚拟列表恒为 0）与一次必要性重试。
+- **状态**：已修并验证（2026-10-18/19）。
+
+---
+
+## R39 条令下拉框英文前缀：`Inherited, ` + 已汉化值（v4.2.2）
+
+- **来源**：用户截图「作战任务设置」下拉值 `Inherited, 始终开火`（同屏其它项都是「继承自上级, …」）。
+- **根因**：游戏把英文前缀 `Inherited, ` 与**已经翻译过**的值（来自池/数据库）拼成一句 → 整串含中文；
+  引擎的 `Inherited, …` 规则位于 `!ContainsChinese(raw)` 守卫之内，于是整串被跳过、英文前缀留在界面上
+  （`TranslateComboItemText` 顶部也有同样的「含中文即返回」早退）。
+- **修复**：新增 `FixMixedEnglishPrefix()`（只替换已知英文前缀，尾部原样保留，不重译），并在
+  `TranslateString`（早退之前）、`TranslateComboItemText`、WPF `TextBlock`/`ContentControl` 值变更钩子里调用。
+- **回归**：`R39-static-mixed-prefix` —— 源码契约 + 用**真引擎 DLL** 跑 `build/test_db_translation.cs`
+  的 11 个用例（含 `Inherited, 始终开火 → 继承自上级，始终开火`）。
+- **实测**：实机 `XLATE Inherited, 始终开火` → `继承自上级，始终开火`；`Inherited, 战斗机与反潜战(ASW)` 同理。
+- **状态**：已修并验证（2026-10-19）。

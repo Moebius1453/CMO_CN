@@ -1408,6 +1408,12 @@ namespace CMOLocalizer
                                         if (targetTb != null && !string.IsNullOrEmpty(targetTb.Text))
                                         {
                                             string cur = targetTb.Text;
+                                            string mixedTb = FixMixedEnglishPrefix(cur);
+                                            if (mixedTb != null)
+                                            {
+                                                SetTextKeepBinding(targetTb, mixedTb);
+                                                return;
+                                            }
                                             if (cur.Contains("kg") && (cur.Contains("fuel") || cur.Contains("燃油") || cur.Contains("Tank") || cur.Contains("坦克") || cur.Contains("reserve")))
                                             {
                                                 string trF = TranslateFuelPanelText(cur);
@@ -1518,6 +1524,12 @@ namespace CMOLocalizer
                                         if (targetCc != null && targetCc.Content is string)
                                         {
                                             string str = (string)targetCc.Content;
+                                            string mixedCc = FixMixedEnglishPrefix(str);
+                                            if (mixedCc != null)
+                                            {
+                                                SetContentKeepBinding(targetCc, mixedCc);
+                                                return;
+                                            }
                                             if (!string.IsNullOrEmpty(str) && !ContainsChinese(str))
                                             {
                                                 string tr = TranslateString(str);
@@ -3129,6 +3141,10 @@ namespace CMOLocalizer
         {
             if (string.IsNullOrEmpty(rawText)) return rawText;
             string t = rawText.Trim();
+            // 条令下拉项：游戏把 "Inherited, " 与池里已翻译的值拼起来，整串含中文会被下面
+            // 「已含中文就不再翻译」的守卫跳过，只剩英文前缀（R39 用户实测）。
+            string mixedItem = FixMixedEnglishPrefix(t);
+            if (mixedItem != null) return mixedItem;
             if (t.Length == 0 || ContainsChinese(t)) return rawText;
             if (IsForbiddenCodeOrEnum(t)) return rawText;
 
@@ -4212,6 +4228,30 @@ namespace CMOLocalizer
             return false;
         }
 
+        /// <summary>
+        /// 英文前缀 + 已汉化尾（R39）。游戏会把 “Inherited, ” 与**已经翻译过**的值拼在一起
+        /// （值来自池/数据库，早就是中文），得到 “Inherited, 始终开火”。整串含中文会让各处
+        /// 「已含中文就不再翻译」的守卫整体跳过，于是英文前缀就留在界面上（用户 2026-10-18
+        /// 在条令窗口实测）。这里只替换已知的英文前缀，尾部原样保留（已汉化，不重译）。
+        /// 返回 null 表示不匹配（调用方走原逻辑）。
+        /// </summary>
+        private static string FixMixedEnglishPrefix(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return null;
+            const string PREFIX = "Inherited, ";
+            if (s.StartsWith(PREFIX, StringComparison.Ordinal))
+            {
+                string tail = s.Substring(PREFIX.Length).Trim();
+                if (tail.Length > 0 && ContainsChinese(tail)) return "继承自上级，" + tail;
+            }
+            if (s.StartsWith("Inherited,", StringComparison.Ordinal))
+            {
+                string tail = s.Substring("Inherited,".Length).Trim();
+                if (tail.Length > 0 && ContainsChinese(tail)) return "继承自上级，" + tail;
+            }
+            return null;
+        }
+
         public static string TranslateString(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return raw;
@@ -4299,6 +4339,11 @@ namespace CMOLocalizer
                     return "现代行动：指挥 v" + mTitle.Groups[1].Value + " - 内部版本 " + mTitle.Groups[2].Value;
                 }
             }
+
+            // 英文前缀 + 已汉化尾（R39）：必须在下面「已含中文」的早退之前处理，
+            // 否则 "Inherited, 始终开火" 这类混合串永远原地不动。
+            string mixedPrefix = FixMixedEnglishPrefix(raw);
+            if (mixedPrefix != null) return mixedPrefix;
 
             // 如果文本中已经含有中文，说明已经被翻译过或者是中文字符串，坚决避免重复翻译与递归替换！
             if (ContainsChinese(raw))

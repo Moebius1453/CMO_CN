@@ -50,6 +50,7 @@ TOP_LEVEL_SECTIONS = frozenset({"_meta", "offsets", "exact", "partial", "words"}
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from triage import classify, is_script_or_schema  # noqa: E402
+from inject_filter import injection_safe, harmful_shape  # noqa: E402
 
 ELLIPSIS = re.compile(r"…+")
 DOT_RUN = re.compile(r"(?:\.\s*){3,}")
@@ -208,10 +209,21 @@ def build() -> dict:
     # overwriting DAL queries, database hashes, or Lua sandbox strings in memory.
     offset_safe_sources = {
         "menu_terms.json", "force_offsets.json", "legacy_fixes.json",
-        "scenario_titles.json", "scenario_settings.json"
+        "scenario_titles.json", "scenario_settings.json",
+        # R38（2026-10-18）：数据库查看器之外的**自绘面板**（目标状态/探测接触等）
+        # 不经控件/WPF/WebView 通道，直接读游戏字符串池绘制；池注入才是它们唯一的汉化通道。
+        # 该文件由 build/gen_pool_display_inject.py 生成：池内存在 + 已有译文 +
+        # classify()=='display' + 多词短语 + 形状排除（反斜杠/花括号/格式串/SQL/路径/…）。
+        # 绝不能直接放行 chunk02..08：实测那样会把注册表路径、格式串、PowerShell 片段一起注入。
+        "pool_display_inject.json",
+        "db_enum_displays.json",
     }
 
     labels_only: set[str] = set()
+
+    # 新放行的「显示文本」注入源必须过形状安全判定（见 scripts/inject_filter.py）。
+    # 精选源（menus/force_offsets/…）是人工核验过的，不受此限。
+    shape_gated_sources = {"pool_display_inject.json", "db_enum_displays.json"}
 
     for name, mapping in iter_source_maps():
         for en, zh in mapping.items():
@@ -223,6 +235,8 @@ def build() -> dict:
             if name in ("db_viewer_html_terms.json", "db_descriptions.json"):
                 labels_only.add(en)
             if name in offset_safe_sources:
+                if name in shape_gated_sources and not injection_safe(en)[0]:
+                    continue
                 off = text_to_offset.get(en)
                 if off is not None and bucket_of.get(off) == "display" \
                         and en not in identifiers:
@@ -310,6 +324,23 @@ def build() -> dict:
     offsets = {k: v for k, v in offsets.items()
                if bucket_of.get(k) == "display"
                and pool.get(str(k)) not in identifiers}
+
+    # 形状安全不变量（R38）：即使基座词典里已经带着危险条目（build 以上一版已发布词典为基，
+    # 累积不删），也要在这里剪掉，否则会永久地留在产物里。
+    # 真实事故：`LongName ASC` 注入后数据库查看器 ORDER BY 全废、列表 0 项。
+    # force_offsets（人工实机核验的函数型注入）在这之后重新加回，不受此限。
+    _unsafe = []
+    for _k in offsets:
+        _src = pool.get(str(_k))
+        if _src is None:        # 池里查不到的偏移留给下面的 known 一致性过滤处理
+            continue
+        if harmful_shape(str(_src)):
+            _unsafe.append(_k)
+    if _unsafe:
+        _samples = [str(pool.get(str(k)))[:40] for k in _unsafe[:5]]
+        print(f"  [inject-filter] 剪掉 {len(_unsafe)} 条形状不安全注入，例如 {_samples}")
+        for k in _unsafe:
+            del offsets[k]
 
     # Explicit, vetted HUD/status bar offsets that must be injected into the pool
     force_file = SRC / "force_offsets.json"
